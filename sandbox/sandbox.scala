@@ -1,7 +1,9 @@
+import regions._
 object Test extends App {
-  regions.withRegion { r =>
-    val p = r.alloc(Array(1, 2, 3))
-    p(1) = 9
-    println(p().toList)
+  @struct class Point(x: Int, y: Int)
+  withRegion { r =>
+    val p = r.alloc[Point](x = 10, y = 20)
+    println(p.x)
+    println(p.y)
   }
 }

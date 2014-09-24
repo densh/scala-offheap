@@ -5,11 +5,15 @@ class macros(val c: Context) {
   import c.universe._
   import c.universe.definitions._
 
+  val internalStuctClass = rootMirror.staticClass("regions.internal.struct")
+
   val prefix = c.prefix.tree
 
   val internal = q"_root_.regions.internal"
 
   val unsafe = q"$internal.unsafe"
+
+  def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
   def fresh(pre: String): TermName = TermName(c.freshName(pre))
 
@@ -81,26 +85,9 @@ class macros(val c: Context) {
       val T = tpe.typeArgs.head
       T.typeSymbol match {
         case sym: ClassSymbol if sym.isPrimitive =>
-        case _ => c.abort(c.enclosingPosition, s"only arrays of primitives are supported at the moment")
+        case _ => abort(s"only arrays of primitives are supported at the moment")
       }
       q"4 + ${sizeof(T)} * $length"
-  }
-
-  def alloc[T: WeakTypeTag](value: Tree): Tree = {
-    val T = weakTypeOf[T]
-    val size = T.typeSymbol match {
-      case sym: ClassSymbol if sym.isPrimitive => sizeof(T)
-      case sym if sym == ArrayClass            => sizeof(T, q"value.length")
-      case _                                   => c.abort(c.enclosingPosition, "allocation of $T is not supported")
-    }
-    val v = fresh("v")
-    val ref = fresh("ref")
-    q"""
-      val $v = $value
-      val $ref = $internal.allocMemory[$T]($prefix, $v.length)
-      $ref() = $v
-      $ref
-    """
   }
 
   def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = {
@@ -111,7 +98,7 @@ class macros(val c: Context) {
           case (q""" "apply" """, Seq()) =>
             read(T, address(prefix))
           case (q""" "update" """, v +: Seq()) =>
-            if (!(v.tpe <:< T)) c.abort(v.pos, s"updated value must be of type $T")
+            if (!(v.tpe <:< T)) abort(s"updated value must be of type $T", at = v.pos)
             write(T, address(prefix), v)
         }
       case sym if sym == ArrayClass =>
@@ -119,16 +106,16 @@ class macros(val c: Context) {
           case (q""" "apply" """, Seq()) =>
             read(T, address(prefix))
           case (q""" "apply" """, i +: Seq()) =>
-            if (!(i.tpe <:< IntTpe)) c.abort(i.pos, s"index must be of type Int")
+            if (!(i.tpe <:< IntTpe)) abort(s"index must be of type Int", at = i.pos)
             val targ = T.typeArgs.head
             read(targ, q"${address(prefix)} + 4 + $i * ${sizeof(targ)}")
           case (q""" "update" """, v +: Seq()) =>
-            if (!(v.tpe <:< T)) c.abort(v.pos, s"updated value must be of type $T")
+            if (!(v.tpe <:< T)) abort(s"updated value must be of type $T", at = v.pos)
             write(T, address(prefix), v)
           case (q""" "update" """, i +: v +: Seq()) =>
             val targ = T.typeArgs.head
-            if (!(i.tpe <:< IntTpe)) c.abort(i.pos, s"index must be of type Int")
-            if (!(v.tpe <:< targ)) c.abort(v.pos, s"updated value must be of type $targ")
+            if (!(i.tpe <:< IntTpe)) abort(s"index must be of type Int", at = i.pos)
+            if (!(v.tpe <:< targ)) abort(s"updated value must be of type $targ", at = v.pos)
             write(targ, q"${address(prefix)} + 4 + $i * ${sizeof(targ)}", v)
         }
     }
@@ -137,4 +124,52 @@ class macros(val c: Context) {
   def refUpdateDynamic[T](field: Tree)(value: Tree): Tree = ???
 
   def refSelectDynamic[T](field: Tree): Tree = ???
+
+  def struct(annottees: Tree*): Tree = annottees match {
+    case q"class $name(..$args)" :: Nil =>
+      val checks = args.map {
+        case q"$_ val $name: $tpt = $default" =>
+          if (default.nonEmpty) abort("structs with default values are not supported")
+          q"_root_.regions.internal.ensureFixedSizeAlloc[$tpt]"
+      }
+      q"""
+        @_root_.regions.internal.struct class $name private(..$args) {
+          ..$checks
+        }
+      """
+  }
+
+  def ensureFixedSizeAlloc[T: WeakTypeTag]: Tree = {
+    val T = weakTypeOf[T]
+    T match {
+      case ByteTpe | ShortTpe | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe => q""
+      case _ => abort(s"$T is not fixed sized allocatable object")
+    }
+  }
+
+  def regionApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = (weakTypeOf[T], method, args) match {
+    case (_, q""" "alloc" """, value +: Seq()) =>
+      val size = value.tpe.typeSymbol match {
+        case sym: ClassSymbol if sym.isPrimitive => sizeof(value.tpe)
+        case sym if sym == ArrayClass            => sizeof(value.tpe, q"value.length")
+        case _                                   => abort(s"allocation of $T is not supported")
+      }
+      val v = fresh("v")
+      val ref = fresh("ref")
+      q"""
+        val $v = $value
+        val $ref = $internal.allocMemory[${value.tpe}]($prefix, $v.length)
+        $ref() = $v
+        $ref
+      """
+  }
+
+  def regionApplyDynamicNamed[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = (weakTypeOf[T], method, args) match {
+    case (T, q""" "alloc" """, _) if T.typeSymbol.annotations.exists { _.tpe.typeSymbol == internalStructClass } =>
+      val fields = T.members.sorted.collect {
+        case sym: TermSymbol if !s.isMethod =>
+          (sym.name, sym.info)
+      }
+      ???
+  }
 }

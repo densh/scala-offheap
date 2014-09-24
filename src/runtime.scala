@@ -1,6 +1,12 @@
 package regions
-import scala.collection.immutable.IntMap
 import sun.misc.Unsafe
+import scala.collection.immutable.IntMap
+import scala.annotation.StaticAnnotation
+import scala.language.experimental.macros
+
+package internal {
+  class struct extends StaticAnnotation
+}
 
 package object internal {
   val unsafe: Unsafe = {
@@ -43,4 +49,6 @@ package object internal {
     }
     new Ref[T](region.id.toLong + (cursor << 8))
   }
+
+  def ensureFixedSizeAlloc[T]: Unit = macro internal.macros.ensureFixedSizeAlloc[T]
 }

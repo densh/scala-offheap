@@ -1,10 +1,11 @@
 import scala.language.dynamics
 import scala.language.experimental.macros
-import scala.collection.immutable.IntMap
+import scala.annotation.StaticAnnotation
 
 package regions {
-  final class Region private[regions](val id: Int) extends AnyVal {
-    def alloc[T](value: T): Ref[T] = macro internal.macros.alloc[T]
+  final class Region private[regions](val id: Int) extends AnyVal with Dynamic {
+    def applyDynamic[T](method: String)(args: Any*): Any                = macro internal.macros.regionApplyDynamic[T]
+    def applyDynamicNamed[T](method: String)(args: (String, Any)*): Any = macro internal.macros.regionApplyDynamicNamed[T]
   }
 
   final class Ref[T] private[regions](val loc: Long) extends AnyVal with Dynamic {
@@ -14,6 +15,10 @@ package regions {
   }
   object Ref {
     def empty[T]: Ref[T] = null.asInstanceOf[Ref[T]]
+  }
+
+  class struct extends StaticAnnotation {
+    def macroTransform(annottees: Any*): Any = macro internal.macros.struct
   }
 }
 
