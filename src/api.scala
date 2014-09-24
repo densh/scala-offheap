@@ -4,7 +4,7 @@ import scala.collection.immutable.IntMap
 
 package regions {
   final class Region private[regions](val id: Short) extends AnyVal {
-    def alloc[T](): Ref[T] = macro internal.macros.alloc[T]
+    def alloc[T](value: T): Ref[T] = macro internal.macros.alloc[T]
   }
 
   final class Ref[T] private[regions](val loc: Long) extends AnyVal with Dynamic {
