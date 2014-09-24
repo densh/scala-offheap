@@ -3,7 +3,7 @@ import scala.language.experimental.macros
 import scala.collection.immutable.IntMap
 
 package regions {
-  final class Region private[regions](val id: Short) extends AnyVal {
+  final class Region private[regions](val id: Int) extends AnyVal {
     def alloc[T](value: T): Ref[T] = macro internal.macros.alloc[T]
   }
 

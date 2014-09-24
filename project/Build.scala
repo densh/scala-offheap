@@ -19,11 +19,20 @@ object RegionsBuild extends Build {
     dependencies = Seq(macros)
   )
 
-  lazy val macros: Project = Project(
+  lazy val macros = Project(
     "macros",
     file("macros"),
     settings = defaults ++ Seq(
       libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" % _)
     )
+  )
+
+  lazy val sandbox = Project(
+    "sandbox",
+    file("sandbox"),
+    settings = defaults ++ Seq(
+      scalacOptions += "-Xprint:all"
+    ),
+    dependencies = Seq(src)
   )
 }
