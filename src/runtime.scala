@@ -1,10 +1,10 @@
 package regions
 import scala.collection.immutable.IntMap
+import sun.misc.Unsafe
 
 package object internal {
   private[regions] final case class RegionInfo(start: Long, size: Long, cursor: Long)
-  val unsafe = {
-    import sun.misc.Unsafe
+  val unsafe: Unsafe = {
     val f = classOf[Unsafe].getDeclaredField("theUnsafe");
     f.setAccessible(true);
     f.get(null).asInstanceOf[Unsafe]

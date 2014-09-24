@@ -11,27 +11,28 @@ class macros(val c: Context) {
 
   val unsafe = q"$internal.unsafe"
 
-  def readPrimitive(tpe: Type, address: Tree): Tree = {
-    val method = TermName(tpe match {
-      case ByteTpe  => "getByte"
-      case ShortTpe => "getShort"
-      case IntTpe   => "getInt"
-      case LongTpe  => "getLong"
-    })
-    q"$unsafe.$method($address)"
+  def readPrimitive(tpe: Type, address: Tree): Tree = tpe match {
+    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+      val method = TermName(s"get$tpe")
+      q"$unsafe.$method($address)"
+    case BooleanTpe =>
+      q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
   }
 
-  def writePrimitive(tpe: Type, address: Tree, value: Tree): Tree = {
-    val method = TermName(tpe match {
-      case ByteTpe  => "putByte"
-      case ShortTpe => "putShort"
-      case IntTpe   => "putInt"
-      case LongTpe  => "putLong"
-    })
-    q"$unsafe.$method($address, $value)"
+  def writePrimitive(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
+    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+      val method = TermName(s"put$tpe")
+      q"$unsafe.$method($address, $value)"
+    case BooleanTpe =>
+      q"""
+        $unsafe.putByte($address,
+                        if ($value) ${Literal(Constant(1.toByte))}
+                        else ${Literal(Constant(0.toByte))})
+      """
   }
 
-  def address(ref: Tree) = q"$internal.regions($internal.refRegion($ref).id).start + $internal.refOffset($ref)"
+  def address(ref: Tree): Tree =
+    q"$internal.regions($internal.refRegion($ref).id).start + $internal.refOffset($ref)"
 
   def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = {
     val T = weakTypeOf[T]
@@ -56,10 +57,10 @@ class macros(val c: Context) {
     T.typeSymbol match {
       case sym: ClassSymbol if sym.isPrimitive =>
         val size = T match {
-          case ByteTpe  => 1
-          case ShortTpe => 2
-          case IntTpe   => 4
-          case LongTpe  => 8
+          case ByteTpe  | BooleanTpe => 1
+          case ShortTpe | CharTpe    => 2
+          case IntTpe   | FloatTpe   => 4
+          case LongTpe  | DoubleTpe  => 8
         }
         q"$internal.allocMemory[$T]($prefix, $size)"
     }
