@@ -34,22 +34,24 @@ class macros(val c: Context) {
   def address(ref: Tree): Tree =
     q"$internal.regions($internal.refRegion($ref).id).start + $internal.refOffset($ref)"
 
+  def sizeof(tpe: Type) = tpe match {
+    case ByteTpe  | BooleanTpe => 1
+    case ShortTpe | CharTpe    => 2
+    case IntTpe   | FloatTpe   => 4
+    case LongTpe  | DoubleTpe  => 8
+  }
+
   def alloc[T: WeakTypeTag](value: Tree): Tree = {
     val T = weakTypeOf[T]
     T.typeSymbol match {
       case sym: ClassSymbol if sym.isPrimitive =>
-        val size = T match {
-          case ByteTpe  | BooleanTpe => 1
-          case ShortTpe | CharTpe    => 2
-          case IntTpe   | FloatTpe   => 4
-          case LongTpe  | DoubleTpe  => 8
-        }
         q"""
-          val ref = $internal.allocMemory[$T]($prefix, $size)
+          val ref = $internal.allocMemory[$T]($prefix, ${sizeof(T)})
           ref() = $value
           ref
         """
     }
+  }
 
   def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = {
     val T = weakTypeOf[T]
