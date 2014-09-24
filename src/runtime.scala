@@ -12,7 +12,7 @@ package object internal {
 
   final case class RegionInfo(start: Long, size: Long, cursor: Long)
   val infos: Array[RegionInfo] = new Array[RegionInfo](65536)
-  var last = 0
+  var last = 1
 
   def allocRegion(): Region = {
     val start = unsafe.allocateMemory(CHUNK_SIZE)

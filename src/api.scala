@@ -12,6 +12,9 @@ package regions {
     def updateDynanic(field: String)(value: Any): Any = macro internal.macros.refUpdateDynamic[T]
     def selectDynamic(field: String): Any             = macro internal.macros.refSelectDynamic[T]
   }
+  object Ref {
+    def empty[T]: Ref[T] = null.asInstanceOf[Ref[T]]
+  }
 }
 
 package object regions {
