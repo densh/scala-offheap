@@ -123,7 +123,17 @@ class macros(val c: Context) {
 
   def refUpdateDynamic[T](field: Tree)(value: Tree): Tree = ???
 
-  def refSelectDynamic[T](field: Tree): Tree = ???
+  def refSelectDynamic[T: WeakTypeTag](field: Tree): Tree = {
+    val T = weakTypeOf[T]
+    T.typeSymbol match {
+      case sym if sym == ArrayClass =>
+        field match {
+          case q""" "length" """ =>
+            val targ = T.typeArgs.head
+            read(IntTpe, address(prefix))
+        }
+    }
+  }
 
   def struct(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args)" :: Nil =>
@@ -149,13 +159,13 @@ class macros(val c: Context) {
 
   def refApply[T: WeakTypeTag](value: Tree)(region: Tree): Tree = {
     val T = weakTypeOf[T]
-    val size = T.typeSymbol match {
-      case sym: ClassSymbol if sym.isPrimitive => sizeof(T)
-      case sym if sym == ArrayClass            => sizeof(T, q"value.length")
-      case _                                   => abort(s"allocation of $T is not supported")
-    }
     val v = fresh("v")
     val ref = fresh("ref")
+    val size = T.typeSymbol match {
+      case sym: ClassSymbol if sym.isPrimitive => sizeof(T)
+      case sym if sym == ArrayClass            => sizeof(T, q"$v.length")
+      case _                                   => abort(s"allocation of $T is not supported")
+    }
     q"""
       val $v = $value
       val $ref = $internal.allocMemory[$T]($region, $size)
