@@ -147,29 +147,20 @@ class macros(val c: Context) {
     }
   }
 
-  def regionApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = (weakTypeOf[T], method, args) match {
-    case (_, q""" "alloc" """, value +: Seq()) =>
-      val size = value.tpe.typeSymbol match {
-        case sym: ClassSymbol if sym.isPrimitive => sizeof(value.tpe)
-        case sym if sym == ArrayClass            => sizeof(value.tpe, q"value.length")
-        case _                                   => abort(s"allocation of $T is not supported")
-      }
-      val v = fresh("v")
-      val ref = fresh("ref")
-      q"""
-        val $v = $value
-        val $ref = $internal.allocMemory[${value.tpe}]($prefix, $v.length)
-        $ref() = $v
-        $ref
-      """
-  }
-
-  def regionApplyDynamicNamed[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = (weakTypeOf[T], method, args) match {
-    case (T, q""" "alloc" """, _) if T.typeSymbol.annotations.exists { _.tpe.typeSymbol == internalStructClass } =>
-      val fields = T.members.sorted.collect {
-        case sym: TermSymbol if !s.isMethod =>
-          (sym.name, sym.info)
-      }
-      ???
+  def refApply[T: WeakTypeTag](value: Tree)(region: Tree): Tree = {
+    val T = weakTypeOf[T]
+    val size = T.typeSymbol match {
+      case sym: ClassSymbol if sym.isPrimitive => sizeof(T)
+      case sym if sym == ArrayClass            => sizeof(T, q"value.length")
+      case _                                   => abort(s"allocation of $T is not supported")
+    }
+    val v = fresh("v")
+    val ref = fresh("ref")
+    q"""
+      val $v = $value
+      val $ref = $internal.allocMemory[$T]($region, $size)
+      $ref() = $v
+      $ref
+    """
   }
 }
