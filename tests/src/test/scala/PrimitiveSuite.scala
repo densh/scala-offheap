@@ -73,4 +73,24 @@ class PrimitiveSuite extends FunSuite {
       assert(ref() == 'b')
     }
   }
+
+  test("read/write Ref 1") {
+    Region { implicit r =>
+      val ref1 = Ref(0)
+      val ref2 = Ref(ref1)
+      assert(ref2() == ref1)
+      ref2() = Ref.empty[Int]
+      assert(ref2() == Ref.empty[Int])
+    }
+  }
+
+  test("read/write Ref 2") {
+    Region { implicit r =>
+      val ref1 = Ref(0)
+      val ref2 = Ref(ref1)
+      assert(ref2() == ref1)
+      ref2()() = 1
+      assert(ref1() == 1)
+    }
+  }
 }

@@ -11,7 +11,7 @@ class ArraySuite extends FunSuite {
     }
   }
 
-  test("rewrite/read array") {
+  test("overwrite/read whole array") {
     Region { implicit r =>
       val array = Array(4, 5, 6)
       val ref = Ref(Array(1, 2, 3))
