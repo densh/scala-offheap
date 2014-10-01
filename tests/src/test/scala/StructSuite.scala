@@ -3,7 +3,7 @@ import regions._
 
 class StructSuite extends FunSuite {
   test("read/write point fields") {
-    @internal.struct class Point(x: Int, y: Int)
+    @struct class Point(x: Int, y: Int)
     Region { implicit r =>
       val p = Ref[Point](1, 2)
       assert(p.x == 1)
@@ -16,8 +16,8 @@ class StructSuite extends FunSuite {
   }
 
   test("read/write nested fields") {
-    @internal.struct class A(value: Int)
-    @internal.struct class B(value: Int, nested: Ref[A])
+    @struct class A(value: Int)
+    @struct class B(value: Int, nested: Ref[A])
     Region { implicit r =>
       val p = Ref[B](1, Ref[A](2))
       assert(p.value == 1)
@@ -28,4 +28,13 @@ class StructSuite extends FunSuite {
       assert(p.nested.value == 20)
     }
   }
+
+  // TODO: find a way to express this
+  // test("read/write embedded fields") {
+  //   @struct class A(value: Int)
+  //   @struct class B(value: Int, nested: A)
+  //   Region { implicit r =>
+  //     val p = Ref[B](1, A(2))
+  //   }
+  // }
 }

@@ -49,6 +49,7 @@ object RegionsBuild extends Build {
     file("tests"),
     settings = defaults ++ Seq(
       libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test",
+      incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false
     ),
     dependencies = Seq(src)

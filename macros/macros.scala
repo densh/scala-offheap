@@ -189,6 +189,7 @@ class macros(val c: Context) {
     T match {
       case ByteTpe | ShortTpe | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe => q""
       case StructTpe(_) => q""
+      case _ if T.typeSymbol == RefClass => q""
       case _ => abort(s"$T is not fixed sized allocatable object")
     }
   }
