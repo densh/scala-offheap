@@ -5,12 +5,13 @@ class macros(val c: Context) {
   import c.universe._
   import c.universe.definitions._
 
-  val internalStuctClass = rootMirror.staticClass("regions.internal.struct")
+  val internalStructClass = rootMirror.staticClass("regions.internal.struct")
+  val RefClass = rootMirror.staticClass("regions.Ref")
 
   val prefix = c.prefix.tree
 
-  val internal = q"_root_.regions.internal"
-
+  val regions = q"_root_.regions"
+  val internal = q"$regions.internal"
   val unsafe = q"$internal.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
@@ -23,6 +24,10 @@ class macros(val c: Context) {
       q"$unsafe.$method($address)"
     case BooleanTpe =>
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
+    case _ if tpe.typeSymbol == RefClass =>
+      val targ = tpe.typeArgs.head
+      val value = read(LongTpe, address)
+      q"new $regions.Ref[$targ]($value)"
     case _ if tpe.typeSymbol == ArrayClass =>
       val size = fresh("size")
       val arr = fresh("arr")
@@ -52,6 +57,8 @@ class macros(val c: Context) {
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
+    case _ if tpe.typeSymbol == RefClass =>
+      write(LongTpe, address, q"$value.loc")
     case _ if tpe.typeSymbol == ArrayClass =>
       val v = fresh("v")
       val i = fresh("i")
@@ -80,6 +87,7 @@ class macros(val c: Context) {
     case ShortTpe | CharTpe                => q"2"
     case IntTpe   | FloatTpe               => q"4"
     case LongTpe  | DoubleTpe              => q"8"
+    case _ if tpe.typeSymbol == RefClass   => q"8"
     case _ if tpe.typeSymbol == ArrayClass =>
       require(length.nonEmpty)
       val T = tpe.typeArgs.head
@@ -88,6 +96,8 @@ class macros(val c: Context) {
         case _ => abort(s"only arrays of primitives are supported at the moment")
       }
       q"4 + ${sizeof(T)} * $length"
+    case StructTpe(fields) =>
+      fields.map { case (_, tpe) => sizeof(tpe) }.reduce { (l, r) => q"$l + $r" }
   }
 
   def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = {
@@ -121,22 +131,47 @@ class macros(val c: Context) {
     }
   }
 
-  def refUpdateDynamic[T](field: Tree)(value: Tree): Tree = ???
+  def refUpdateDynamic[T: WeakTypeTag](field: Tree)(value: Tree): Tree = {
+    val T = weakTypeOf[T]
+    T match {
+      case StructTpe(fields) =>
+        val q"${fieldStr: String}" = field
+        fieldInfo(fields, fieldStr).map { case (tpe: Type, offset: Tree) =>
+          write(tpe, q"${address(prefix)} + $offset", value)
+        }.getOrElse {
+          abort(s"struct $T doesn't have field $field")
+        }
+    }
+  }
+
+  def fieldInfo(fields: List[(String, Type)], field: String, offset: Tree = q"0"): Option[(Type, Tree)] = fields match {
+    case Nil => None
+    case (f, tpe) :: _ if f == field => Some((tpe, offset))
+    case (f, tpe) :: rest => fieldInfo(rest, field, q"$offset + ${sizeof(tpe)}")
+  }
 
   def refSelectDynamic[T: WeakTypeTag](field: Tree): Tree = {
     val T = weakTypeOf[T]
-    T.typeSymbol match {
-      case sym if sym == ArrayClass =>
+    T match {
+      case _ if T.typeSymbol == ArrayClass =>
         field match {
           case q""" "length" """ =>
             val targ = T.typeArgs.head
             read(IntTpe, address(prefix))
+        }
+      case StructTpe(fields) =>
+        val q"${fieldStr: String}" = field
+        fieldInfo(fields, fieldStr).map { case (tpe: Type, offset: Tree) =>
+          read(tpe, q"${address(prefix)} + $offset")
+        }.getOrElse {
+          abort(s"struct $T doesn't have field $field")
         }
     }
   }
 
   def struct(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args)" :: Nil =>
+      if (args.isEmpty) abort("structs require at least one argument")
       val checks = args.map {
         case q"$_ val $name: $tpt = $default" =>
           if (default.nonEmpty) abort("structs with default values are not supported")
@@ -153,24 +188,50 @@ class macros(val c: Context) {
     val T = weakTypeOf[T]
     T match {
       case ByteTpe | ShortTpe | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe => q""
+      case StructTpe(_) => q""
       case _ => abort(s"$T is not fixed sized allocatable object")
     }
   }
 
-  def refApply[T: WeakTypeTag](value: Tree)(region: Tree): Tree = {
-    val T = weakTypeOf[T]
-    val v = fresh("v")
-    val ref = fresh("ref")
-    val size = T.typeSymbol match {
-      case sym: ClassSymbol if sym.isPrimitive => sizeof(T)
-      case sym if sym == ArrayClass            => sizeof(T, q"$v.length")
-      case _                                   => abort(s"allocation of $T is not supported")
+  object StructTpe {
+    def unapply(tpe: Type): Option[List[(String, Type)]] = tpe.typeSymbol match {
+      case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == internalStructClass) =>
+        Some(tpe.members.sorted.filter { m => m.isTerm && !m.isMethod }.map { m =>
+          (m.name.toString, m.info)
+        })
+      case _ => None
     }
-    q"""
-      val $v = $value
-      val $ref = $internal.allocMemory[$T]($region, $size)
-      $ref() = $v
-      $ref
-    """
+  }
+
+  def refCompanionApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*)(region: Tree): Tree = {
+    val T = weakTypeOf[T]
+    (T, args) match {
+      case (NothingTpe, value +: Seq()) =>
+        val V = value.tpe.widen
+        val v = fresh("v")
+        val ref = fresh("ref")
+        val size = V.typeSymbol match {
+          case sym: ClassSymbol if sym.isPrimitive => sizeof(V)
+          case sym if sym == ArrayClass            => sizeof(V, q"$v.length")
+          case _                                   => abort(s"allocation of $V is not supported")
+        }
+        q"""
+          val $v = $value
+          val $ref = $internal.allocMemory[$V]($region, $size)
+          $ref() = $v
+          $ref
+        """
+      case (StructTpe(fields), _) =>
+        val ref = fresh("ref")
+        val size = sizeof(T)
+        val writes: List[Tree] = fields.zip(args).map {
+          case ((name, tpe), v) => q"$ref.${TermName(name)} = ($v: $tpe)"
+        }
+        q"""
+          val $ref = $internal.allocMemory[$T]($region, $size)
+          ..$writes
+          $ref
+      """
+    }
   }
 }

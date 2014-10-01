@@ -3,7 +3,7 @@ import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
 
 package regions {
-  final class Region private[regions](val id: Int) extends AnyVal with Dynamic
+  final class Region(val id: Int) extends AnyVal with Dynamic
   object Region {
     // TODO: this should be a macro too to avoid closure allocation
     def apply[T](f: Region => T): T = {
@@ -13,14 +13,14 @@ package regions {
     }
   }
 
-  final class Ref[T] private[regions](val loc: Long) extends AnyVal with Dynamic {
+  final class Ref[T](val loc: Long) extends AnyVal with Dynamic {
     def applyDynamic(method: String)(args: Any*): Any = macro internal.macros.refApplyDynamic[T]
-    def updateDynanic(field: String)(value: Any): Any = macro internal.macros.refUpdateDynamic[T]
+    def updateDynamic(field: String)(value: Any): Any = macro internal.macros.refUpdateDynamic[T]
     def selectDynamic(field: String): Any             = macro internal.macros.refSelectDynamic[T]
   }
-  object Ref {
-    def apply[T](value: T)(implicit region: Region): Ref[T] = macro internal.macros.refApply[T]
-    def empty[T]: Ref[T]                                    = null.asInstanceOf[Ref[T]]
+  object Ref extends Dynamic {
+    def applyDynamic[T](method: String)(args: Any*)(implicit region: Region): Any = macro internal.macros.refCompanionApplyDynamic[T]
+    def empty[T]: Ref[T] = null.asInstanceOf[Ref[T]]
   }
 
   class struct extends StaticAnnotation {
