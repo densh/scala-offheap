@@ -15,9 +15,8 @@ package object internal {
     f.get(null).asInstanceOf[Unsafe]
   }
   val CHUNK_SIZE = 4096000
-
+  // TODO: use thread-local Array[Long] for this
   final case class RegionInfo(start: Long, size: Long, cursor: Long)
-  // TODO: use thread-locals for this
   val infos: Array[RegionInfo] = new Array[RegionInfo](65536)
   var last = 1
 

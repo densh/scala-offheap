@@ -1,4 +1,6 @@
 package regions.internal
+
+import scala.collection.mutable
 import scala.reflect.macros.whitebox.Context
 
 class macros(val c: Context) {
@@ -36,12 +38,20 @@ class macros(val c: Context) {
     }
   }
 
+  case class StructField(name: TermName, tpe: Type, offset: Long)
+
   object StructOf {
-    def unapply(tpe: Type): Option[List[(String, Type)]] = tpe.typeSymbol match {
+    def unapply(tpe: Type): Option[List[StructField]] = tpe.typeSymbol match {
       case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == internalStructClass) =>
-        Some(tpe.members.sorted.filter { m => m.isTerm && !m.isMethod }.map { m =>
-          (m.name.toString, m.info)
-        })
+        val args = tpe.typeSymbol.asClass.primaryConstructor.asMethod.paramLists.head.map { arg => (arg.name.toTermName, arg.info) }
+        val buf = mutable.ListBuffer[StructField]()
+        var offset = 0
+        args.foreach { case (name, tpe) =>
+          buf.append(StructField(name, tpe, offset))
+          val q"${size: Int}" = sizeof(tpe)
+          offset += size
+        }
+        Some(buf.toList)
       case _ => None
     }
   }
@@ -71,6 +81,17 @@ class macros(val c: Context) {
         }
         $arr
       """
+    case StructOf(fields) =>
+      val companion = tpe.typeSymbol.companion
+      val tmps = fields.map { f => fresh(f.name.decoded) }
+      val reads = fields.zip(tmps).map { case (f, tmp) =>
+        val rhs = read(f.tpe, q"$address + ${f.offset}")
+        q"val $tmp = $rhs"
+      }
+      q"""
+        ..$reads
+        $companion.apply(..$tmps)
+      """
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -99,6 +120,12 @@ class macros(val c: Context) {
           $i += 1
         }
       """
+    case StructOf(fields) =>
+      val v = fresh("v")
+      val writes = fields.map { f =>
+        write(f.tpe, q"$address + ${f.offset}", q"$v.${f.name}")
+      }
+      q"val $v = $value; ..$writes"
   }
 
   def regionId(ref: Tree): Tree = q"($ref.loc & 0x000000FF).toInt"
@@ -116,13 +143,17 @@ class macros(val c: Context) {
       require(length.nonEmpty)
       q"4 + ${sizeof(targ)} * $length"
     case StructOf(fields) =>
-      fields.map { case (_, tpe) => sizeof(tpe) }.reduce { (l, r) => q"$l + $r" }
+      val size = fields.map { f =>
+        val q"${size: Int}" = sizeof(f.tpe)
+        size
+      }.reduce(_ + _)
+      q"$size"
   }
 
   def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = {
     val T = weakTypeOf[T]
     T match {
-      case Primitive() =>
+      case Primitive() | RefOf(_) | StructOf(_) =>
         (method, args) match {
           case (q""" "apply" """, Seq()) =>
             read(T, address(prefix))
@@ -153,18 +184,13 @@ class macros(val c: Context) {
     T match {
       case StructOf(fields) =>
         val q"${fieldStr: String}" = field
-        fieldInfo(fields, fieldStr).map { case (tpe: Type, offset: Tree) =>
-          write(tpe, q"${address(prefix)} + $offset", value)
+        fields.collectFirst {
+          case f if f.name.decoded.toString == fieldStr =>
+            write(f.tpe, q"${address(prefix)} + ${f.offset}", value)
         }.getOrElse {
           abort(s"struct $T doesn't have field $field")
         }
     }
-  }
-
-  def fieldInfo(fields: List[(String, Type)], field: String, offset: Tree = q"0"): Option[(Type, Tree)] = fields match {
-    case Nil => None
-    case (f, tpe) :: _ if f == field => Some((tpe, offset))
-    case (f, tpe) :: rest => fieldInfo(rest, field, q"$offset + ${sizeof(tpe)}")
   }
 
   def refSelectDynamic[T: WeakTypeTag](field: Tree): Tree = {
@@ -177,8 +203,9 @@ class macros(val c: Context) {
         }
       case StructOf(fields) =>
         val q"${fieldStr: String}" = field
-        fieldInfo(fields, fieldStr).map { case (tpe: Type, offset: Tree) =>
-          read(tpe, q"${address(prefix)} + $offset")
+        fields.collectFirst {
+          case f if f.name.decoded.toString == fieldStr =>
+            read(f.tpe, q"${address(prefix)} + ${f.offset}")
         }.getOrElse {
           abort(s"struct $T doesn't have field $field")
         }
@@ -193,8 +220,9 @@ class macros(val c: Context) {
           if (default.nonEmpty) abort("structs with default values are not supported")
           q"_root_.regions.internal.ensureFixedSizeAlloc[$tpt]"
       }
+      val nargs = args.map { case q"$_ val $name: $tpt = $_" => q"val $name: $tpt" }
       q"""
-        @_root_.regions.internal.struct class $name private(..$args) {
+        @_root_.regions.internal.struct case class $name(..$nargs) {
           ..$checks
         }
       """
@@ -216,9 +244,9 @@ class macros(val c: Context) {
         val v = fresh("v")
         val ref = fresh("ref")
         val size = V match {
-          case Primitive() | RefOf(_) => sizeof(V)
-          case ArrayOf(_)             => sizeof(V, q"$v.length")
-          case _                      => abort(s"allocation of $V is not supported")
+          case Primitive() | RefOf(_) | StructOf(_) => sizeof(V)
+          case ArrayOf(_)                           => sizeof(V, q"$v.length")
+          case _                                    => abort(s"allocation of $V is not supported")
         }
         q"""
           val $v = $value
@@ -229,8 +257,8 @@ class macros(val c: Context) {
       case (StructOf(fields), _) =>
         val ref = fresh("ref")
         val size = sizeof(T)
-        val writes: List[Tree] = fields.zip(args).map {
-          case ((name, tpe), v) => q"$ref.${TermName(name)} = ($v: $tpe)"
+        val writes = fields.toSeq.zip(args).map {
+          case (f, v) => q"$ref.${f.name} = ($v: ${f.tpe})"
         }
         q"""
           val $ref = $internal.allocMemory[$T]($region, $size)
