@@ -132,7 +132,7 @@ class macros(val c: Context) {
 
   def regionOffset(ref: Tree): Tree = q"$ref.loc >> 8"
 
-  def address(ref: Tree): Tree = q"$internal.infos(${regionId(ref)}).start + ${regionOffset(ref)}"
+  def address(ref: Tree): Tree = q"$internal.infos(${regionId(ref)} * 3) + ${regionOffset(ref)}"
 
   def sizeof(tpe: Type, length: Tree = EmptyTree): Tree = tpe match {
     case ByteTpe  | BooleanTpe                    => q"1"
@@ -150,7 +150,7 @@ class macros(val c: Context) {
       q"$size"
   }
 
-  def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = {
+  def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = wrap {
     val T = weakTypeOf[T]
     T match {
       case Primitive() | RefOf(_) | StructOf(_) =>
@@ -179,7 +179,7 @@ class macros(val c: Context) {
     }
   }
 
-  def refUpdateDynamic[T: WeakTypeTag](field: Tree)(value: Tree): Tree = {
+  def refUpdateDynamic[T: WeakTypeTag](field: Tree)(value: Tree): Tree = wrap {
     val T = weakTypeOf[T]
     T match {
       case StructOf(fields) =>
@@ -193,7 +193,7 @@ class macros(val c: Context) {
     }
   }
 
-  def refSelectDynamic[T: WeakTypeTag](field: Tree): Tree = {
+  def refSelectDynamic[T: WeakTypeTag](field: Tree): Tree = wrap {
     val T = weakTypeOf[T]
     T match {
       case ArrayOf(targ) =>
@@ -236,7 +236,7 @@ class macros(val c: Context) {
     }
   }
 
-  def refCompanionApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*)(region: Tree): Tree = {
+  def refCompanionApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*)(region: Tree): Tree = wrap {
     val T = weakTypeOf[T]
     (T, args) match {
       case (NothingTpe, value +: Seq()) =>
@@ -260,6 +260,8 @@ class macros(val c: Context) {
         val writes = fields.toSeq.zip(args).map {
           case (f, v) => q"$ref.${f.name} = ($v: ${f.tpe})"
         }
+        val amsg = s"starting to write"
+        val bmsg = s"done writing"
         q"""
           val $ref = $internal.allocMemory[$T]($region, $size)
           ..$writes
@@ -267,4 +269,9 @@ class macros(val c: Context) {
         """
     }
   }
+
+  def wrap(f: => Tree): Tree = f/*{
+    val wrapper = fresh("wrapper")
+    q"def $wrapper() = { $f }; $wrapper()"
+  }*/
 }

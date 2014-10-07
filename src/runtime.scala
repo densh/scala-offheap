@@ -14,39 +14,40 @@ package object internal {
     f.setAccessible(true);
     f.get(null).asInstanceOf[Unsafe]
   }
-  val CHUNK_SIZE = 4096000
-  // TODO: use thread-local Array[Long] for this
-  final case class RegionInfo(start: Long, size: Long, cursor: Long)
-  val infos: Array[RegionInfo] = new Array[RegionInfo](65536)
+  // TODO: dynamically upscale size of the array
+  // TODO: use thread-local
+  val infos: Array[Long] = new Array[Long](64 * 3)
   var last = 1
 
-  def allocRegion(): Region = {
-    val start = unsafe.allocateMemory(CHUNK_SIZE)
-    val info = RegionInfo(start = start, size = CHUNK_SIZE, cursor = 0)
+  def allocRegion(size: Long = 40960): Region = {
+    val start = unsafe.allocateMemory(size)
     val id = last
     last += 1
-    infos(id) = info
+    infos(id * 3) = start
+    infos(id * 3 + 1) = size
+    infos(id * 3 + 2) = 0
     new Region(id.toShort)
   }
 
   def disposeRegion(region: Region): Unit = {
-    assert(region.id == last - 1)
     last -= 1
-    unsafe.freeMemory(infos(last).start)
-    infos(last) = null
+    unsafe.freeMemory(infos(last * 3))
   }
 
   def allocMemory[T](region: Region, size: Long): Ref[T] = {
-    val info = infos(region.id)
-    val cursor = info.cursor
-    if (cursor + size < info.size)
-      infos(region.id) = info.copy(cursor = cursor + size)
+    val rsize = infos(region.id * 3 + 1)
+    val cursor = infos(region.id * 3 + 2)
+    if (cursor + size < rsize)
+      infos(region.id * 3 + 2) = cursor + size
     else {
-      var newsize = info.size
-      while (cursor + size > newsize) newsize += CHUNK_SIZE
-      val newstart = unsafe.reallocateMemory(info.start, newsize)
-      infos(region.id) = info.copy(start = newstart, size = newsize, cursor = cursor + size)
+      val newsize = rsize * 2
+      val newstart = unsafe.reallocateMemory(infos(region.id * 3), newsize)
+      infos(region.id * 3) = newstart
+      infos(region.id * 3 + 1) = newsize
+      infos(region.id * 3 + 2) = cursor + size
+      //println(s"resized region size = $newsize, start = $newstart")
     }
+    //println(s"allocated at ${region.id} and $cursor")
     new Ref[T](region.id.toLong + (cursor << 8))
   }
 

@@ -1,0 +1,77 @@
+import org.scalameter.api._
+
+object BinaryTree extends PerformanceTest.Quickbenchmark {
+  performance of "binary trees" in {
+    def n = Gen.range("n")(8, 16, 4)
+    measure method "gc heap" in {
+      using(n) in { n => GCHeap.main(n) }
+    }
+    measure method "off-heap" in {
+      using(n) in { n => OffHeap.main(n) }
+    }
+  }
+}
+
+object GCHeap {
+  def main(n: Int) = {
+    val minDepth = 4
+    val maxDepth = n max (minDepth+2)
+    val longLivedTree = Tree(0,maxDepth)
+    var depth = minDepth
+    while (depth <= maxDepth) {
+      val iterations = 1 << (maxDepth - depth + minDepth)
+      var i,sum = 0
+      while (i < iterations) {
+        i += 1
+        sum += Tree(i,depth).isum + Tree(-i,depth).isum
+      }
+      depth += 2
+    }
+  }
+  final class Tree(i: Int, left: Tree, right: Tree) {
+    def isum: Int = {
+      val tl = left
+      if (tl eq null) i
+      else i + tl.isum - right.isum
+    }
+  }
+  object Tree {
+    def apply(i: Int, depth: Int): Tree = {
+      if (depth > 0) new Tree(i, Tree(i*2-1, depth-1), Tree(i*2, depth-1))
+      else new Tree(i, null, null)
+    }
+  }
+}
+
+object OffHeap {
+  import regions._
+  def main(n: Int) = Region { outer =>
+    val minDepth = 4
+    val maxDepth = n max (minDepth+2)
+    val longLivedTree = tree(0,maxDepth)(outer)
+    var depth = minDepth
+    while (depth <= maxDepth) Region { implicit inner =>
+      val iterations = 1 << (maxDepth - depth + minDepth)
+      var i,sum = 0
+      while (i < iterations) {
+        i += 1
+        sum += isum(tree(i,depth)(outer)) +
+               isum(tree(-i,depth)(outer))
+      }
+      depth += 2
+    }
+  }
+  @struct class Tree(i: Int, left: Ref[Tree], right: Ref[Tree])
+  def isum(tree: Ref[Tree]): Int = {
+    val left = tree.left
+    if (left.isEmpty) tree.i
+    else tree.i + isum(left) - isum(tree.right)
+  }
+  def tree(i: Int, depth: Int)(implicit region: Region): Ref[Tree] = {
+    if (depth > 0) {
+      val left = tree(i*2-1, depth-1)
+      val right = tree(i*2, depth-1)
+      Ref[Tree](i, left, right)
+    } else Ref[Tree](i, Ref.empty[Tree], Ref.empty[Tree])
+  }
+}

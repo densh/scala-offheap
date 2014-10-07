@@ -38,9 +38,10 @@ object RegionsBuild extends Build {
   lazy val sandbox = Project(
     "sandbox",
     file("sandbox"),
-    settings = defaults /*++ Seq(
-      scalacOptions += "-Xprint:all"
-    )*/,
+    settings = defaults ++ Seq(
+      incOptions := incOptions.value.withNameHashing(false),
+      scalacOptions += "-Xprint:jvm"
+    ),
     dependencies = Seq(src)
   )
 
@@ -48,9 +49,22 @@ object RegionsBuild extends Build {
     "tests",
     file("tests"),
     settings = defaults ++ Seq(
-      libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test",
+      libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false
+    ),
+    dependencies = Seq(src)
+  )
+
+  lazy val benchmarks = Project(
+    "benchmarks",
+    file("benchmarks"),
+    settings = defaults ++ Seq(
+      libraryDependencies += "com.github.axel22" %% "scalameter" % "0.5-M2",
+      testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework"),
+      incOptions := incOptions.value.withNameHashing(false),
+      parallelExecution in Test := false,
+      logBuffered := false
     ),
     dependencies = Seq(src)
   )
