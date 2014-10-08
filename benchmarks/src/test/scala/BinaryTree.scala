@@ -4,16 +4,16 @@ object BinaryTree extends PerformanceTest.Quickbenchmark {
   performance of "binary trees" in {
     def n = Gen.range("n")(8, 16, 4)
     measure method "gc heap" in {
-      using(n) in { n => GCHeap.main(n) }
+      using(n) in { n => GCHeap.run(n) }
     }
     measure method "off-heap" in {
-      using(n) in { n => OffHeap.main(n) }
+      using(n) in { n => OffHeap.run(n) }
     }
   }
 }
 
 object GCHeap {
-  def main(n: Int) = {
+  def run(n: Int) = {
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = Tree(0,maxDepth)
@@ -45,7 +45,7 @@ object GCHeap {
 
 object OffHeap {
   import regions._
-  def main(n: Int) = Region { outer =>
+  def run(n: Int) = Region { outer =>
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = tree(0,maxDepth)(outer)
@@ -55,8 +55,8 @@ object OffHeap {
       var i,sum = 0
       while (i < iterations) {
         i += 1
-        sum += isum(tree(i,depth)(outer)) +
-               isum(tree(-i,depth)(outer))
+        sum += isum(tree(i,depth)) +
+               isum(tree(-i,depth))
       }
       depth += 2
     }

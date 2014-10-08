@@ -40,7 +40,9 @@ object RegionsBuild extends Build {
     file("sandbox"),
     settings = defaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
-      scalacOptions += "-Xprint:jvm"
+      scalacOptions += "-Xprint:jvm",
+      fork in run := true,
+      javacOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
     ),
     dependencies = Seq(src)
   )

@@ -270,8 +270,8 @@ class macros(val c: Context) {
     }
   }
 
-  def wrap(f: => Tree): Tree = f/*{
+  def wrap(f: => Tree): Tree = {
     val wrapper = fresh("wrapper")
     q"def $wrapper() = { $f }; $wrapper()"
-  }*/
+  }
 }
