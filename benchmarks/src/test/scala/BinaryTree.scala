@@ -2,7 +2,7 @@ import org.scalameter.api._
 
 object BinaryTree extends PerformanceTest.Quickbenchmark {
   performance of "binary trees" in {
-    def n = Gen.range("n")(8, 16, 4)
+    def n = Gen.single("n")(16)
     measure method "gc heap" in {
       using(n) in { n => GCHeap.run(n) }
     }
