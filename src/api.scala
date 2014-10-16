@@ -3,19 +3,11 @@ import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
 
 package regions {
-  final class Region(val id: Int) extends AnyVal with Dynamic
+  final class Region(val id: Int) extends AnyVal with Dynamic {
+    def dispose() = internal.disposeRegion(this)
+  }
   object Region {
-    // TODO: this should be a macro too to avoid closure allocation
-    def apply[T](f: Region => T): T = {
-      val region = internal.allocRegion()
-      try f(region)
-      finally internal.disposeRegion(region)
-    }
-    def sized[T](size: Long)(f: Region => T): T = {
-      val region = internal.allocRegion(size)
-      try f(region)
-      finally internal.disposeRegion(region)
-    }
+    def apply() = internal.allocRegion()
   }
 
   final class Ref[T](val loc: Long) extends AnyVal with Dynamic {

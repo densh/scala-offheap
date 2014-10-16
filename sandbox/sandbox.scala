@@ -1,20 +1,27 @@
 object OffHeap extends App {
   import regions._
-  def run(n: Int) = Region { outer =>
+  def run(n: Int) = {
+    val outer = Region()
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = tree(0,maxDepth)(outer)
     var depth = minDepth
-    while (depth <= maxDepth) Region { implicit inner =>
+    while (depth <= maxDepth) {
       val iterations = 1 << (maxDepth - depth + minDepth)
       var i,sum = 0
+      def rsum(i: Int, depth: Int): Int = {
+        val r = Region()
+        val res = isum(tree(i, depth)(r))
+        r.dispose()
+        res
+      }
       while (i < iterations) {
         i += 1
-        sum += Region { r => isum(tree(i,depth)(r))  } +
-               Region { r => isum(tree(-i,depth)(r)) }
+        sum += rsum(i, depth) + rsum(-i, depth)
       }
       depth += 2
     }
+    outer.dispose()
   }
   @struct class Tree(i: Int, left: Ref[Tree], right: Ref[Tree])
   def isum(tree: Ref[Tree]): Int = {

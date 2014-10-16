@@ -42,7 +42,8 @@ object RegionsBuild extends Build {
       incOptions := incOptions.value.withNameHashing(false),
       scalacOptions += "-Xprint:jvm",
       fork in run := true,
-      javacOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
+      //javaOptions in run += "-Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=n"
+      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
     ),
     dependencies = Seq(src)
   )
