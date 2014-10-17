@@ -17,18 +17,15 @@ package object internal {
     f.get(null).asInstanceOf[Unsafe]
   }
 
-  val nodeSize = 4096000
+  val nodeSize = 4096
   var free: Node = null
   def retainNode(): Node = {
-    if (free != null) {
-      val res = free
-      free = free.next
-      res.next = null
-      res
-    } else {
+    if (free == null)
       allocArena()
-      retainNode()
-    }
+    val res = free
+    free = free.next
+    res.next = null
+    res
   }
   def allocArena(): Unit = {
     val nodes = 32
@@ -40,14 +37,12 @@ package object internal {
     }
   }
   def releaseNode(node: Node): Unit = {
-    if (node.next == null) {
-      node.next = free
-      free = node
-    } else {
-      val next = node.next
-      node.next = null
-      releaseNode(node)
-      releaseNode(next)
+    var n = node
+    while (n != null) {
+      val cur = n
+      n = n.next
+      cur.next = free
+      free = cur
     }
   }
 
@@ -56,15 +51,16 @@ package object internal {
   def disposeRegion(region: Region): Unit = releaseNode(region.node)
 
   def allocMemory[T](region: Region, size: Long): Ref[T] = {
+    val old = region.offset
     val offset =
-      if (region.offset + size < nodeSize) {
-        val offset = region.offset
-        region.offset = offset + size
-        offset
+      if (old + size < nodeSize) {
+        region.offset = old + size
+        old
       } else {
         val newnode = retainNode()
         newnode.next = region.node
         region.node = newnode
+        region.offset = size
         0
       }
     new Ref[T](region.node.loc + offset)

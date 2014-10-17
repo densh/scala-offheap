@@ -27,7 +27,9 @@ object OffHeap extends App {
   def isum(tree: Ref[Tree]): Int = {
     val left = tree.left
     if (left.isEmpty) tree.i
-    else tree.i + isum(left) - isum(tree.right)
+    else {
+      tree.i + isum(left) - isum(tree.right)
+    }
   }
   def tree(i: Int, depth: Int)(implicit region: Region): Ref[Tree] = {
     if (depth > 0) {
@@ -36,7 +38,7 @@ object OffHeap extends App {
       Ref[Tree](i, left, right)
     } else Ref[Tree](i, Ref.empty[Tree], Ref.empty[Tree])
   }
-  run(20)
+  run(8)
 }
 
 /*
