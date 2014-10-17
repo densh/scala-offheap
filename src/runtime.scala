@@ -17,7 +17,7 @@ package object internal {
     f.get(null).asInstanceOf[Unsafe]
   }
 
-  val nodeSize = 4096
+  val nodeSize = 409600
   var free: Node = null
   def retainNode(): Node = {
     if (free == null)
@@ -46,9 +46,22 @@ package object internal {
     }
   }
 
-  def allocRegion(): Region = new Region(retainNode(), 0)
+  var regions: Array[Region] = (1 to 16).map { _ => new Region(null, 0) }.toArray
+  var regionNext: Int = 0
 
-  def disposeRegion(region: Region): Unit = releaseNode(region.node)
+  def allocRegion(): Region = {
+    val region = regions(regionNext)
+    regionNext += 1
+    region.node = retainNode()
+    region.offset = 0
+    region
+  }
+
+  def disposeRegion(region: Region): Unit = {
+    releaseNode(region.node)
+    region.node = null
+    regionNext -= 1
+  }
 
   def allocMemory[T](region: Region, size: Long): Ref[T] = {
     val old = region.offset

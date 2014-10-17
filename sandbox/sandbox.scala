@@ -38,7 +38,7 @@ object OffHeap extends App {
       Ref[Tree](i, left, right)
     } else Ref[Tree](i, Ref.empty[Tree], Ref.empty[Tree])
   }
-  run(8)
+  while(true) run(18)
 }
 
 /*
