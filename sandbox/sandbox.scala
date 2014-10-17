@@ -38,10 +38,9 @@ object OffHeap extends App {
       Ref[Tree](i, left, right)
     } else Ref[Tree](i, Ref.empty[Tree], Ref.empty[Tree])
   }
-  while(true) run(18)
+  while(true) run(20)
 }
 
-/*
 object GCHeap extends App {
   def run(n: Int) = {
     val minDepth = 4
@@ -71,6 +70,5 @@ object GCHeap extends App {
       else new Tree(i, null, null)
     }
   }
-  run(20)
+  while(true) run(20)
 }
-*/

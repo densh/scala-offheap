@@ -43,8 +43,8 @@ object RegionsBuild extends Build {
       //scalacOptions += "-Xprint:jvm",
       fork in run := true,
       //javaOptions in run += "-Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=n"
-      //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
-      javaOptions in run += "-Xms256M -Xmx256M"
+      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib",
+      javaOptions in run ++= Seq("-Xms1M", "-Xmx1M")
     ),
     dependencies = Seq(src)
   )
