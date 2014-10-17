@@ -9,46 +9,65 @@ package internal {
 }
 
 package object internal {
+  private[regions] case class Node(loc: Long, var next: Node)
+
   val unsafe: Unsafe = {
     val f = classOf[Unsafe].getDeclaredField("theUnsafe");
     f.setAccessible(true);
     f.get(null).asInstanceOf[Unsafe]
   }
-  // TODO: dynamically upscale size of the array
-  // TODO: use thread-local
-  val infos: Array[Long] = new Array[Long](64 * 3)
-  var last = 1
 
-  def allocRegion(size: Long = 40960): Region = {
-    val start = unsafe.allocateMemory(size)
-    val id = last
-    last += 1
-    infos(id * 3) = start
-    infos(id * 3 + 1) = size
-    infos(id * 3 + 2) = 0
-    new Region(id.toShort)
+  val nodeSize = 4096000
+  var free: Node = null
+  def retainNode(): Node = {
+    if (free != null) {
+      val res = free
+      free = free.next
+      res.next = null
+      res
+    } else {
+      allocArena()
+      retainNode()
+    }
+  }
+  def allocArena(): Unit = {
+    val nodes = 32
+    val arena = unsafe.allocateMemory(nodeSize * nodes)
+    var i = 0
+    while (i < nodes) {
+      free = Node(arena + i * nodeSize, free)
+      i += 1
+    }
+  }
+  def releaseNode(node: Node): Unit = {
+    if (node.next == null) {
+      node.next = free
+      free = node
+    } else {
+      val next = node.next
+      node.next = null
+      releaseNode(node)
+      releaseNode(next)
+    }
   }
 
-  def disposeRegion(region: Region): Unit = {
-    last -= 1
-    unsafe.freeMemory(infos(last * 3))
-  }
+  def allocRegion(): Region = new Region(retainNode(), 0)
+
+  def disposeRegion(region: Region): Unit = releaseNode(region.node)
 
   def allocMemory[T](region: Region, size: Long): Ref[T] = {
-    val rsize = infos(region.id * 3 + 1)
-    val cursor = infos(region.id * 3 + 2)
-    if (cursor + size < rsize)
-      infos(region.id * 3 + 2) = cursor + size
-    else {
-      val newsize = rsize * 2
-      val newstart = unsafe.reallocateMemory(infos(region.id * 3), newsize)
-      infos(region.id * 3) = newstart
-      infos(region.id * 3 + 1) = newsize
-      infos(region.id * 3 + 2) = cursor + size
-      //println(s"resized region size = $newsize, start = $newstart")
-    }
-    //println(s"allocated at ${region.id} and $cursor")
-    new Ref[T](region.id.toLong + (cursor << 8))
+    val offset =
+      if (region.offset + size < nodeSize) {
+        val offset = region.offset
+        region.offset = offset + size
+        offset
+      } else {
+        val newnode = retainNode()
+        newnode.next = region.node
+        region.node = newnode
+        0
+      }
+    new Ref[T](region.node.loc + offset)
   }
 
   def ensureFixedSizeAlloc[T]: Unit = macro internal.macros.ensureFixedSizeAlloc[T]

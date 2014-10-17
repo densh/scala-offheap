@@ -3,11 +3,20 @@ import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
 
 package regions {
-  final class Region(val id: Int) extends AnyVal with Dynamic {
-    def dispose() = internal.disposeRegion(this)
+  class Region private[regions](
+    private[regions] var node: internal.Node,
+    private[regions] var offset: Long
+  ) {
+    def dispose(): Unit = internal.disposeRegion(this)
   }
   object Region {
     def apply() = internal.allocRegion()
+    def apply[T](f: Region => T): T = {
+      val r = internal.allocRegion()
+      val res = f(r)
+      internal.disposeRegion(r)
+      res
+    }
   }
 
   final class Ref[T](val loc: Long) extends AnyVal with Dynamic {

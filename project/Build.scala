@@ -40,7 +40,7 @@ object RegionsBuild extends Build {
     file("sandbox"),
     settings = defaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
-      scalacOptions += "-Xprint:jvm",
+      //scalacOptions += "-Xprint:jvm",
       fork in run := true//,
       //javaOptions in run += "-Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=n"
       //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"

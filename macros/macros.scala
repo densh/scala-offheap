@@ -132,7 +132,7 @@ class macros(val c: Context) {
 
   def regionOffset(ref: Tree): Tree = q"$ref.loc >> 8"
 
-  def address(ref: Tree): Tree = q"$internal.infos(${regionId(ref)} * 3) + ${regionOffset(ref)}"
+  def address(ref: Tree): Tree = q"$ref.loc"
 
   def sizeof(tpe: Type, length: Tree = EmptyTree): Tree = tpe match {
     case ByteTpe  | BooleanTpe                    => q"1"
