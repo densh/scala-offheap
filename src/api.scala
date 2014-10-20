@@ -42,6 +42,8 @@ package regions {
     def empty[T]: Ref[T]                               = macro internal.macros.refCompanionEmpty[T]
   }
 
+  case object EmptyRefException extends Exception
+
   class struct extends StaticAnnotation {
     def macroTransform(annottees: Any*): Any = macro internal.macros.struct
   }

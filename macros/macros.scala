@@ -164,10 +164,18 @@ class macros(val c: Context) {
 
   // --- * --- * --- * --- * ---
 
-  def refNonEmpty[A]: Tree                = q"$prefix.loc != 0"
-  def refIsEmpty[A]: Tree                 = q"$prefix.loc == 0"
-  def refGet[A: WeakTypeTag]              = read(weakTypeOf[A], q"$prefix.loc")
-  def refSet[A: WeakTypeTag](value: Tree) = write(weakTypeOf[A], q"$prefix.loc", value)
+  def refNonEmpty[A]: Tree = q"$prefix.loc != 0"
+  def refIsEmpty[A]: Tree  = q"$prefix.loc == 0"
+
+  def refGet[A: WeakTypeTag] =  {
+    val readA = read(weakTypeOf[A], q"$prefix.loc")
+    q"if ($prefix.loc != 0) $readA else throw $regions.EmptyRefException"
+  }
+
+  def refSet[A: WeakTypeTag](value: Tree) = {
+    val writeA = write(weakTypeOf[A], q"$prefix.loc", value)
+    q"if ($prefix.loc != 0) $writeA else throw $regions.EmptyRefException"
+  }
 
   def refCompanionApply[T: WeakTypeTag](value: Tree)(r: Tree): Tree = {
     val T = weakTypeOf[T]

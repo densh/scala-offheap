@@ -17,4 +17,16 @@ class CombinatorSuite extends FunSuite {
   test("nonempty nonEmpty") {
     Region { r => assert(Ref(1)(r).nonEmpty) }
   }
+
+  test("empty get") {
+    intercept[EmptyRefException.type] {
+      Ref.empty[Int].get
+    }
+  }
+
+  test("empty set") {
+    intercept[EmptyRefException.type] {
+      Ref.empty[Int].set(42)
+    }
+  }
 }

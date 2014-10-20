@@ -2,6 +2,7 @@ import org.scalatest.FunSuite
 import regions._
 
 class ArraySuite extends FunSuite {
+  /*
   test("read whole array") {
     Region { implicit r =>
       val array = Array(1, 2, 3)
@@ -58,4 +59,5 @@ class ArraySuite extends FunSuite {
       assert(ref(0) == 1L)
     }
   }
+  */
 }
