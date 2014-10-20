@@ -19,16 +19,27 @@ package regions {
     }
   }
 
-  final class Ref[T](val loc: Long) extends AnyVal with Dynamic {
-    def applyDynamic(method: String)(args: Any*): Any = macro internal.macros.refApplyDynamic[T]
-    def updateDynamic(field: String)(value: Any): Any = macro internal.macros.refUpdateDynamic[T]
-    def selectDynamic(field: String): Any             = macro internal.macros.refSelectDynamic[T]
-    def nonEmpty: Boolean = loc != 0
-    def isEmpty: Boolean  = loc == 0
+  final class Ref[A](val loc: Long) extends AnyVal {
+    def nonEmpty: Boolean                                      = macro internal.macros.refNonEmpty[A]
+    def isEmpty: Boolean                                       = macro internal.macros.refIsEmpty[A]
+    def get: A                                                 = macro internal.macros.refGet[A]
+    def set(value: A): Unit                                    = macro internal.macros.refSet[A]
+    /*
+    def getOrElse[B >: A](default: B): B                       = macro internal.macros.refGetOrElse[A]
+    def map[B](f: A => B)(implicit r: Region): Ref[B]          = macro internal.macros.refMap[A]
+    def fold[B](ifEmpty: B)(f: A => B): B                      = macro internal.macros.refFold[A]
+    def flatMap[B](f: A => Ref[B])(implicit r: Region): Ref[B] = macro internal.macros.refFlatMap[A]
+    def flatten[B](implicit ev: A <:< Ref[B]): Ref[B]          = macro internal.macros.refFlatten[A]
+    def filter(p: A => Boolean): Ref[B]                        = macro internal.macros.refFilter[A]
+    def contains[A1 >: A](elem: A1): Boolean                   = macro internal.macros.refContains[A]
+    def exists(p: A => Boolean): Boolean                       = macro internal.macros.refExists[A]
+    def forall(p: A => Boolean): Boolean                       = macro internal.macros.refForall[A]
+    def mutate[B](f: A => B): Unit                             = macro internal.macros.refMutate[A]
+    */
   }
-  object Ref extends Dynamic {
-    def applyDynamic[T](method: String)(args: Any*)(implicit region: Region): Any = macro internal.macros.refCompanionApplyDynamic[T]
-    def empty[T]: Ref[T] = null.asInstanceOf[Ref[T]]
+  object Ref {
+    def apply[T](value: T)(implicit r: Region): Ref[T] = macro internal.macros.refCompanionApply[T]
+    def empty[T]: Ref[T]                               = macro internal.macros.refCompanionEmpty[T]
   }
 
   class struct extends StaticAnnotation {

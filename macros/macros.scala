@@ -128,89 +128,15 @@ class macros(val c: Context) {
       q"val $v = $value; ..$writes"
   }
 
-  def regionId(ref: Tree): Tree = q"($ref.loc & 0x000000FF).toInt"
-
-  def regionOffset(ref: Tree): Tree = q"$ref.loc >> 8"
-
-  def address(ref: Tree): Tree = q"$ref.loc"
-
-  def sizeof(tpe: Type, length: Tree = EmptyTree): Tree = tpe match {
-    case ByteTpe  | BooleanTpe                    => q"1"
-    case ShortTpe | CharTpe                       => q"2"
-    case IntTpe   | FloatTpe                      => q"4"
-    case LongTpe  | DoubleTpe | RefOf(_)          => q"8"
-    case ArrayOf(targ @ (Primitive() | RefOf(_))) =>
-      require(length.nonEmpty)
-      q"4 + ${sizeof(targ)} * $length"
-    case StructOf(fields) =>
-      val size = fields.map { f =>
-        val q"${size: Int}" = sizeof(f.tpe)
-        size
-      }.reduce(_ + _)
-      q"$size"
+  def sizeof(tpe: Type): Int = tpe match {
+    case ByteTpe  | BooleanTpe           => 1
+    case ShortTpe | CharTpe              => 2
+    case IntTpe   | FloatTpe             => 4
+    case LongTpe  | DoubleTpe | RefOf(_) => 8
+    case StructOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
   }
 
-  def refApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*): Tree = wrap {
-    val T = weakTypeOf[T]
-    T match {
-      case Primitive() | RefOf(_) | StructOf(_) =>
-        (method, args) match {
-          case (q""" "apply" """, Seq()) =>
-            read(T, address(prefix))
-          case (q""" "update" """, v +: Seq()) =>
-            if (!(v.tpe <:< T)) abort(s"updated value must be of type $T", at = v.pos)
-            write(T, address(prefix), v)
-        }
-      case ArrayOf(targ) =>
-        (method, args) match {
-          case (q""" "apply" """, Seq()) =>
-            read(T, address(prefix))
-          case (q""" "apply" """, i +: Seq()) =>
-            if (!(i.tpe <:< IntTpe)) abort(s"index must be of type Int", at = i.pos)
-            read(targ, q"${address(prefix)} + 4 + $i * ${sizeof(targ)}")
-          case (q""" "update" """, v +: Seq()) =>
-            if (!(v.tpe <:< T)) abort(s"updated value must be of type $T", at = v.pos)
-            write(T, address(prefix), v)
-          case (q""" "update" """, i +: v +: Seq()) =>
-            if (!(i.tpe <:< IntTpe)) abort(s"index must be of type Int", at = i.pos)
-            if (!(v.tpe <:< targ)) abort(s"updated value must be of type $targ", at = v.pos)
-            write(targ, q"${address(prefix)} + 4 + $i * ${sizeof(targ)}", v)
-        }
-    }
-  }
-
-  def refUpdateDynamic[T: WeakTypeTag](field: Tree)(value: Tree): Tree = wrap {
-    val T = weakTypeOf[T]
-    T match {
-      case StructOf(fields) =>
-        val q"${fieldStr: String}" = field
-        fields.collectFirst {
-          case f if f.name.decoded.toString == fieldStr =>
-            write(f.tpe, q"${address(prefix)} + ${f.offset}", value)
-        }.getOrElse {
-          abort(s"struct $T doesn't have field $field")
-        }
-    }
-  }
-
-  def refSelectDynamic[T: WeakTypeTag](field: Tree): Tree = wrap {
-    val T = weakTypeOf[T]
-    T match {
-      case ArrayOf(targ) =>
-        field match {
-          case q""" "length" """ =>
-            read(IntTpe, address(prefix))
-        }
-      case StructOf(fields) =>
-        val q"${fieldStr: String}" = field
-        fields.collectFirst {
-          case f if f.name.decoded.toString == fieldStr =>
-            read(f.tpe, q"${address(prefix)} + ${f.offset}")
-        }.getOrElse {
-          abort(s"struct $T doesn't have field $field")
-        }
-    }
-  }
+  // --- * --- * --- * --- * ---
 
   def struct(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args)" :: Nil =>
@@ -236,42 +162,28 @@ class macros(val c: Context) {
     }
   }
 
-  def refCompanionApplyDynamic[T: WeakTypeTag](method: Tree)(args: Tree*)(region: Tree): Tree = wrap {
+  // --- * --- * --- * --- * ---
+
+  def refNonEmpty[A]: Tree                = q"$prefix.loc != 0"
+  def refIsEmpty[A]: Tree                 = q"$prefix.loc == 0"
+  def refGet[A: WeakTypeTag]              = read(weakTypeOf[A], q"$prefix.loc")
+  def refSet[A: WeakTypeTag](value: Tree) = write(weakTypeOf[A], q"$prefix.loc", value)
+
+  def refCompanionApply[T: WeakTypeTag](value: Tree)(r: Tree): Tree = {
     val T = weakTypeOf[T]
-    (T, args) match {
-      case (NothingTpe, value +: Seq()) =>
-        val V = value.tpe.widen
-        val v = fresh("v")
-        val ref = fresh("ref")
-        val size = V match {
-          case Primitive() | RefOf(_) | StructOf(_) => sizeof(V)
-          case ArrayOf(_)                           => sizeof(V, q"$v.length")
-          case _                                    => abort(s"allocation of $V is not supported")
-        }
-        q"""
-          val $v = $value
-          val $ref = $internal.allocMemory[$V]($region, $size)
-          $ref() = $v
-          $ref
-        """
-      case (StructOf(fields), _) =>
-        val ref = fresh("ref")
-        val size = sizeof(T)
-        val writes = fields.toSeq.zip(args).map {
-          case (f, v) => q"$ref.${f.name} = ($v: ${f.tpe})"
-        }
-        val amsg = s"starting to write"
-        val bmsg = s"done writing"
-        q"""
-          val $ref = $internal.allocMemory[$T]($region, $size)
-          ..$writes
-          $ref
-        """
+    val v = fresh("v")
+    val ref = fresh("ref")
+    val size = T match {
+      case Primitive() | RefOf(_) | StructOf(_) => sizeof(T)
+      case _                                    => abort(s"allocation of $T is not supported")
     }
+    q"""
+      val $v = $value
+      val $ref = $internal.allocMemory[$T]($r, $size)
+      $ref.set($v)
+      $ref
+    """
   }
 
-  def wrap(f: => Tree): Tree = f /*{
-    val wrapper = fresh("wrapper")
-    q"def $wrapper() = { $f }; $wrapper()"
-  }*/
+  def refCompanionEmpty[T: WeakTypeTag]: Tree = q"null.asInstanceOf[Ref[${weakTypeOf[T]}]]"
 }
