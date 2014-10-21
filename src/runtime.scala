@@ -1,16 +1,18 @@
-package regions
+package regions.internal
+
 import sun.misc.Unsafe
 import scala.collection.immutable.IntMap
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.macros
+import regions.{Region, Ref}
 
-package internal {
+package runtime {
   class struct extends StaticAnnotation
+  class union extends StaticAnnotation
+  case class Node(loc: Long, var next: Node)
 }
 
-package object internal {
-  private[regions] case class Node(loc: Long, var next: Node)
-
+package object runtime {
   val unsafe: Unsafe = {
     val f = classOf[Unsafe].getDeclaredField("theUnsafe");
     f.setAccessible(true);
@@ -78,6 +80,4 @@ package object internal {
       }
     new Ref[T](region.node.loc + offset)
   }
-
-  def ensureFixedSizeAlloc[T]: Unit = macro internal.macros.ensureFixedSizeAlloc[T]
 }

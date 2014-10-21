@@ -1,20 +1,21 @@
 import scala.language.dynamics
 import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
+import regions.internal.runtime
 
 package regions {
   class Region private[regions](
-    private[regions] var node: internal.Node,
+    private[regions] var node: runtime.Node,
     private[regions] var offset: Long
   ) {
-    def dispose(): Unit = internal.disposeRegion(this)
+    def dispose(): Unit = runtime.disposeRegion(this)
   }
   object Region {
-    def apply() = internal.allocRegion()
+    def apply() = runtime.allocRegion()
     def apply[T](f: Region => T): T = {
-      val r = internal.allocRegion()
+      val r = runtime.allocRegion()
       val res = f(r)
-      internal.disposeRegion(r)
+      runtime.disposeRegion(r)
       res
     }
   }
@@ -46,5 +47,9 @@ package regions {
 
   class struct extends StaticAnnotation {
     def macroTransform(annottees: Any*): Any = macro internal.macros.struct
+  }
+
+  class union extends StaticAnnotation {
+    def macroTransform(annottees: Any*): Any = macro internal.macros.union
   }
 }

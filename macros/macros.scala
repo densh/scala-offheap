@@ -7,12 +7,14 @@ class macros(val c: Context) {
   import c.universe._
   import c.universe.definitions._
 
-  val internalStructClass = rootMirror.staticClass("regions.internal.struct")
+  val runtimeStructClass = rootMirror.staticClass("regions.internal.runtime.struct")
+  val runtimeUnionClass = rootMirror.staticClass("regions.internal.runtime.union")
   val RefClass = rootMirror.staticClass("regions.Ref")
   val prefix = c.prefix.tree
   val regions = q"_root_.regions"
   val internal = q"$regions.internal"
-  val unsafe = q"$internal.unsafe"
+  val runtime = q"$internal.runtime"
+  val unsafe = q"$runtime.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
@@ -42,14 +44,13 @@ class macros(val c: Context) {
 
   object StructOf {
     def unapply(tpe: Type): Option[List[StructField]] = tpe.typeSymbol match {
-      case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == internalStructClass) =>
+      case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == runtimeStructClass) =>
         val args = tpe.typeSymbol.asClass.primaryConstructor.asMethod.paramLists.head.map { arg => (arg.name.toTermName, arg.info) }
         val buf = mutable.ListBuffer[StructField]()
         var offset = 0
         args.foreach { case (name, tpe) =>
           buf.append(StructField(name, tpe, offset))
-          val q"${size: Int}" = sizeof(tpe)
-          offset += size
+          offset += sizeof(tpe)
         }
         Some(buf.toList)
       case _ => None
@@ -144,7 +145,7 @@ class macros(val c: Context) {
       val checks = args.map {
         case q"$_ val $name: $tpt = $default" =>
           if (default.nonEmpty) abort("structs with default values are not supported")
-          q"_root_.regions.internal.ensureFixedSizeAlloc[$tpt]"
+          q"$internal.ensure.allocatable[$tpt]"
       }
       val nargs = args.map { case q"$_ val $name: $tpt = $_" => q"val $name: $tpt" }
       q"""
@@ -154,7 +155,11 @@ class macros(val c: Context) {
       """
   }
 
-  def ensureFixedSizeAlloc[T: WeakTypeTag]: Tree = {
+  def union(annottees: Tree*): Tree = ???
+
+  // --- * --- * --- * --- * ---
+
+  def ensureAllocatable[T: WeakTypeTag]: Tree = {
     val T = weakTypeOf[T]
     T match {
       case Primitive() | StructOf(_) | RefOf(_) => q""
@@ -165,6 +170,7 @@ class macros(val c: Context) {
   // --- * --- * --- * --- * ---
 
   def refNonEmpty[A]: Tree = q"$prefix.loc != 0"
+
   def refIsEmpty[A]: Tree  = q"$prefix.loc == 0"
 
   def refGet[A: WeakTypeTag] =  {
@@ -187,7 +193,7 @@ class macros(val c: Context) {
     }
     q"""
       val $v = $value
-      val $ref = $internal.allocMemory[$T]($r, $size)
+      val $ref = $runtime.allocMemory[$T]($r, $size)
       $ref.set($v)
       $ref
     """
