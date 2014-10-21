@@ -137,28 +137,26 @@ trait util {
     case StructOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
   }
 
-  def declosurify(f: Tree, argValue: Tree) = {
-    import c.internal._, c.internal.decorators._
-    val q"($param => $body)" = f
-    val q"$_ val $_: $argTpt = $_" = param
-    val arg = fresh("arg")
-    val argSym = enclosingOwner.newTermSymbol(arg).setInfo(argTpt.tpe)
-    val argDef = valDef(argSym, argValue)
-    changeOwner(body, f.symbol, enclosingOwner)
-    val transformedBody = typingTransform(body) { (tree, api) =>
-      tree match {
-        case id: Ident if id.symbol == param.symbol =>
-          api.typecheck(q"$argSym")
-        case _ =>
-          api.default(tree)
+  def app(f: Tree, argValue: Tree) = f match {
+    case q"($_ => $_)" =>
+      import c.internal._, c.internal.decorators._
+      val q"($param => $body)" = f
+      val q"$_ val $_: $argTpt = $_" = param
+      val arg = fresh("arg")
+      val argSym = enclosingOwner.newTermSymbol(arg).setInfo(argTpt.tpe)
+      val argDef = valDef(argSym, argValue)
+      changeOwner(body, f.symbol, enclosingOwner)
+      val transformedBody = typingTransform(body) { (tree, api) =>
+        tree match {
+          case id: Ident if id.symbol == param.symbol =>
+            api.typecheck(q"$argSym")
+          case _ =>
+            api.default(tree)
+        }
       }
-    }
-    q"$argDef; $transformedBody"
-  }
-
-  def maybeDeclosurify(f: Tree, argValue: Tree) = f match {
-    case q"($_ => $_)" => declosurify(f, argValue)
-    case _             => q"$f($argValue)"
+      q"$argDef; $transformedBody"
+    case _             =>
+      q"$f($argValue)"
   }
 
   def paramTpe(f: Tree) = f.tpe.typeArgs.head
@@ -209,73 +207,86 @@ class ref(val c: Context) extends util {
   import c.universe._
   import c.universe.definitions._
 
-  def branch(f: TermName => (Tree, Tree)) =
+  lazy val A = c.prefix.tree.tpe.baseType(RefClass).typeArgs.head
+
+  def readRef(pre: TermName) = read(A, q"$pre.addr")
+
+  def writeRef(pre: TermName, value: Tree) = write(A, q"$pre.addr", value)
+
+  def branchEmpty(f: TermName => (Tree, Tree)) =
     stabilized { pre =>
       val (nonEmpty, empty) = f(pre)
       q"if ($pre.addr != 0) $nonEmpty else $empty"
     }
 
-  def allocRef(A: Type, value: Tree, r: Tree) = {
+  def allocRef(T: Type, value: Tree, r: Tree) = {
     val v = fresh("v")
     val ref = fresh("ref")
-    val size = A match {
-      case Primitive() | RefOf(_) | StructOf(_) => sizeof(A)
-      case _                                    => abort(s"allocation of $A is not supported")
+    val size = T match {
+      case Primitive() | RefOf(_) | StructOf(_) => sizeof(T)
+      case _                                    => abort(s"allocation of $T is not supported")
     }
     q"""
       val $v = $value
-      val $ref = $runtime.allocMemory[$A]($r, $size)
+      val $ref = $runtime.allocMemory[$T]($r, $size)
       $ref.set($v)
       $ref
     """
   }
 
-  def emptyRef(A: Type) =
-    q"null.asInstanceOf[$RefClass[$A]]"
+  def emptyRef(T: Type) =
+    q"null.asInstanceOf[$RefClass[$T]]"
 
   def throwEmptyRef =
     q"throw $regions.EmptyRefException"
 
-  def nonEmpty[A]: Tree =
+  def nonEmpty: Tree =
     q"${c.prefix}.addr != 0"
 
-  def isEmpty[A]: Tree =
+  def isEmpty: Tree =
     q"${c.prefix}.addr == 0"
 
-  def get[A: WeakTypeTag] =
-    branch { pre => (read(wt[A], q"$pre.addr"), throwEmptyRef) }
+  def get =
+    branchEmpty { pre => (readRef(pre), throwEmptyRef) }
 
-  def getOrElse[A: WeakTypeTag](default: Tree) =
-    branch { pre => (read(wt[A], q"$pre.addr"), default) }
+  def getOrElse(default: Tree) =
+    branchEmpty { pre => (readRef(pre), default) }
 
-  def set[A: WeakTypeTag](value: Tree) =
-    branch { pre => (write(wt[A], q"$pre.addr", value), throwEmptyRef) }
+  def set(value: Tree) =
+    branchEmpty { pre => (writeRef(pre, value), throwEmptyRef) }
 
-  def setOrElse[A: WeakTypeTag](value: Tree)(default: Tree) =
-    branch { pre => (write(wt[A], q"$pre.addr", value), default) }
+  def setOrElse(value: Tree)(default: Tree) =
+    branchEmpty { pre => (writeRef(pre, value), default) }
 
-  def contains[A: WeakTypeTag](elem: Tree) =
-    branch { pre =>
-      val readA = read(wt[A], q"$pre.addr")
-      (q"$readA == $elem", q"false")
-    }
+  def contains(elem: Tree) =
+    branchEmpty { pre => (q"${readRef(pre)} == $elem", q"false") }
 
-  def flatten[A: WeakTypeTag](ev: Tree) =
-    branch { pre => (read(wt[A], q"$pre.addr"), emptyRef(wt[A].typeArgs.head)) }
+  def flatten(ev: Tree) =
+    branchEmpty { pre => (readRef(pre), emptyRef(A.typeArgs.head)) }
 
-  def map[A: WeakTypeTag](f: Tree)(r: Tree) =
-    branch { pre =>
-      (allocRef(paramTpe(f), maybeDeclosurify(f, read(wt[A], q"$pre.addr")), r), q"$pre")
-    }
+  def map(f: Tree)(r: Tree) =
+    branchEmpty { pre => (allocRef(paramTpe(f), app(f, readRef(pre)), r), q"$pre") }
 
-  def fold[A: WeakTypeTag](ifEmpty: Tree)(f: Tree) =
-    branch { pre => (maybeDeclosurify(f, read(wt[A], q"$pre.addr")), ifEmpty) }
+  def fold(ifEmpty: Tree)(f: Tree) =
+    branchEmpty { pre => (app(f, readRef(pre)), ifEmpty) }
 
-  def alloc[A: WeakTypeTag](value: Tree)(r: Tree) =
-    allocRef(wt[A], value, r)
+  def filter(p: Tree) =
+    stabilized { pre => q"if ($pre.addr == 0 || ${app(p, readRef(pre))}) ${emptyRef(A)} else $pre" }
 
-  def empty[A: WeakTypeTag] =
-    emptyRef(wt[A])
+  def exists(p: Tree) =
+    stabilized { pre => q"($pre.addr != 0) && ${app(p, readRef(pre))}" }
+
+  def forall(p: Tree) =
+    stabilized { pre => q"($pre.addr == 0) || ${app(p, readRef(pre))}" }
+
+  def mutate(f: Tree) =
+    branchEmpty { pre => (q"$pre.set(${app(f, readRef(pre))})", q"$pre") }
+
+  def alloc[T: WeakTypeTag](value: Tree)(r: Tree) =
+    allocRef(wt[T], value, r)
+
+  def empty[T: WeakTypeTag] =
+    emptyRef(wt[T])
 }
 
 class region(val c: Context) extends util {
@@ -285,13 +296,13 @@ class region(val c: Context) extends util {
   def alloc[T: WeakTypeTag](f: Tree) = {
     val r = fresh("r")
     val res = fresh("res")
-    val app = f match {
-      case q"($_ => $_)" => declosurify(f, q"$r")
+    val fapp = f match {
+      case q"($_ => $_)" => app(f, q"$r")
       case _             => q"$f($r)"
     }
     q"""
       val $r = $runtime.allocRegion()
-      val $res = $app
+      val $res = $fapp
       $runtime.disposeRegion($r)
       $res
     """

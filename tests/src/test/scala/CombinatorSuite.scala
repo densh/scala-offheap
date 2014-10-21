@@ -80,6 +80,55 @@ class CombinatorSuite extends FunSuite {
     }
   }
 
+  test("nonempty filter #1") {
+    Region { implicit r =>
+      val ref = Ref(1)
+      assert(ref.filter(_ == 1).isEmpty)
+    }
+  }
+
+  test("nonempty filter #2") {
+    Region { implicit r =>
+      val ref = Ref(1)
+    }
+  }
+
+  test("nonempty exists #1") {
+    Region { implicit r =>
+      val ref = Ref(1)
+      assert(!ref.exists(_ == 0))
+    }
+  }
+
+  test("nonempty exists #2") {
+    Region { implicit r =>
+      val ref = Ref(1)
+      assert(ref.exists(_ == 1))
+    }
+  }
+
+  test("nonempty forall #1") {
+    Region { implicit r =>
+      val ref = Ref(1)
+      assert(ref.forall(_ == 1))
+    }
+  }
+
+  test("nonempty forall #2") {
+    Region { implicit r =>
+      val ref = Ref(1)
+      assert(!ref.forall(_ == 0))
+    }
+  }
+
+  test("nonempty mutate") {
+    Region { implicit r =>
+      val ref = Ref(1)
+      ref.mutate(_ + 1)
+      assert(ref.get == 2)
+    }
+  }
+
   test("empty isEmpty") {
     assert(Ref.empty[Int].isEmpty)
   }
@@ -127,5 +176,21 @@ class CombinatorSuite extends FunSuite {
 
   test("empty fold") {
     assert(Ref.empty[Int].fold(0)(identity) == 0)
+  }
+
+  test("empty filter") {
+    assert(Ref.empty[Int].filter(_ == 0).isEmpty)
+  }
+
+  test("empty exists") {
+    assert(!Ref.empty[Int].exists(_ == 0))
+  }
+
+  test("empty forall") {
+    assert(Ref.empty[Int].forall(_ => false))
+  }
+
+  test("empty mutate") {
+    Ref.empty[Int].mutate(_ + 1)
   }
 }

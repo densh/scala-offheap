@@ -3,7 +3,6 @@ package regions.internal
 import sun.misc.Unsafe
 import scala.collection.immutable.IntMap
 import scala.annotation.StaticAnnotation
-import scala.language.experimental.macros
 import regions.{Region, Ref}
 
 package runtime {
