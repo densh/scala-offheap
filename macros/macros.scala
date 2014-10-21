@@ -1,24 +1,24 @@
-package regions.internal
+package regions.internal.macros
 
 import scala.collection.mutable
 import scala.reflect.macros.whitebox.Context
 
-class macros(val c: Context) {
+trait util {
+  val c: Context
   import c.universe._
   import c.universe.definitions._
 
   val runtimeStructClass = rootMirror.staticClass("regions.internal.runtime.struct")
   val runtimeUnionClass = rootMirror.staticClass("regions.internal.runtime.union")
   val RefClass = rootMirror.staticClass("regions.Ref")
-  val prefix = c.prefix.tree
   val regions = q"_root_.regions"
   val internal = q"$regions.internal"
   val runtime = q"$internal.runtime"
   val unsafe = q"$runtime.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
-
-  def fresh(pre: String): TermName = TermName(c.freshName(pre))
+  def wt[T: WeakTypeTag]: Type        = weakTypeOf[T]
+  def fresh(pre: String): TermName    = TermName(c.freshName(pre))
 
   object RefOf {
     def unapply(tpe: Type): Option[Type] =
@@ -106,7 +106,7 @@ class macros(val c: Context) {
                         else ${Literal(Constant(0.toByte))})
       """
     case RefOf(_) =>
-      write(LongTpe, address, q"$value.loc")
+      write(LongTpe, address, q"$value.addr")
     case ArrayOf(targ) =>
       val v = fresh("v")
       val i = fresh("i")
@@ -137,7 +137,41 @@ class macros(val c: Context) {
     case StructOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
   }
 
-  // --- * --- * --- * --- * ---
+  def declosurify(f: Tree, argValue: Tree) = {
+    import c.internal._, c.internal.decorators._
+    val q"($param => $body)" = f
+    val q"$_ val $_: $argTpt = $_" = param
+    val arg = fresh("arg")
+    val argSym = enclosingOwner.newTermSymbol(arg).setInfo(argTpt.tpe)
+    val argDef = valDef(argSym, argValue)
+    changeOwner(body, f.symbol, enclosingOwner)
+    val transformedBody = typingTransform(body) { (tree, api) =>
+      tree match {
+        case id: Ident if id.symbol == param.symbol =>
+          api.typecheck(q"$argSym")
+        case _ =>
+          api.default(tree)
+      }
+    }
+    q"$argDef; $transformedBody"
+  }
+
+  def maybeDeclosurify(f: Tree, argValue: Tree) = f match {
+    case q"($_ => $_)" => declosurify(f, argValue)
+    case _             => q"$f($argValue)"
+  }
+
+  def paramTpe(f: Tree) = f.tpe.typeArgs.head
+
+  def stabilized(f: TermName => Tree) = {
+    val pre = fresh("pre")
+    q"val $pre = ${c.prefix}; ${f(pre)}"
+  }
+}
+
+class annotations(val c: Context) extends util {
+  import c.universe._
+  import c.universe.definitions._
 
   def struct(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args)" :: Nil =>
@@ -156,48 +190,110 @@ class macros(val c: Context) {
   }
 
   def union(annottees: Tree*): Tree = ???
+}
 
-  // --- * --- * --- * --- * ---
+class ensure(val c: Context) extends util {
+  import c.universe._
+  import c.universe.definitions._
 
-  def ensureAllocatable[T: WeakTypeTag]: Tree = {
-    val T = weakTypeOf[T]
+  def allocatable[T: WeakTypeTag]: Tree = {
+    val T = wt[T]
     T match {
       case Primitive() | StructOf(_) | RefOf(_) => q""
       case _ => abort(s"$T is not fixed sized allocatable object")
     }
   }
+}
 
-  // --- * --- * --- * --- * ---
+class ref(val c: Context) extends util {
+  import c.universe._
+  import c.universe.definitions._
 
-  def refNonEmpty[A]: Tree = q"$prefix.loc != 0"
+  def branch(f: TermName => (Tree, Tree)) =
+    stabilized { pre =>
+      val (nonEmpty, empty) = f(pre)
+      q"if ($pre.addr != 0) $nonEmpty else $empty"
+    }
 
-  def refIsEmpty[A]: Tree  = q"$prefix.loc == 0"
-
-  def refGet[A: WeakTypeTag] =  {
-    val readA = read(weakTypeOf[A], q"$prefix.loc")
-    q"if ($prefix.loc != 0) $readA else throw $regions.EmptyRefException"
-  }
-
-  def refSet[A: WeakTypeTag](value: Tree) = {
-    val writeA = write(weakTypeOf[A], q"$prefix.loc", value)
-    q"if ($prefix.loc != 0) $writeA else throw $regions.EmptyRefException"
-  }
-
-  def refCompanionApply[T: WeakTypeTag](value: Tree)(r: Tree): Tree = {
-    val T = weakTypeOf[T]
+  def allocRef(A: Type, value: Tree, r: Tree) = {
     val v = fresh("v")
     val ref = fresh("ref")
-    val size = T match {
-      case Primitive() | RefOf(_) | StructOf(_) => sizeof(T)
-      case _                                    => abort(s"allocation of $T is not supported")
+    val size = A match {
+      case Primitive() | RefOf(_) | StructOf(_) => sizeof(A)
+      case _                                    => abort(s"allocation of $A is not supported")
     }
     q"""
       val $v = $value
-      val $ref = $runtime.allocMemory[$T]($r, $size)
+      val $ref = $runtime.allocMemory[$A]($r, $size)
       $ref.set($v)
       $ref
     """
   }
 
-  def refCompanionEmpty[T: WeakTypeTag]: Tree = q"null.asInstanceOf[Ref[${weakTypeOf[T]}]]"
+  def emptyRef(A: Type) =
+    q"null.asInstanceOf[$RefClass[$A]]"
+
+  def throwEmptyRef =
+    q"throw $regions.EmptyRefException"
+
+  def nonEmpty[A]: Tree =
+    q"${c.prefix}.addr != 0"
+
+  def isEmpty[A]: Tree =
+    q"${c.prefix}.addr == 0"
+
+  def get[A: WeakTypeTag] =
+    branch { pre => (read(wt[A], q"$pre.addr"), throwEmptyRef) }
+
+  def getOrElse[A: WeakTypeTag](default: Tree) =
+    branch { pre => (read(wt[A], q"$pre.addr"), default) }
+
+  def set[A: WeakTypeTag](value: Tree) =
+    branch { pre => (write(wt[A], q"$pre.addr", value), throwEmptyRef) }
+
+  def setOrElse[A: WeakTypeTag](value: Tree)(default: Tree) =
+    branch { pre => (write(wt[A], q"$pre.addr", value), default) }
+
+  def contains[A: WeakTypeTag](elem: Tree) =
+    branch { pre =>
+      val readA = read(wt[A], q"$pre.addr")
+      (q"$readA == $elem", q"false")
+    }
+
+  def flatten[A: WeakTypeTag](ev: Tree) =
+    branch { pre => (read(wt[A], q"$pre.addr"), emptyRef(wt[A].typeArgs.head)) }
+
+  def map[A: WeakTypeTag](f: Tree)(r: Tree) =
+    branch { pre =>
+      (allocRef(paramTpe(f), maybeDeclosurify(f, read(wt[A], q"$pre.addr")), r), q"$pre")
+    }
+
+  def fold[A: WeakTypeTag](ifEmpty: Tree)(f: Tree) =
+    branch { pre => (maybeDeclosurify(f, read(wt[A], q"$pre.addr")), ifEmpty) }
+
+  def alloc[A: WeakTypeTag](value: Tree)(r: Tree) =
+    allocRef(wt[A], value, r)
+
+  def empty[A: WeakTypeTag] =
+    emptyRef(wt[A])
+}
+
+class region(val c: Context) extends util {
+  import c.universe._
+  import c.universe.definitions._
+
+  def alloc[T: WeakTypeTag](f: Tree) = {
+    val r = fresh("r")
+    val res = fresh("res")
+    val app = f match {
+      case q"($_ => $_)" => declosurify(f, q"$r")
+      case _             => q"$f($r)"
+    }
+    q"""
+      val $r = $runtime.allocRegion()
+      val $res = $app
+      $runtime.disposeRegion($r)
+      $res
+    """
+  }
 }

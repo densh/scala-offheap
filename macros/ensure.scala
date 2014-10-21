@@ -1,7 +1,7 @@
 package regions.internal
 
-import scala.language.experimental.macros
+import scala.language.experimental.{macros => CanMacro}
 
 object ensure {
-  def allocatable[T]: Unit = macro macros.ensureAllocatable[T]
+  def allocatable[T]: Unit = macro macros.ensure.allocatable[T]
 }

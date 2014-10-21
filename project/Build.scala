@@ -40,11 +40,11 @@ object RegionsBuild extends Build {
     file("sandbox"),
     settings = defaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
-      //scalacOptions += "-Xprint:jvm",
-      fork in run := true,
+      scalacOptions += "-Xprint:posterasure",
+      fork in run := true//,
       //javaOptions in run += "-Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=n"
-      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib",
-      javaOptions in run ++= Seq("-Xms1M", "-Xmx1M")
+      // javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib",
+      //javaOptions in run ++= Seq("-Xms1M", "-Xmx1M")
     ),
     dependencies = Seq(src)
   )
@@ -55,7 +55,8 @@ object RegionsBuild extends Build {
     settings = defaults ++ Seq(
       libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
       incOptions := incOptions.value.withNameHashing(false),
-      parallelExecution in Test := false
+      parallelExecution in Test := false,
+      fork in Test := true
     ),
     dependencies = Seq(src)
   )
