@@ -64,7 +64,7 @@ package object runtime {
     regionNext -= 1
   }
 
-  def allocMemory[T](region: Region, size: Long): Ref[T] = {
+  def allocMemory(region: Region, size: Long): Long = {
     val old = region.offset
     val offset =
       if (old + size < nodeSize) {
@@ -77,6 +77,6 @@ package object runtime {
         region.offset = size
         0
       }
-    new Ref[T](region.node.loc + offset)
+    region.node.loc + offset
   }
 }
