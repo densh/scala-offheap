@@ -12,14 +12,20 @@ package runtime {
 }
 
 package object runtime {
+  final val NODE_PAYLOAD_SIZE = 409600
+  final val ARENA_NODE_COUNT  = 32
+  final val ARENA_SIZE        = NODE_PAYLOAD_SIZE * ARENA_NODE_COUNT
+
   val unsafe: Unsafe = {
     val f = classOf[Unsafe].getDeclaredField("theUnsafe");
     f.setAccessible(true);
     f.get(null).asInstanceOf[Unsafe]
   }
 
-  val nodeSize = 409600
   var free: Node = null
+  var regions: Array[Region] = (1 to 16).map { _ => new Region(null, 0) }.toArray
+  var regionNext: Int = 0
+
   def retainNode(): Node = {
     if (free == null)
       allocArena()
@@ -28,15 +34,16 @@ package object runtime {
     res.next = null
     res
   }
+
   def allocArena(): Unit = {
-    val nodes = 32
-    val arena = unsafe.allocateMemory(nodeSize * nodes)
+    val arena = unsafe.allocateMemory(ARENA_SIZE)
     var i = 0
-    while (i < nodes) {
-      free = Node(arena + i * nodeSize, free)
+    while (i < ARENA_NODE_COUNT) {
+      free = Node(arena + i * NODE_PAYLOAD_SIZE, free)
       i += 1
     }
   }
+
   def releaseNode(node: Node): Unit = {
     var n = node
     while (n != null) {
@@ -46,9 +53,6 @@ package object runtime {
       free = cur
     }
   }
-
-  var regions: Array[Region] = (1 to 16).map { _ => new Region(null, 0) }.toArray
-  var regionNext: Int = 0
 
   def allocRegion(): Region = {
     val region = regions(regionNext)
@@ -67,7 +71,7 @@ package object runtime {
   def allocMemory(region: Region, size: Long): Long = {
     val old = region.offset
     val offset =
-      if (old + size < nodeSize) {
+      if (old + size < NODE_PAYLOAD_SIZE) {
         region.offset = old + size
         old
       } else {
