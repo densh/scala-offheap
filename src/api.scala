@@ -33,6 +33,7 @@ package regions {
     def apply[T](value: T)(implicit r: Region): Ref[T] = macro macros.Ref.alloc[T]
   }
 
+  /*
   final class FatRef[A](val addr: Long) extends AnyVal {
     def isEmpty: Boolean                                    = macro macros.FatRef.isEmpty
     def nonEmpty: Boolean                                   = macro macros.FatRef.nonEmpty
@@ -44,6 +45,7 @@ package regions {
     def apply[T](values: T*)(implicit r: Region): FatRef[T]         = macro macros.FatRef.alloc[T]
     def fill[T](n: Long)(elem: => T)(implicit r: Region): FatRef[T] = macro macros.FatRef.fill[T]
   }
+  */
 
   case object EmptyRefException extends Exception
 

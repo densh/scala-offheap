@@ -11,7 +11,7 @@ trait Common {
   val StructClass = rootMirror.staticClass("regions.internal.runtime.struct")
   val UnionClass  = rootMirror.staticClass("regions.internal.runtime.union")
   val RefClass    = rootMirror.staticClass("regions.Ref")
-  val FatRefClass = rootMirror.staticClass("regions.FatRef")
+  // val FatRefClass = rootMirror.staticClass("regions.FatRef")
 
   val regions  = q"_root_.regions"
   val internal = q"$regions.internal"
@@ -278,6 +278,7 @@ class Ref(val c: Context) extends RefCommon {
     allocRef(wt[T], value, r)
 }
 
+/*
 class FatRef(val c: Context) extends RefCommon {
   import c.universe._
   import c.universe.definitions._
@@ -347,6 +348,7 @@ class FatRef(val c: Context) extends RefCommon {
     """
   }
 }
+*/
 
 class Region(val c: Context) extends Common {
   import c.universe._
