@@ -22,10 +22,19 @@ trait Common {
   def wt[T: WeakTypeTag]: Type        = weakTypeOf[T]
   def fresh(pre: String): TermName    = TermName(c.freshName(pre))
 
+  def debug[T](header: String)(f: => T): T = {
+    val res = f
+    println(s"$header = $res")
+    res
+  }
+
   object RefOf {
-    def unapply(tpe: Type): Option[Type] =
-      if (tpe.typeSymbol == RefClass) Some(tpe.typeArgs.head)
-      else None
+    def unapply(tpe: Type): Option[(Type, Type)] =
+      if (tpe.typeSymbol != RefClass) None
+      else {
+        val base = tpe.baseType(RefClass)
+        Some((base.typeArgs(0), base.typeArgs(1)))
+      }
   }
 
   object ArrayOf {
@@ -44,8 +53,8 @@ trait Common {
 
   object Allocatable {
     def unapply(tpe: Type): Boolean = tpe match {
-      case Primitive() | RefOf(_) | StructOf(_) => true
-      case _                                    => false
+      case Primitive() | RefOf(_, _) | StructOf(_) => true
+      case _                                       => false
     }
   }
 
@@ -72,9 +81,9 @@ trait Common {
       q"$unsafe.$method($address)"
     case BooleanTpe =>
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
-    case RefOf(targ) =>
+    case RefOf(targ, r) =>
       val value = read(LongTpe, address)
-      q"new $regions.Ref[$targ]($value)"
+      q"new $regions.Ref[$targ, $r]($value)"
     case StructOf(fields) =>
       val companion = tpe.typeSymbol.companion
       val tmps = fields.map { f => fresh(f.name.decoded) }
@@ -98,7 +107,7 @@ trait Common {
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
-    case RefOf(_) =>
+    case RefOf(_, _) =>
       write(LongTpe, address, q"$value.addr")
     case StructOf(fields) =>
       val v = fresh("v")
@@ -109,11 +118,11 @@ trait Common {
   }
 
   def sizeof(tpe: Type): Int = tpe match {
-    case ByteTpe  | BooleanTpe           => 1
-    case ShortTpe | CharTpe              => 2
-    case IntTpe   | FloatTpe             => 4
-    case LongTpe  | DoubleTpe | RefOf(_) => 8
-    case StructOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
+    case ByteTpe  | BooleanTpe              => 1
+    case ShortTpe | CharTpe                 => 2
+    case IntTpe   | FloatTpe                => 4
+    case LongTpe  | DoubleTpe | RefOf(_, _) => 8
+    case StructOf(fields)                   => fields.map(f => sizeof(f.tpe)).sum
   }
 
   def app(f: Tree, argValue: Tree) = f match {
@@ -177,13 +186,12 @@ class Ensure(val c: Context) extends Common {
   }
 }
 
-trait RefCommon extends Common {
+class Ref(val c: Context) extends Common {
   import c.universe._
+  import c.universe.definitions._
 
-  def MyClass: ClassSymbol
-
-  lazy val A = c.prefix.tree.tpe.baseType(MyClass).typeArgs.head
-
+  lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get._1
+  lazy val R   = RefOf.unapply(c.prefix.tree.tpe).get._2
   lazy val pre = fresh("pre")
 
   def stabilized(value: Tree)(f: TermName => Tree) = {
@@ -197,27 +205,12 @@ trait RefCommon extends Common {
   def branchEmpty(nonEmpty: Tree, empty: Tree) =
     stabilizedPrefix(q"if ($pre.addr != 0) $nonEmpty else $empty")
 
-  def nonEmpty: Tree =
-    q"${c.prefix}.addr != 0"
-
-  def isEmpty: Tree =
-    q"${c.prefix}.addr == 0"
-
-  def emptyRef(T: Type) =
-    q"null.asInstanceOf[$RefClass[$T]]"
-
-  def empty[T: WeakTypeTag] =
-    emptyRef(wt[T])
-}
-
-class Ref(val c: Context) extends RefCommon {
-  import c.universe._
-
-  val MyClass = RefClass
-
   def readValue = read(A, q"$pre.addr")
 
   def writeValue(value: Tree) = write(A, q"$pre.addr", value)
+
+  def emptyRef(T: Type, R: Type) =
+    q"null.asInstanceOf[$RefClass[$T, $R]]"
 
   def allocRef(T: Type, value: Tree, r: Tree) = {
     val v = fresh("v")
@@ -228,7 +221,7 @@ class Ref(val c: Context) extends RefCommon {
     }
     stabilized(value) { v =>
       q"""
-        val $ref = new $regions.Ref[$T]($runtime.allocMemory($r, $size))
+        val $ref = new $regions.Ref[$T, ${r.symbol}.type]($runtime.allocMemory($r, $size))
         $ref.set($v)
         $ref
       """
@@ -237,6 +230,12 @@ class Ref(val c: Context) extends RefCommon {
 
   def throwEmptyRef =
     q"throw $regions.EmptyRefException"
+
+  def isEmpty: Tree =
+    q"${c.prefix}.addr == 0"
+
+  def nonEmpty: Tree =
+    q"${c.prefix}.addr != 0"
 
   def get =
     branchEmpty(readValue, throwEmptyRef)
@@ -253,17 +252,25 @@ class Ref(val c: Context) extends RefCommon {
   def contains(elem: Tree) =
     branchEmpty(q"$readValue == $elem", q"false")
 
-  def flatten(ev: Tree) =
-    branchEmpty(readValue, emptyRef(A.baseType(MyClass).typeArgs.head))
+  def flatten(ev: Tree) = {
+    val RefOf(argtpe, regtpe) = A
+    if (regtpe.termSymbol != NoSymbol)
+      branchEmpty(readValue, emptyRef(argtpe, regtpe))
+    else
+      emptyRef(argtpe, regtpe)
+  }
 
-  def map(f: Tree)(r: Tree) =
-    branchEmpty(allocRef(paramTpe(f), app(f, readValue), r), q"$pre")
+  def map(f: Tree) =
+    if (R.termSymbol != NoSymbol)
+      branchEmpty(allocRef(paramTpe(f), app(f, readValue), q"${R.termSymbol}"), q"$pre")
+    else
+      q"${c.prefix}"
 
   def fold(ifEmpty: Tree)(f: Tree) =
     branchEmpty(app(f, readValue), ifEmpty)
 
   def filter(p: Tree) =
-    stabilizedPrefix(q"if ($pre.addr == 0 || ${app(p, readValue)}) ${emptyRef(A)} else $pre")
+    stabilizedPrefix(q"if ($pre.addr == 0 || ${app(p, readValue)}) ${emptyRef(A, R)} else $pre")
 
   def exists(p: Tree) =
     stabilizedPrefix(q"($pre.addr != 0) && ${app(p, readValue)}")
@@ -276,79 +283,10 @@ class Ref(val c: Context) extends RefCommon {
 
   def alloc[T: WeakTypeTag](value: Tree)(r: Tree) =
     allocRef(wt[T], value, r)
+
+  def empty[T: WeakTypeTag] =
+    emptyRef(wt[T], NothingTpe)
 }
-
-/*
-class FatRef(val c: Context) extends RefCommon {
-  import c.universe._
-  import c.universe.definitions._
-
-  val MyClass = FatRefClass
-
-  def elementSize(T: Type) = T match {
-    case Allocatable() => sizeof(T)
-    case _             => abort(s"allocation of $T is not supported")
-  }
-
-  def readElement(index: Tree) =
-    read(A, q"$pre.addr + 8 + $index * ${sizeof(A)}")
-
-  def writeElement(index: Tree, value: Tree) =
-    write(A, q"$pre.addr + 8 + $index * ${sizeof(A)}", value)
-
-  def writeLength(value: Tree) =
-    write(LongTpe, q"$pre.addr", value)
-
-  def boundsChecked(index: Tree, ifOk: TermName => Tree) = stabilizedPrefix {
-    val size = fresh("size")
-    stabilized(index) { idx =>
-      q"""
-        val $size = ${read(LongTpe, q"$pre.addr")}
-        if ($idx >= 0 && $idx < $size)  ${ifOk(idx)}
-        else throw new _root_.java.lang.IndexOutOfBoundsException($index.toString)
-      """
-    }
-  }
-
-  def apply(index: Tree) =
-    boundsChecked(index, i => readElement(q"$i"))
-
-  def update(index: Tree, value: Tree) =
-    boundsChecked(index, i => writeElement(q"$i", value))
-
-  def alloc[T: WeakTypeTag](values: Tree*)(r: Tree) = {
-    val T = wt[T]
-    val esize = elementSize(T)
-    val size = 8 + esize * values.length
-    val updateValues = values.zipWithIndex.map { case (value, i) =>
-      q"$pre($i) = $value"
-    }
-    q"""
-      val $pre = new $regions.FatRef[$T]($runtime.allocMemory($r, $size))
-      ${writeLength(q"${values.length}")}
-      ..$updateValues
-      $pre
-    """
-  }
-
-  def fill[T: WeakTypeTag](n: Tree)(elem: Tree)(r: Tree) = stabilized(n) { length =>
-    val i = fresh("i")
-    val T = wt[T]
-    val esize = elementSize(T)
-    val size = q"8 + $esize * $length"
-    q"""
-      val $pre = new $regions.FatRef[$T]($runtime.allocMemory($r, $size))
-      ${writeLength(q"$length")}
-      var $i = 0L
-      while ($i < $length) {
-        $pre($i) = $elem
-        $i += 1
-      }
-      $pre
-    """
-  }
-}
-*/
 
 class Region(val c: Context) extends Common {
   import c.universe._

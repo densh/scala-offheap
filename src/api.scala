@@ -12,40 +12,26 @@ package regions {
     def apply[T](f: Region => T): T = macro internal.macros.Region.alloc[T]
   }
 
-  final class Ref[A](val addr: Long) extends AnyVal {
-    def isEmpty: Boolean                               = macro macros.Ref.isEmpty
-    def nonEmpty: Boolean                              = macro macros.Ref.nonEmpty
-    def get: A                                         = macro macros.Ref.get
-    def getOrElse[B >: A](default: => B): B            = macro macros.Ref.getOrElse
-    def set(value: A): Unit                            = macro macros.Ref.set
-    def setOrElse(value: A)(default: => Unit): Unit    = macro macros.Ref.setOrElse
-    def contains[A1 >: A](elem: A1): Boolean           = macro macros.Ref.contains
-    def flatten[B](implicit ev: A <:< Ref[B]): Ref[B]  = macro macros.Ref.flatten
-    def map[B](f: A => B)(implicit r: Region): Ref[B]  = macro macros.Ref.map
-    def fold[B](ifEmpty: B)(f: A => B): B              = macro macros.Ref.fold
-    def filter(p: A => Boolean): Ref[A]                = macro macros.Ref.filter
-    def exists(p: A => Boolean): Boolean               = macro macros.Ref.exists
-    def forall(p: A => Boolean): Boolean               = macro macros.Ref.forall
-    def mutate[B](f: A => B): Unit                     = macro macros.Ref.mutate
+  final class Ref[A, +R <: Region with Singleton](val addr: Long) extends AnyVal {
+    def isEmpty: Boolean                                          = macro macros.Ref.isEmpty
+    def nonEmpty: Boolean                                         = macro macros.Ref.nonEmpty
+    def get: A                                                    = macro macros.Ref.get
+    def getOrElse[B >: A](default: => B): B                       = macro macros.Ref.getOrElse
+    def set(value: A): Unit                                       = macro macros.Ref.set
+    def setOrElse(value: A)(default: => Unit): Unit               = macro macros.Ref.setOrElse
+    def contains[A1 >: A](elem: A1): Boolean                      = macro macros.Ref.contains
+    def flatten[B, R2](implicit ev: A <:< Ref[B, R2]): Ref[B, R2] = macro macros.Ref.flatten
+    def map[B](f: A => B): Ref[B, R]                              = macro macros.Ref.map
+    def fold[B](ifEmpty: B)(f: A => B): B                         = macro macros.Ref.fold
+    def filter(p: A => Boolean): Ref[A, R]                        = macro macros.Ref.filter
+    def exists(p: A => Boolean): Boolean                          = macro macros.Ref.exists
+    def forall(p: A => Boolean): Boolean                          = macro macros.Ref.forall
+    def mutate[B](f: A => B): Unit                                = macro macros.Ref.mutate
   }
   object Ref {
-    def empty[T]: Ref[T]                               = macro macros.Ref.empty[T]
-    def apply[T](value: T)(implicit r: Region): Ref[T] = macro macros.Ref.alloc[T]
+    def apply[T, R <: Region](value: T)(implicit r: R): Ref[T, r.type]    = macro macros.Ref.alloc[T]
+    def empty[T]: Ref[T, Nothing]                                 = macro macros.Ref.empty[T]
   }
-
-  /*
-  final class FatRef[A](val addr: Long) extends AnyVal {
-    def isEmpty: Boolean                                    = macro macros.FatRef.isEmpty
-    def nonEmpty: Boolean                                   = macro macros.FatRef.nonEmpty
-    def apply(index: Long): A                               = macro macros.FatRef.apply
-    def update(index: Long, value: A): Unit                 = macro macros.FatRef.update
-  }
-  object FatRef {
-    def empty[T]: Ref[T]                                            = macro macros.FatRef.empty[T]
-    def apply[T](values: T*)(implicit r: Region): FatRef[T]         = macro macros.FatRef.alloc[T]
-    def fill[T](n: Long)(elem: => T)(implicit r: Region): FatRef[T] = macro macros.FatRef.fill[T]
-  }
-  */
 
   case object EmptyRefException extends Exception
 
