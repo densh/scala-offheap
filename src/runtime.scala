@@ -6,8 +6,7 @@ import scala.annotation.StaticAnnotation
 import regions.{Region, Ref}
 
 package runtime {
-  class struct extends StaticAnnotation
-  class union extends StaticAnnotation
+  class offheap extends StaticAnnotation
   case class Node(loc: Long, var next: Node)
 }
 

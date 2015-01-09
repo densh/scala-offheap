@@ -154,23 +154,56 @@ class Annotations(val c: Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def struct(annottees: Tree*): Tree = annottees match {
-    case q"class $name(..$args)" :: Nil =>
-      if (args.isEmpty) abort("structs require at least one argument")
+  def offheapName(name: Name) =
+    TermName("$offheap$" + name.toString)
+
+  // TODO: handle mods properly
+  // TODO: handle generics
+  // TODO: hygienic reference to class type from companion
+  // TODO: transform this to $self in offheap methods
+  def offheap(annottees: Tree*): Tree = annottees match {
+    case q"class $name(..$args) { ..$members }" :: Nil =>
+      if (args.isEmpty)
+        abort("offheap classes require at least one parameter")
       val checks = args.map {
         case q"$_ val $name: $tpt = $default" =>
           if (default.nonEmpty) abort("structs with default values are not supported")
           q"$internal.Ensure.allocatable[$tpt]"
       }
       val nargs = args.map { case q"$_ val $name: $tpt = $_" => q"val $name: $tpt" }
+      val self = fresh("self")
+      val Self = q"$RefClass[$name]"
+      val offheapAccessors: List[Tree] = args.map {
+        case q"$_ val $name: $tpt" =>
+          q"def ${offheapName(name)}($self: $Self): $tpt = $self.$name"
+      }
+      val offheapScope: List[Tree] = ???
+      val offheapMethods: List[Tree] = members.map {
+        case q"$_ def $name(...$args): $tpt = $body" =>
+          q"""
+            def ${offheapName(name)}($self: $Self)(...$args): $tpt = {
+              ..$offheapScope
+              $body
+            }
+          """
+        case m => abort("unsupported member", at = m.pos)
+      }
+      val apply: Tree = ???
+      val unapply: Tree = ???
+
       q"""
-        @$internal.struct case class $name(..$nargs) {
+        @$internal.offheap final class $name private(..$nargs) {
           ..$checks
+          ..$members
+        }
+        object ${name.toTermName} {
+          ..$offheapAccessors
+          ..$offheapMethods
+          $apply
+          $unapply
         }
       """
   }
-
-  def union(annottees: Tree*): Tree = ???
 }
 
 class Ensure(val c: Context) extends Common {

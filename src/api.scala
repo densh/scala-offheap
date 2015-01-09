@@ -36,10 +36,6 @@ object Ref {
 
 case object EmptyRefException extends Exception
 
-final class struct extends StaticAnnotation {
-  def macroTransform(annottees: Any*): Any = macro macros.Annotations.struct
-}
-
-final class union extends StaticAnnotation {
-  def macroTransform(annottees: Any*): Any = macro macros.Annotations.union
+final class offheap extends StaticAnnotation {
+  def macroTransform(annottees: Any*): Any = macro macros.Annotations.offheap
 }
