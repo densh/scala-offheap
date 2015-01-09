@@ -12,15 +12,19 @@ package runtime {
 }
 
 package object runtime {
-  final val NODE_PAYLOAD_SIZE = 409600
-  final val ARENA_NODE_COUNT  = 32
-  final val ARENA_SIZE        = NODE_PAYLOAD_SIZE * ARENA_NODE_COUNT
-
   val unsafe: Unsafe = {
     val f = classOf[Unsafe].getDeclaredField("theUnsafe");
     f.setAccessible(true);
     f.get(null).asInstanceOf[Unsafe]
   }
+
+  val PAGE_SIZE         = unsafe.pageSize()
+  val NODE_PAYLOAD_SIZE = 409600
+  val ARENA_NODE_COUNT  = 32
+  val ARENA_SIZE        = NODE_PAYLOAD_SIZE * ARENA_NODE_COUNT
+
+  assert(NODE_PAYLOAD_SIZE % PAGE_SIZE == 0)
+  assert(ARENA_SIZE % NODE_PAYLOAD_SIZE == 0)
 
   var free: Node = null
   var regions: Array[Region] = (1 to 16).map { _ => new Region(null, 0) }.toArray

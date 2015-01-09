@@ -165,7 +165,7 @@ class CombinatorSuite extends FunSuite {
   }
 
   test("empty flatten") {
-    assert(Ref.empty[Ref[Int, Nothing]].flatten == Ref.empty[Int])
+    assert(Ref.empty[Ref[Int]].flatten == Ref.empty[Int])
   }
 
   test("empty map") {

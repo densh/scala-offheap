@@ -5,13 +5,12 @@ import scala.reflect.macros.whitebox.Context
 
 trait Common {
   val c: Context
-  import c.universe._
+  import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
   val StructClass = rootMirror.staticClass("regions.internal.runtime.struct")
   val UnionClass  = rootMirror.staticClass("regions.internal.runtime.union")
   val RefClass    = rootMirror.staticClass("regions.Ref")
-  // val FatRefClass = rootMirror.staticClass("regions.FatRef")
 
   val regions  = q"_root_.regions"
   val internal = q"$regions.internal"
@@ -19,9 +18,7 @@ trait Common {
   val unsafe   = q"$runtime.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
-  def wt[T: WeakTypeTag]: Type        = weakTypeOf[T]
-  def fresh(pre: String): TermName    = TermName(c.freshName(pre))
-
+  def fresh(pre: String): TermName = TermName(c.freshName(pre))
   def debug[T](header: String)(f: => T): T = {
     val res = f
     println(s"$header = $res")
@@ -29,11 +26,11 @@ trait Common {
   }
 
   object RefOf {
-    def unapply(tpe: Type): Option[(Type, Type)] =
+    def unapply(tpe: Type): Option[Type] =
       if (tpe.typeSymbol != RefClass) None
       else {
         val base = tpe.baseType(RefClass)
-        Some((base.typeArgs(0), base.typeArgs(1)))
+        Some(base.typeArgs.head)
       }
   }
 
@@ -53,8 +50,8 @@ trait Common {
 
   object Allocatable {
     def unapply(tpe: Type): Boolean = tpe match {
-      case Primitive() | RefOf(_, _) | StructOf(_) => true
-      case _                                       => false
+      case Primitive() | RefOf(_) | StructOf(_) => true
+      case _                                    => false
     }
   }
 
@@ -63,7 +60,10 @@ trait Common {
   object StructOf {
     def unapply(tpe: Type): Option[List[StructField]] = tpe.typeSymbol match {
       case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == StructClass) =>
-        val args = tpe.typeSymbol.asClass.primaryConstructor.asMethod.paramLists.head.map { arg => (arg.name.toTermName, arg.info) }
+        val args = tpe.typeSymbol.asClass.primaryConstructor
+                      .asMethod.paramLists.head.map { arg =>
+          (arg.name.toTermName, arg.info)
+        }
         val buf = mutable.ListBuffer[StructField]()
         var offset = 0
         args.foreach { case (name, tpe) =>
@@ -81,9 +81,9 @@ trait Common {
       q"$unsafe.$method($address)"
     case BooleanTpe =>
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
-    case RefOf(targ, r) =>
+    case RefOf(targ) =>
       val value = read(LongTpe, address)
-      q"new $regions.Ref[$targ, $r]($value)"
+      q"new $regions.Ref[$targ]($value)"
     case StructOf(fields) =>
       val companion = tpe.typeSymbol.companion
       val tmps = fields.map { f => fresh(f.name.decoded) }
@@ -107,7 +107,7 @@ trait Common {
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
-    case RefOf(_, _) =>
+    case RefOf(_) =>
       write(LongTpe, address, q"$value.addr")
     case StructOf(fields) =>
       val v = fresh("v")
@@ -118,11 +118,11 @@ trait Common {
   }
 
   def sizeof(tpe: Type): Int = tpe match {
-    case ByteTpe  | BooleanTpe              => 1
-    case ShortTpe | CharTpe                 => 2
-    case IntTpe   | FloatTpe                => 4
-    case LongTpe  | DoubleTpe | RefOf(_, _) => 8
-    case StructOf(fields)                   => fields.map(f => sizeof(f.tpe)).sum
+    case ByteTpe  | BooleanTpe           => 1
+    case ShortTpe | CharTpe              => 2
+    case IntTpe   | FloatTpe             => 4
+    case LongTpe  | DoubleTpe | RefOf(_) => 8
+    case StructOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
   }
 
   def app(f: Tree, argValue: Tree) = f match {
@@ -164,7 +164,7 @@ class Annotations(val c: Context) extends Common {
       }
       val nargs = args.map { case q"$_ val $name: $tpt = $_" => q"val $name: $tpt" }
       q"""
-        @_root_.regions.internal.struct case class $name(..$nargs) {
+        @$internal.struct case class $name(..$nargs) {
           ..$checks
         }
       """
@@ -174,7 +174,7 @@ class Annotations(val c: Context) extends Common {
 }
 
 class Ensure(val c: Context) extends Common {
-  import c.universe._
+  import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
   def allocatable[T: WeakTypeTag]: Tree = {
@@ -187,11 +187,10 @@ class Ensure(val c: Context) extends Common {
 }
 
 class Ref(val c: Context) extends Common {
-  import c.universe._
+  import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get._1
-  lazy val R   = RefOf.unapply(c.prefix.tree.tpe).get._2
+  lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get
   lazy val pre = fresh("pre")
 
   def stabilized(value: Tree)(f: TermName => Tree) = {
@@ -209,8 +208,8 @@ class Ref(val c: Context) extends Common {
 
   def writeValue(value: Tree) = write(A, q"$pre.addr", value)
 
-  def emptyRef(T: Type, R: Type) =
-    q"null.asInstanceOf[$RefClass[$T, $R]]"
+  def emptyRef(T: Type) =
+    q"null.asInstanceOf[$RefClass[$T]]"
 
   def allocRef(T: Type, value: Tree, r: Tree) = {
     val v = fresh("v")
@@ -221,7 +220,7 @@ class Ref(val c: Context) extends Common {
     }
     stabilized(value) { v =>
       q"""
-        val $ref = new $regions.Ref[$T, ${r.symbol}.type]($runtime.allocMemory($r, $size))
+        val $ref = new $RefClass[$T]($runtime.allocMemory($r, $size))
         $ref.set($v)
         $ref
       """
@@ -253,24 +252,20 @@ class Ref(val c: Context) extends Common {
     branchEmpty(q"$readValue == $elem", q"false")
 
   def flatten(ev: Tree) = {
-    val RefOf(argtpe, regtpe) = A
-    if (regtpe.termSymbol != NoSymbol)
-      branchEmpty(readValue, emptyRef(argtpe, regtpe))
-    else
-      emptyRef(argtpe, regtpe)
+    val RefOf(argtpe) = A
+    branchEmpty(readValue, emptyRef(argtpe))
   }
 
-  def map(f: Tree) =
-    if (R.termSymbol != NoSymbol)
-      branchEmpty(allocRef(paramTpe(f), app(f, readValue), q"${R.termSymbol}"), q"$pre")
-    else
-      q"${c.prefix}"
+  def map(f: Tree)(r: Tree) =
+    branchEmpty(allocRef(paramTpe(f), app(f, readValue), r), q"$pre")
 
   def fold(ifEmpty: Tree)(f: Tree) =
     branchEmpty(app(f, readValue), ifEmpty)
 
   def filter(p: Tree) =
-    stabilizedPrefix(q"if ($pre.addr == 0 || ${app(p, readValue)}) ${emptyRef(A, R)} else $pre")
+    stabilizedPrefix(q"""
+      if ($pre.addr == 0 || ${app(p, readValue)}) ${emptyRef(A)} else $pre
+    """)
 
   def exists(p: Tree) =
     stabilizedPrefix(q"($pre.addr != 0) && ${app(p, readValue)}")
@@ -285,7 +280,7 @@ class Ref(val c: Context) extends Common {
     allocRef(wt[T], value, r)
 
   def empty[T: WeakTypeTag] =
-    emptyRef(wt[T], NothingTpe)
+    emptyRef(wt[T])
 }
 
 class Region(val c: Context) extends Common {
