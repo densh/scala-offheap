@@ -1,16 +1,16 @@
 package regions.internal.macros
 
 import scala.collection.mutable
-import scala.reflect.macros.whitebox.Context
+import scala.reflect.macros.{whitebox, blackbox}
 
 trait Common {
-  val c: Context
+  val c: blackbox.Context
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  val StructClass = rootMirror.staticClass("regions.internal.runtime.struct")
-  val UnionClass  = rootMirror.staticClass("regions.internal.runtime.union")
-  val RefClass    = rootMirror.staticClass("regions.Ref")
+  val OffheapClass      = rootMirror.staticClass("regions.internal.runtime.offheap")
+  val RefClass          = rootMirror.staticClass("regions.Ref")
+  val UnwrappedRefClass = rootMirror.staticClass("regions.UnwrappedRef")
 
   val regions  = q"_root_.regions"
   val internal = q"$regions.internal"
@@ -26,12 +26,13 @@ trait Common {
   }
 
   object RefOf {
-    def unapply(tpe: Type): Option[Type] =
-      if (tpe.typeSymbol != RefClass) None
-      else {
-        val base = tpe.baseType(RefClass)
-        Some(base.typeArgs.head)
+    def unapply(tpe: Type): Option[Type] = {
+      val base = tpe.typeSymbol match {
+        case RefClass | UnwrappedRefClass => Some(tpe.baseType(tpe.typeSymbol))
+        case _                            => None
       }
+      base.map(_.typeArgs.head)
+    }
   }
 
   object ArrayOf {
@@ -50,16 +51,16 @@ trait Common {
 
   object Allocatable {
     def unapply(tpe: Type): Boolean = tpe match {
-      case Primitive() | RefOf(_) | StructOf(_) => true
+      case Primitive() | RefOf(_) | ClassOf(_) => true
       case _                                    => false
     }
   }
 
   case class StructField(name: TermName, tpe: Type, offset: Long)
 
-  object StructOf {
+  object ClassOf {
     def unapply(tpe: Type): Option[List[StructField]] = tpe.typeSymbol match {
-      case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == StructClass) =>
+      case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == OffheapClass) =>
         val args = tpe.typeSymbol.asClass.primaryConstructor
                       .asMethod.paramLists.head.map { arg =>
           (arg.name.toTermName, arg.info)
@@ -84,7 +85,7 @@ trait Common {
     case RefOf(targ) =>
       val value = read(LongTpe, address)
       q"new $regions.Ref[$targ]($value)"
-    case StructOf(fields) =>
+    case ClassOf(fields) =>
       val companion = tpe.typeSymbol.companion
       val tmps = fields.map { f => fresh(f.name.decoded) }
       val reads = fields.zip(tmps).map { case (f, tmp) =>
@@ -109,7 +110,7 @@ trait Common {
       """
     case RefOf(_) =>
       write(LongTpe, address, q"$value.addr")
-    case StructOf(fields) =>
+    case ClassOf(fields) =>
       val v = fresh("v")
       val writes = fields.map { f =>
         write(f.tpe, q"$address + ${f.offset}", q"$v.${f.name}")
@@ -122,7 +123,7 @@ trait Common {
     case ShortTpe | CharTpe              => 2
     case IntTpe   | FloatTpe             => 4
     case LongTpe  | DoubleTpe | RefOf(_) => 8
-    case StructOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
+    case ClassOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
   }
 
   def app(f: Tree, argValue: Tree) = f match {
@@ -150,7 +151,7 @@ trait Common {
   def paramTpe(f: Tree) = f.tpe.typeArgs.head
 }
 
-class Annotations(val c: Context) extends Common {
+class Annotations(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
@@ -219,7 +220,7 @@ class Annotations(val c: Context) extends Common {
   }
 }
 
-class Ensure(val c: Context) extends Common {
+class Ensure(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
@@ -232,12 +233,13 @@ class Ensure(val c: Context) extends Common {
   }
 }
 
-class Ref(val c: Context) extends Common {
+trait RefCommon extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
-  import c.universe.definitions._
 
   lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get
   lazy val pre = fresh("pre")
+
+  def ThisRefClass: ClassSymbol
 
   def stabilized(value: Tree)(f: TermName => Tree) = {
     val stable = fresh("stable")
@@ -250,12 +252,11 @@ class Ref(val c: Context) extends Common {
   def branchEmpty(nonEmpty: Tree, empty: Tree) =
     stabilizedPrefix(q"if ($pre.addr != 0) $nonEmpty else $empty")
 
-  def readValue = read(A, q"$pre.addr")
-
-  def writeValue(value: Tree) = write(A, q"$pre.addr", value)
+  def throwEmptyRef =
+    q"throw $regions.EmptyRefException"
 
   def emptyRef(T: Type) =
-    q"null.asInstanceOf[$RefClass[$T]]"
+    q"null.asInstanceOf[$ThisRefClass[$T]]"
 
   def allocRef(T: Type, value: Tree, r: Tree) = {
     val v = fresh("v")
@@ -266,21 +267,35 @@ class Ref(val c: Context) extends Common {
     }
     stabilized(value) { v =>
       q"""
-        val $ref = new $RefClass[$T]($runtime.allocMemory($r, $size))
-        $ref.set($v)
+        val $ref = new $ThisRefClass[$T]($runtime.allocMemory($r, $size))
+        ${write(T, q"$ref.addr", q"$v")}
         $ref
       """
     }
   }
 
-  def throwEmptyRef =
-    q"throw $regions.EmptyRefException"
+  def alloc[T: WeakTypeTag](value: Tree)(r: Tree) =
+    allocRef(wt[T], value, r)
+
+  def empty[T: WeakTypeTag] =
+    emptyRef(wt[T])
 
   def isEmpty: Tree =
     q"${c.prefix}.addr == 0"
 
   def nonEmpty: Tree =
     q"${c.prefix}.addr != 0"
+}
+
+class Ref(val c: blackbox.Context) extends RefCommon {
+  import c.universe.{ weakTypeOf => wt, _ }
+  import c.universe.definitions._
+
+  lazy val ThisRefClass = RefClass
+
+  def readValue = read(A, q"$pre.addr")
+
+  def writeValue(value: Tree) = write(A, q"$pre.addr", value)
 
   def get =
     branchEmpty(readValue, throwEmptyRef)
@@ -321,15 +336,30 @@ class Ref(val c: Context) extends Common {
 
   def mutate(f: Tree) =
     branchEmpty(q"$pre.set(${app(f, readValue)})", q"$pre")
-
-  def alloc[T: WeakTypeTag](value: Tree)(r: Tree) =
-    allocRef(wt[T], value, r)
-
-  def empty[T: WeakTypeTag] =
-    emptyRef(wt[T])
 }
 
-class Region(val c: Context) extends Common {
+class UnwrappedRef(val c: whitebox.Context) extends RefCommon {
+  import c.universe._
+
+  lazy val ThisRefClass = UnwrappedRefClass
+
+  def applyDynamic(method: Tree)(args: Tree*): Tree = ???
+
+  def selectDynamic(field: Tree): Tree = stabilizedPrefix {
+    A match {
+      case ClassOf(fields) =>
+        val q"${fieldStr: String}" = field
+        fields.collectFirst {
+          case f if f.name.decoded.toString == fieldStr =>
+            read(f.tpe, q"$pre.addr + ${f.offset}")
+        }.getOrElse {
+          abort(s"class $A doesn't have field $field")
+        }
+    }
+  }
+}
+
+class Region(val c: blackbox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 

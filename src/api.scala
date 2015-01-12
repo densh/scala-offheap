@@ -35,6 +35,10 @@ object Ref {
 }
 
 final class UnwrappedRef[A](val addr: Long) extends AnyVal with Dynamic {
+  def nonEmpty: Boolean                             = macro macros.UnwrappedRef.nonEmpty
+  def isEmpty: Boolean                              = macro macros.UnwrappedRef.isEmpty
+  def applyDynamic(method: String)(args: Any*): Any = macro macros.UnwrappedRef.applyDynamic
+  def selectDynamic(field: String): Any             = macro macros.UnwrappedRef.selectDynamic
 }
 object UnwrappedRef {
   def apply[T](value: T)(implicit r: Region): UnwrappedRef[T] =
