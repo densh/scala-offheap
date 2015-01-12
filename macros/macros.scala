@@ -172,12 +172,23 @@ class Annotations(val c: Context) extends Common {
       }
       val nargs = args.map { case q"$_ val $name: $tpt = $_" => q"val $name: $tpt" }
       val self = fresh("self")
-      val Self = q"$RefClass[$name]"
+      val Self = tq"$RefClass[$name]"
       val offheapAccessors: List[Tree] = args.map {
         case q"$_ val $name: $tpt" =>
           q"def ${offheapName(name)}($self: $Self): $tpt = $self.$name"
       }
-      val offheapScope: List[Tree] = ???
+      val offheapScope: List[Tree] = {
+        val aliasAcessors: List[Tree] = args.map {
+          case q"$_ val $name: $tpt" =>
+            q"def $name: $tpt = ${offheapName(name)}($self)"
+        }
+        val aliasMethods: List[Tree] = members.map {
+          case q"$_ def $name(...$args): $tpt = $body" =>
+            val argNames = args.map { _.map { case q"$_ val $name: $_ = $_" => name } }
+            q"def $name(...$args): $tpt = ${offheapName(name)}($self)(...$argNames)"
+        }
+        aliasAcessors ++ aliasMethods
+      }
       val offheapMethods: List[Tree] = members.map {
         case q"$_ def $name(...$args): $tpt = $body" =>
           q"""
@@ -188,11 +199,11 @@ class Annotations(val c: Context) extends Common {
           """
         case m => abort("unsupported member", at = m.pos)
       }
-      val apply: Tree = ???
-      val unapply: Tree = ???
+      val apply: Tree = q"()"
+      val unapply: Tree = q"()"
 
-      q"""
-        @$internal.offheap final class $name private(..$nargs) {
+      val res = q"""
+        @$runtime.offheap final class $name private(..$nargs) {
           ..$checks
           ..$members
         }
@@ -203,6 +214,8 @@ class Annotations(val c: Context) extends Common {
           $unapply
         }
       """
+      println(s"expanded offheap annotation into: ${showCode(res)}")
+      res
   }
 }
 

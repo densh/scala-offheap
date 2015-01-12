@@ -34,6 +34,15 @@ object Ref {
   def empty[T]: Ref[T]                               = macro macros.Ref.empty[T]
 }
 
+final class UnwrappedRef[A](val addr: Long) extends AnyVal with Dynamic {
+}
+object UnwrappedRef {
+  def apply[T](value: T)(implicit r: Region): UnwrappedRef[T] =
+    macro macros.UnwrappedRef.alloc[T]
+  def empty[T]: UnwrappedRef[T] =
+    macro macros.UnwrappedRef.empty[T]
+}
+
 case object EmptyRefException extends Exception
 
 final class offheap extends StaticAnnotation {
