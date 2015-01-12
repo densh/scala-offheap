@@ -163,7 +163,7 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: hygienic reference to class type from companion
   // TODO: transform this to $self in offheap methods
   def offheap(annottees: Tree*): Tree = annottees match {
-    case q"class $name(..$args) { ..$members }" :: Nil =>
+    case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
       val checks = args.map {
@@ -171,9 +171,8 @@ class Annotations(val c: whitebox.Context) extends Common {
           if (default.nonEmpty) abort("structs with default values are not supported")
           q"$internal.Ensure.allocatable[$tpt]"
       }
-      val nargs = args.map { case q"$_ val $name: $tpt = $_" => q"val $name: $tpt" }
       val self = fresh("self")
-      val Self = tq"$RefClass[$name]"
+      val Self = tq"$UnwrappedRefClass[$name]"
       val offheapAccessors: List[Tree] = args.map {
         case q"$_ val $name: $tpt" =>
           q"def ${offheapName(name)}($self: $Self): $tpt = $self.$name"
@@ -183,14 +182,14 @@ class Annotations(val c: whitebox.Context) extends Common {
           case q"$_ val $name: $tpt" =>
             q"def $name: $tpt = ${offheapName(name)}($self)"
         }
-        val aliasMethods: List[Tree] = members.map {
+        val aliasMethods: List[Tree] = stats.collect {
           case q"$_ def $name(...$args): $tpt = $body" =>
             val argNames = args.map { _.map { case q"$_ val $name: $_ = $_" => name } }
             q"def $name(...$args): $tpt = ${offheapName(name)}($self)(...$argNames)"
         }
         aliasAcessors ++ aliasMethods
       }
-      val offheapMethods: List[Tree] = members.map {
+      val offheapMethods: List[Tree] = stats.map {
         case q"$_ def $name(...$args): $tpt = $body" =>
           q"""
             def ${offheapName(name)}($self: $Self)(...$args): $tpt = {
@@ -200,19 +199,18 @@ class Annotations(val c: whitebox.Context) extends Common {
           """
         case m => abort("unsupported member", at = m.pos)
       }
-      val apply: Tree = q"()"
-      val unapply: Tree = q"()"
-
+      val argNames = args.map(_.name)
       val res = q"""
-        @$runtime.offheap final class $name private(..$nargs) {
+        @$runtime.offheap final class $name private(..$args) {
+          ..$stats
           ..$checks
-          ..$members
         }
         object ${name.toTermName} {
           ..$offheapAccessors
           ..$offheapMethods
-          $apply
-          $unapply
+          def apply(..$args)(implicit r: $regions.Region): $Self =
+            $runtime.allocClass[$name](..$argNames)
+          def unapply($self: $Self): $Self = $self
         }
       """
       println(s"expanded offheap annotation into: ${showCode(res)}")
@@ -377,4 +375,11 @@ class Region(val c: blackbox.Context) extends Common {
       $res
     """
   }
+}
+
+class Runtime(val c: blackbox.Context) extends Common {
+  import c.universe.{ weakTypeOf => wt, _ }
+
+  def allocClass[T: WeakTypeTag](args: Tree*): Tree =
+    q"null.asInstanceOf[$UnwrappedRefClass[${wt[T]}]]"
 }

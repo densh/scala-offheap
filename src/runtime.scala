@@ -3,6 +3,7 @@ package regions.internal
 import sun.misc.Unsafe
 import scala.collection.immutable.IntMap
 import scala.annotation.StaticAnnotation
+import scala.language.experimental.{macros => CanMacro}
 import regions.{Region, Ref}
 
 package runtime {
@@ -86,4 +87,7 @@ package object runtime {
       }
     region.node.loc + offset
   }
+
+  def allocClass[T](args: Any*): _root_.regions.UnwrappedRef[T] =
+    macro macros.Runtime.allocClass[T]
 }
