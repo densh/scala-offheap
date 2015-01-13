@@ -325,13 +325,9 @@ class Region(val c: blackbox.Context) extends Common {
   def alloc[T: WeakTypeTag](f: Tree) = {
     val r = fresh("r")
     val res = fresh("res")
-    val fapp = f match {
-      case q"($_ => $_)" => app(f, q"$r")
-      case _             => q"$f($r)"
-    }
     q"""
       val $r = $runtime.allocRegion()
-      val $res = $fapp
+      val $res = ${app(f, q"$r")}
       $runtime.disposeRegion($r)
       $res
     """
