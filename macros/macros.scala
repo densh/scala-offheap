@@ -343,9 +343,8 @@ class UnwrappedRef(val c: whitebox.Context) extends RefCommon {
 
   def applyDynamic(method: Tree)(args: Tree*): Tree = ???
 
-  // TODO: check for null before dereference
   def selectDynamic(field: Tree): Tree =
-    stabilizedPrefix {
+    branchEmpty(nonEmpty = {
       A match {
         case ClassOf(fields) =>
           val q"${fieldStr: String}" = field
@@ -356,7 +355,7 @@ class UnwrappedRef(val c: whitebox.Context) extends RefCommon {
             abort(s"class $A doesn't have field $field")
           }
       }
-    }
+    }, empty = throwEmptyRef)
 }
 
 class Region(val c: blackbox.Context) extends Common {
