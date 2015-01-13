@@ -48,7 +48,7 @@ trait Common {
   object Allocatable {
     def unapply(tpe: Type): Boolean = tpe match {
       case Primitive() | RefOf(_) | ClassOf(_) => true
-      case _                                    => false
+      case _                                   => false
     }
   }
 
@@ -119,7 +119,7 @@ trait Common {
     case ShortTpe | CharTpe              => 2
     case IntTpe   | FloatTpe             => 4
     case LongTpe  | DoubleTpe | RefOf(_) => 8
-    case ClassOf(fields)                => fields.map(f => sizeof(f.tpe)).sum
+    case ClassOf(fields)                 => fields.map(f => sizeof(f.tpe)).sum
   }
 
   def app(f: Tree, argValue: Tree) = f match {
@@ -173,7 +173,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       val Self = tq"$RefClass[$name]"
       val offheapAccessors: List[Tree] = args.map {
         case q"$_ val $name: $tpt" =>
-          q"def ${offheapName(name)}($self: $Self): $tpt = $self.$name"
+          q"def ${offheapName(name)}($self: $Self): $tpt = $self.project(_.$name)"
       }
       val offheapScope: List[Tree] = {
         val aliasAcessors: List[Tree] = args.map {
@@ -197,10 +197,11 @@ class Annotations(val c: whitebox.Context) extends Common {
           """
         case m => abort("unsupported member", at = m.pos)
       }
+      val classArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
       val argNames = args.map(_.name)
       val r = fresh("r")
       q"""
-        @$runtime.offheap final class $name private(..$args) {
+        @$runtime.offheap final class $name private(..$classArgs) {
           ..$stats
           ..$checks
         }
@@ -289,8 +290,12 @@ class Ref(val c: blackbox.Context) extends Common {
   def get =
     branchEmpty(readValue, throwEmptyRef)
 
+  def getF(f: Tree): Tree = ???
+
   def getOrElse(default: Tree) =
     branchEmpty(readValue, default)
+
+  def getFOrElse(f: Tree, default: Tree) = ???
 
   def contains(elem: Tree) =
     branchEmpty(q"$readValue == $elem", q"false")
