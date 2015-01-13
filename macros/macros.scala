@@ -158,11 +158,12 @@ class Annotations(val c: whitebox.Context) extends Common {
   def offheapName(name: Name) =
     TermName("$offheap$" + name.toString)
 
+  // TODO: turn off stabilization for offheap accessors
   // TODO: handle mods properly
   // TODO: handle generics
   // TODO: hygienic reference to class type from companion
   // TODO: transform this to $self in offheap methods
-  def offheap(annottees: Tree*): Tree = annottees match {
+  def offheap(annottees: Tree*): Tree = debug("@offheap")(annottees match {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
@@ -193,14 +194,15 @@ class Annotations(val c: whitebox.Context) extends Common {
         case q"$_ def $name(...$args): $tpt = $body" =>
           q"""
             def ${offheapName(name)}($self: $Self)(...$args): $tpt = {
-              ..$offheapScope
+              ..$offheapScope;
               $body
             }
           """
         case m => abort("unsupported member", at = m.pos)
       }
       val argNames = args.map(_.name)
-      val res = q"""
+      val r = fresh("r")
+      q"""
         @$runtime.offheap final class $name private(..$args) {
           ..$stats
           ..$checks
@@ -208,14 +210,12 @@ class Annotations(val c: whitebox.Context) extends Common {
         object ${name.toTermName} {
           ..$offheapAccessors
           ..$offheapMethods
-          def apply(..$args)(implicit r: $regions.Region): $Self =
-            $runtime.allocClass[$name](..$argNames)
+          def apply(..$args)(implicit $r: $regions.Region): $Self =
+            $runtime.allocClass[$name]($r, ..$argNames)
           def unapply($self: $Self): $Self = $self
         }
       """
-      println(s"expanded offheap annotation into: ${showCode(res)}")
-      res
-  }
+  })
 }
 
 class Ensure(val c: blackbox.Context) extends Common {
@@ -343,18 +343,20 @@ class UnwrappedRef(val c: whitebox.Context) extends RefCommon {
 
   def applyDynamic(method: Tree)(args: Tree*): Tree = ???
 
-  def selectDynamic(field: Tree): Tree = stabilizedPrefix {
-    A match {
-      case ClassOf(fields) =>
-        val q"${fieldStr: String}" = field
-        fields.collectFirst {
-          case f if f.name.decoded.toString == fieldStr =>
-            read(f.tpe, q"$pre.addr + ${f.offset}")
-        }.getOrElse {
-          abort(s"class $A doesn't have field $field")
-        }
+  // TODO: check for null before dereference
+  def selectDynamic(field: Tree): Tree =
+    stabilizedPrefix {
+      A match {
+        case ClassOf(fields) =>
+          val q"${fieldStr: String}" = field
+          fields.collectFirst {
+            case f if f.name.decoded.toString == fieldStr =>
+              read(f.tpe, q"$pre.addr + ${f.offset}")
+          }.getOrElse {
+            abort(s"class $A doesn't have field $field")
+          }
+      }
     }
-  }
 }
 
 class Region(val c: blackbox.Context) extends Common {
@@ -380,6 +382,18 @@ class Region(val c: blackbox.Context) extends Common {
 class Runtime(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
 
-  def allocClass[T: WeakTypeTag](args: Tree*): Tree =
-    q"null.asInstanceOf[$UnwrappedRefClass[${wt[T]}]]"
+  def allocClass[T: WeakTypeTag](r: Tree, args: Tree*): Tree = {
+    val ref = fresh("ref")
+    val T = wt[T]
+    val ClassOf(fields) = T
+    val size = sizeof(T)
+    val writes = fields.zip(args).map { case (f, arg) =>
+      write(f.tpe, q"$ref.addr + ${f.offset}", arg)
+    }
+    q"""
+      val $ref = new $UnwrappedRefClass[$T]($runtime.allocMemory($r, $size))
+      ..$writes
+      $ref
+    """
+  }
 }
