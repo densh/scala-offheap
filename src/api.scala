@@ -18,15 +18,12 @@ final class Ref[A](val addr: Long) extends AnyVal {
   def nonEmpty: Boolean                             = macro macros.Ref.nonEmpty
   def get: A                                        = macro macros.Ref.get
   def getOrElse[B >: A](default: => B): B           = macro macros.Ref.getOrElse
-  def set(value: A): Unit                           = macro macros.Ref.set
-  def setOrElse(value: A)(default: => Unit): Unit   = macro macros.Ref.setOrElse
   def contains[A1 >: A](elem: A1): Boolean          = macro macros.Ref.contains
   def map[B](f: A => B)(implicit r: Region): Ref[B] = macro macros.Ref.map
   def fold[B](ifEmpty: B)(f: A => B): B             = macro macros.Ref.fold
   def filter(p: A => Boolean): Ref[A]               = macro macros.Ref.filter
   def exists(p: A => Boolean): Boolean              = macro macros.Ref.exists
   def forall(p: A => Boolean): Boolean              = macro macros.Ref.forall
-  def mutate[B](f: A => B): Unit                    = macro macros.Ref.mutate
   def flatten[B](implicit ev: A <:< Ref[B]): Ref[B] = macro macros.Ref.flatten
 }
 object Ref {

@@ -301,12 +301,6 @@ class Ref(val c: blackbox.Context) extends RefCommon {
   def getOrElse(default: Tree) =
     branchEmpty(readValue, default)
 
-  def set(value: Tree) =
-    branchEmpty(writeValue(value), throwEmptyRef)
-
-  def setOrElse(value: Tree)(default: Tree) =
-    branchEmpty(writeValue(value), default)
-
   def contains(elem: Tree) =
     branchEmpty(q"$readValue == $elem", q"false")
 
@@ -331,9 +325,6 @@ class Ref(val c: blackbox.Context) extends RefCommon {
 
   def forall(p: Tree) =
     stabilizedPrefix(q"($pre.addr == 0) || ${app(p, readValue)}")
-
-  def mutate(f: Tree) =
-    branchEmpty(q"$pre.set(${app(f, readValue)})", q"$pre")
 }
 
 class UnwrappedRef(val c: whitebox.Context) extends RefCommon {
