@@ -10,7 +10,6 @@ trait Common {
 
   val OffheapClass      = rootMirror.staticClass("regions.internal.runtime.offheap")
   val RefClass          = rootMirror.staticClass("regions.Ref")
-  val UnwrappedRefClass = rootMirror.staticClass("regions.UnwrappedRef")
 
   val regions  = q"_root_.regions"
   val internal = q"$regions.internal"
@@ -26,12 +25,9 @@ trait Common {
   }
 
   object RefOf {
-    def unapply(tpe: Type): Option[Type] = {
-      val base = tpe.typeSymbol match {
-        case RefClass | UnwrappedRefClass => Some(tpe.baseType(tpe.typeSymbol))
-        case _                            => None
-      }
-      base.map(_.typeArgs.head)
+    def unapply(tpe: Type): Option[Type] = tpe.typeSymbol match {
+      case RefClass => Some(tpe.baseType(tpe.typeSymbol).typeArgs.head)
+      case _        => None
     }
   }
 
@@ -158,9 +154,10 @@ class Annotations(val c: whitebox.Context) extends Common {
   def offheapName(name: Name) =
     TermName("$offheap$" + name.toString)
 
-  // TODO: turn off stabilization for offheap accessors
+  // TODO: pre-expand off-heap accessors?
   // TODO: handle mods properly
   // TODO: handle generics
+  // TODO: handle implicit parameters
   // TODO: hygienic reference to class type from companion
   // TODO: transform this to $self in offheap methods
   def offheap(annottees: Tree*): Tree = debug("@offheap")(annottees match {
@@ -173,7 +170,7 @@ class Annotations(val c: whitebox.Context) extends Common {
           q"$internal.Ensure.allocatable[$tpt]"
       }
       val self = fresh("self")
-      val Self = tq"$UnwrappedRefClass[$name]"
+      val Self = tq"$RefClass[$name]"
       val offheapAccessors: List[Tree] = args.map {
         case q"$_ val $name: $tpt" =>
           q"def ${offheapName(name)}($self: $Self): $tpt = $self.$name"
@@ -231,13 +228,12 @@ class Ensure(val c: blackbox.Context) extends Common {
   }
 }
 
-trait RefCommon extends Common {
+class Ref(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
+  import c.universe.definitions._
 
   lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get
   lazy val pre = fresh("pre")
-
-  def ThisRefClass: ClassSymbol
 
   def stabilized(value: Tree)(f: TermName => Tree) = {
     val stable = fresh("stable")
@@ -254,7 +250,7 @@ trait RefCommon extends Common {
     q"throw $regions.EmptyRefException"
 
   def emptyRef(T: Type) =
-    q"null.asInstanceOf[$ThisRefClass[$T]]"
+    q"null.asInstanceOf[$RefClass[$T]]"
 
   def allocRef(T: Type, value: Tree, r: Tree) = {
     val v = fresh("v")
@@ -265,7 +261,7 @@ trait RefCommon extends Common {
     }
     stabilized(value) { v =>
       q"""
-        val $ref = new $ThisRefClass[$T]($runtime.allocMemory($r, $size))
+        val $ref = new $RefClass[$T]($runtime.allocMemory($r, $size))
         ${write(T, q"$ref.addr", q"$v")}
         $ref
       """
@@ -283,17 +279,12 @@ trait RefCommon extends Common {
 
   def nonEmpty: Tree =
     q"${c.prefix}.addr != 0"
-}
 
-class Ref(val c: blackbox.Context) extends RefCommon {
-  import c.universe.{ weakTypeOf => wt, _ }
-  import c.universe.definitions._
+  def readValue =
+    read(A, q"$pre.addr")
 
-  lazy val ThisRefClass = RefClass
-
-  def readValue = read(A, q"$pre.addr")
-
-  def writeValue(value: Tree) = write(A, q"$pre.addr", value)
+  def writeValue(value: Tree) =
+    write(A, q"$pre.addr", value)
 
   def get =
     branchEmpty(readValue, throwEmptyRef)
@@ -325,28 +316,6 @@ class Ref(val c: blackbox.Context) extends RefCommon {
 
   def forall(p: Tree) =
     stabilizedPrefix(q"($pre.addr == 0) || ${app(p, readValue)}")
-}
-
-class UnwrappedRef(val c: whitebox.Context) extends RefCommon {
-  import c.universe._
-
-  lazy val ThisRefClass = UnwrappedRefClass
-
-  def applyDynamic(method: Tree)(args: Tree*): Tree = ???
-
-  def selectDynamic(field: Tree): Tree =
-    branchEmpty(nonEmpty = {
-      A match {
-        case ClassOf(fields) =>
-          val q"${fieldStr: String}" = field
-          fields.collectFirst {
-            case f if f.name.decoded.toString == fieldStr =>
-              read(f.tpe, q"$pre.addr + ${f.offset}")
-          }.getOrElse {
-            abort(s"class $A doesn't have field $field")
-          }
-      }
-    }, empty = throwEmptyRef)
 }
 
 class Region(val c: blackbox.Context) extends Common {
@@ -381,7 +350,7 @@ class Runtime(val c: blackbox.Context) extends Common {
       write(f.tpe, q"$ref.addr + ${f.offset}", arg)
     }
     q"""
-      val $ref = new $UnwrappedRefClass[$T]($runtime.allocMemory($r, $size))
+      val $ref = new $RefClass[$T]($runtime.allocMemory($r, $size))
       ..$writes
       $ref
     """

@@ -88,6 +88,6 @@ package object runtime {
     region.node.loc + offset
   }
 
-  def allocClass[T](r: Region, args: Any*): _root_.regions.UnwrappedRef[T] =
+  def allocClass[T](r: Region, args: Any*): _root_.regions.Ref[T] =
     macro macros.Runtime.allocClass[T]
 }

@@ -31,18 +31,8 @@ object Ref {
   def empty[T]: Ref[T]                               = macro macros.Ref.empty[T]
 }
 
-final class UnwrappedRef[A](val addr: Long) extends AnyVal with Dynamic {
-  def nonEmpty: Boolean                             = macro macros.UnwrappedRef.nonEmpty
-  def isEmpty: Boolean                              = macro macros.UnwrappedRef.isEmpty
-  def applyDynamic(method: String)(args: Any*): Any = macro macros.UnwrappedRef.applyDynamic
-  def selectDynamic(field: String): Any             = macro macros.UnwrappedRef.selectDynamic
-}
-object UnwrappedRef {
-  def apply[T](value: T)(implicit r: Region): UnwrappedRef[T] =
-    macro macros.UnwrappedRef.alloc[T]
-  def empty[T]: UnwrappedRef[T] =
-    macro macros.UnwrappedRef.empty[T]
-}
+// TODO: class ArrayRef[A](val addr: Long) extends AnyVal
+// TODO: object ArrayRef
 
 case object EmptyRefException extends Exception
 
