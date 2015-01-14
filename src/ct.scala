@@ -2,6 +2,8 @@ package regions.internal
 
 import scala.language.experimental.{macros => CanMacro}
 
-object Ensure {
+package object ct {
   def allocatable[T]: Unit = macro macros.Ensure.allocatable[T]
+  def ref[T](ref: _root_.regions.Ref[T]): T = ???
+  def lit[T](t: T): T = ???
 }

@@ -6,12 +6,12 @@ import scala.annotation.StaticAnnotation
 import scala.language.experimental.{macros => CanMacro}
 import regions.{Region, Ref}
 
-package runtime {
+package rt {
   class offheap extends StaticAnnotation
   case class Node(loc: Long, var next: Node)
 }
 
-package object runtime {
+package object rt {
   val unsafe: Unsafe = {
     val f = classOf[Unsafe].getDeclaredField("theUnsafe");
     f.setAccessible(true);

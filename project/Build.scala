@@ -41,7 +41,7 @@ object RegionsBuild extends Build {
     settings = defaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
       scalacOptions += "-Xprint:typer",
-      scalacOptions += "-Xprint-types",
+      //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
       fork in run := true//,
       //javaOptions in run += "-Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=n"

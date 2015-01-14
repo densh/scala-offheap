@@ -8,13 +8,14 @@ trait Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  val OffheapClass      = rootMirror.staticClass("regions.internal.runtime.offheap")
+  val OffheapClass      = rootMirror.staticClass("regions.internal.rt.offheap")
   val RefClass          = rootMirror.staticClass("regions.Ref")
 
   val regions  = q"_root_.regions"
   val internal = q"$regions.internal"
-  val runtime  = q"$internal.runtime"
-  val unsafe   = q"$runtime.unsafe"
+  val rt       = q"$internal.rt"
+  val ct       = q"$internal.ct"
+  val unsafe   = q"$rt.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
   def fresh(pre: String): TermName = TermName(c.freshName(pre))
@@ -154,6 +155,7 @@ class Annotations(val c: whitebox.Context) extends Common {
   def offheapName(name: Name) =
     TermName("$offheap$" + name.toString)
 
+  // TODO: alias acessors don't have to perform null checks
   // TODO: pre-expand off-heap accessors?
   // TODO: handle mods properly
   // TODO: handle generics
@@ -167,13 +169,13 @@ class Annotations(val c: whitebox.Context) extends Common {
       val checks = args.map {
         case q"$_ val $name: $tpt = $default" =>
           if (default.nonEmpty) abort("structs with default values are not supported")
-          q"$internal.Ensure.allocatable[$tpt]"
+          q"$ct.allocatable[$tpt]"
       }
       val self = fresh("self")
       val Self = tq"$RefClass[$name]"
       val offheapAccessors: List[Tree] = args.map {
         case q"$_ val $name: $tpt" =>
-          q"def ${offheapName(name)}($self: $Self): $tpt = $self.project(_.$name)"
+          q"def ${offheapName(name)}($self: $Self): $tpt = $self.get(_.$name)"
       }
       val offheapScope: List[Tree] = {
         val aliasAcessors: List[Tree] = args.map {
@@ -191,6 +193,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         case q"$_ def $name(...$args): $tpt = $body" =>
           q"""
             def ${offheapName(name)}($self: $Self)(...$args): $tpt = {
+              if ($self.isEmpty) throw $regions.EmptyRefException
               ..$offheapScope;
               $body
             }
@@ -201,7 +204,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       val argNames = args.map(_.name)
       val r = fresh("r")
       q"""
-        @$runtime.offheap final class $name private(..$classArgs) {
+        @$rt.offheap final class $name private(..$classArgs) {
           ..$stats
           ..$checks
         }
@@ -209,7 +212,7 @@ class Annotations(val c: whitebox.Context) extends Common {
           ..$offheapAccessors
           ..$offheapMethods
           def apply(..$args)(implicit $r: $regions.Region): $Self =
-            $runtime.allocClass[$name]($r, ..$argNames)
+            $rt.allocClass[$name]($r, ..$argNames)
           def unapply($self: $Self): $Self = $self
         }
       """
@@ -232,6 +235,7 @@ class Ensure(val c: blackbox.Context) extends Common {
 class Ref(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
+  import c.internal._, c.internal.decorators._
 
   lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get
   lazy val pre = fresh("pre")
@@ -262,7 +266,7 @@ class Ref(val c: blackbox.Context) extends Common {
     }
     stabilized(value) { v =>
       q"""
-        val $ref = new $RefClass[$T]($runtime.allocMemory($r, $size))
+        val $ref = new $RefClass[$T]($rt.allocMemory($r, $size))
         ${write(T, q"$ref.addr", q"$v")}
         $ref
       """
@@ -272,7 +276,60 @@ class Ref(val c: blackbox.Context) extends Common {
   def alloc[T: WeakTypeTag](value: Tree)(r: Tree) =
     allocRef(wt[T], value, r)
 
-  def empty[T: WeakTypeTag] =
+  def readValue =
+    read(A, q"$pre.addr")
+
+  def writeValue(value: Tree) =
+    write(A, q"$pre.addr", value)
+
+  def ctoTransform(f: Tree) = debug("ctoTransform") {
+    val applied = debug("applied")(f match {
+      case q"($param => $body)" =>
+        val q"$_ val $_: $argTpt = $_" = param
+        val arg = fresh("arg")
+        val argTpe = appliedType(RefClass.toType, argTpt.tpe)
+        val argSym = enclosingOwner.newTermSymbol(arg).setInfo(argTpe)
+        val argDef = debug("argDef")(valDef(argSym, c.prefix.tree))
+        changeOwner(body, f.symbol, enclosingOwner)
+        val transformedBody = typingTransform(body) { (tree, api) =>
+          tree match {
+            case id: Ident if id.symbol == param.symbol =>
+              api.typecheck(debug("typechecking")(q"$ct.ref($argSym)"))
+            case _ =>
+              debug("default")(api.default(tree))
+          }
+        }
+        q"$argDef; $transformedBody"
+    })
+    applied
+  }
+
+  // TODO: use better pattern for ct.ref
+  def ctoExpand(t: Tree) = typingTransform(t) { (tree, api) =>
+    tree match {
+      case q"$_.ct.`package`.ref[$tpt]($ref).$name" => debug("expand access") {
+        val ClassOf(fields) = tpt.tpe
+        fields.collectFirst {
+          case f if f.name == name =>
+            api.typecheck(read(f.tpe, q"$ref.addr + ${f.offset}"))
+        }.getOrElse {
+          abort(s"$tpt doesn't have field $name")
+        }
+      }
+      case _ =>
+        debug("expand default")(api.default(tree))
+    }
+  }
+
+  def getF(f: Tree): Tree = {
+    branchEmpty(ctoExpand(ctoTransform(f)), throwEmptyRef)
+  }
+
+  /*debug("getF") {
+    branchEmpty(app(f, readValue), throwEmptyRef)
+  }*/
+
+  /*def empty[T: WeakTypeTag] =
     emptyRef(wt[T])
 
   def isEmpty: Tree =
@@ -281,21 +338,11 @@ class Ref(val c: blackbox.Context) extends Common {
   def nonEmpty: Tree =
     q"${c.prefix}.addr != 0"
 
-  def readValue =
-    read(A, q"$pre.addr")
-
-  def writeValue(value: Tree) =
-    write(A, q"$pre.addr", value)
-
   def get =
     branchEmpty(readValue, throwEmptyRef)
 
-  def getF(f: Tree): Tree = ???
-
   def getOrElse(default: Tree) =
     branchEmpty(readValue, default)
-
-  def getFOrElse(f: Tree, default: Tree) = ???
 
   def contains(elem: Tree) =
     branchEmpty(q"$readValue == $elem", q"false")
@@ -320,7 +367,7 @@ class Ref(val c: blackbox.Context) extends Common {
     stabilizedPrefix(q"($pre.addr != 0) && ${app(p, readValue)}")
 
   def forall(p: Tree) =
-    stabilizedPrefix(q"($pre.addr == 0) || ${app(p, readValue)}")
+    stabilizedPrefix(q"($pre.addr == 0) || ${app(p, readValue)}")*/
 }
 
 class Region(val c: blackbox.Context) extends Common {
@@ -331,9 +378,9 @@ class Region(val c: blackbox.Context) extends Common {
     val r = fresh("r")
     val res = fresh("res")
     q"""
-      val $r = $runtime.allocRegion()
+      val $r = $rt.allocRegion()
       val $res = ${app(f, q"$r")}
-      $runtime.disposeRegion($r)
+      $rt.disposeRegion($r)
       $res
     """
   }
@@ -351,7 +398,7 @@ class Runtime(val c: blackbox.Context) extends Common {
       write(f.tpe, q"$ref.addr + ${f.offset}", arg)
     }
     q"""
-      val $ref = new $RefClass[$T]($runtime.allocMemory($r, $size))
+      val $ref = new $RefClass[$T]($rt.allocMemory($r, $size))
       ..$writes
       $ref
     """

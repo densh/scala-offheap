@@ -1,10 +1,8 @@
 import regions._
 object Test extends App {
-  val tmp = {
-    Region { r =>
-      Ref(1)(r)
-
-    }
-  }.toString
-  println(tmp)
+  @offheap class Point(x: Int, y: Int)
+  Region { implicit r =>
+    val ref: Ref[Point] = Point(10, 20)
+    println(ref.get(p => p.x + p.y))
+  }
 }
