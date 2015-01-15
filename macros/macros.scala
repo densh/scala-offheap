@@ -148,10 +148,8 @@ trait Common {
           && refTree.symbol.asTerm.isStable =>
           (refTree, q"")
         case _ =>
-          val arg = fresh("arg")
-          val sym = enclosingOwner.newTermSymbol(arg).setInfo(argTpt.tpe)
-          val vd = valDef(sym, argValue)
-          (q"$sym", vd)
+          val vd = freshVal("arg", argTpt.tpe, argValue)
+          (q"${vd.symbol}", vd)
       }
       val transformedBody = typingTransform(body) { (tree, api) =>
         tree match {
@@ -390,7 +388,7 @@ class Region(val c: blackbox.Context) extends Common {
     q"""
       $r
       val $res = ${app(f, q"${r.symbol}")}
-      $rt.disposeRegion($r)
+      $rt.disposeRegion(${r.symbol})
       $res
     """
   }
