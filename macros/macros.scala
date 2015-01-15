@@ -114,16 +114,7 @@ trait Common {
       val value = read(LongTpe, address)
       q"new $RefClass[$targ]($value)"
     case ClassOf(fields) =>
-      val companion = tpe.typeSymbol.companion
-      val tmps = fields.map { f => fresh(f.name.decoded) }
-      val reads = fields.zip(tmps).map { case (f, tmp) =>
-        val rhs = read(f.tpe, q"$address + ${f.offset}")
-        q"val $tmp = $rhs"
-      }
-      q"""
-        ..$reads
-        $companion.apply(..$tmps)
-      """
+      q"$ct.ref[$tpe](new $RefClass[$tpe]($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -146,7 +137,8 @@ trait Common {
             write(f.tpe, q"$address + ${f.offset}", arg)
           }
           q"..$writes"
-        case CtvRef(ref) => ???
+        case CtvRef(ref) =>
+          q"$unsafe.copyMemory($ref.addr, $address, ${sizeof(tpe)})"
       }
   }
 
@@ -304,8 +296,12 @@ class Ref(val c: blackbox.Context) extends Common {
   def stabilizedPrefix(f: Tree => Tree) =
     stabilized(c.prefix.tree)(f)
 
-  def branchEmpty(nonEmpty: Tree, empty: Tree) =
-    stabilizedPrefix(pre => q"if ($pre.addr != 0) $nonEmpty else $empty")
+  def branchEmpty(nonEmpty: Tree => Tree, empty: Tree => Tree) =
+    stabilizedPrefix { pre =>
+      val thenp = nonEmpty(pre)
+      val elsep = empty(pre)
+      q"if ($pre.addr != 0) $thenp else $elsep"
+    }
 
   def throwEmptyRef =
     q"throw $regions.EmptyRefException"
@@ -358,12 +354,11 @@ class Ref(val c: blackbox.Context) extends Common {
   }
 
   def getF(f: Tree): Tree = {
-    branchEmpty(ctvExpand(ctvTransform(f)), throwEmptyRef)
+    branchEmpty(_ => ctvExpand(ctvTransform(f)), _ => throwEmptyRef)
   }
 
-  /*debug("getF") {
-    branchEmpty(app(f, readValue), throwEmptyRef)
-  }*/
+  def get =
+    branchEmpty(pre => read(A, q"$pre.addr"), _ => throwEmptyRef)
 
   /*def empty[T: WeakTypeTag] =
     emptyRef(wt[T])
@@ -374,8 +369,7 @@ class Ref(val c: blackbox.Context) extends Common {
   def nonEmpty: Tree =
     q"${c.prefix}.addr != 0"
 
-  def get =
-    branchEmpty(readValue, throwEmptyRef)
+
 
   def getOrElse(default: Tree) =
     branchEmpty(readValue, default)

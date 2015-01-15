@@ -14,10 +14,10 @@ object Region {
 }
 
 final class Ref[+A](val addr: Long) extends AnyVal {
+  def get: A                                         = macro macros.Ref.get
   def get[B](f: A => B): B                           = macro macros.Ref.getF
   /*def isEmpty: Boolean                               = macro macros.Ref.isEmpty
   def nonEmpty: Boolean                              = macro macros.Ref.nonEmpty
-  def get: A                                         = macro macros.Ref.get
   def getOrElse[B >: A](default: => B): B            = macro macros.Ref.getOrElse
   def contains[A1 >: A](elem: A1): Boolean           = macro macros.Ref.contains
   def map[B](f: A => B)(implicit r: Region): Ref[B]  = macro macros.Ref.map
