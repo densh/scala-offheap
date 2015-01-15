@@ -21,12 +21,12 @@ trait Common {
   val unsafe   = q"$rt.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
+
   def debug[T](header: String)(f: => T): T = {
     val res = f
     println(s"$header = $res")
     res
   }
-
 
   def fresh(pre: String): TermName = TermName(c.freshName(pre))
 
@@ -69,9 +69,10 @@ trait Common {
   case class StructField(name: TermName, tpe: Type, offset: Long)
 
   object ClassOf {
-    def unapply(tpe: Type): Option[List[StructField]] = tpe.typeSymbol match {
+    def unapply(tpe: Type): Option[List[StructField]] = unapply(tpe.typeSymbol)
+    def unapply(sym: Symbol): Option[List[StructField]] = sym match {
       case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == OffheapClass) =>
-        val args = tpe.typeSymbol.asClass.primaryConstructor
+        val args = sym.asClass.primaryConstructor
                       .asMethod.paramLists.head.map { arg =>
           (arg.name.toTermName, arg.info)
         }
@@ -83,6 +84,23 @@ trait Common {
         }
         Some(buf.toList)
       case _ => None
+    }
+  }
+
+  object CtvRef {
+    def unapply(t: Tree): Option[Tree] = t match {
+      case q"$pre.`package`.ref[$_]($ref)" if pre.symbol == ct => Some(ref)
+      case _ => None
+    }
+  }
+  object CtvLit {
+    def unapply(t: Tree): Option[(ClassSymbol, List[Tree])] = t match {
+      case q"${reft: RefTree}.apply(..$args)"
+        if reft.symbol.isModule
+        && reft.symbol.companion.annotations.exists(_.tpe.typeSymbol == OffheapClass) =>
+        Some((reft.symbol.companion.asClass, args))
+      case _ =>
+        None
     }
   }
 
@@ -121,11 +139,15 @@ trait Common {
     case RefOf(_) =>
       write(LongTpe, address, q"$value.addr")
     case ClassOf(fields) =>
-      val v = fresh("v")
-      val writes = fields.map { f =>
-        write(f.tpe, q"$address + ${f.offset}", q"$v.${f.name}")
+      value match {
+        case CtvLit(sym, args) =>
+          val ClassOf(fields) = sym
+          val writes = fields.zip(args).map { case (f, arg) =>
+            write(f.tpe, q"$address + ${f.offset}", arg)
+          }
+          q"..$writes"
+        case CtvRef(ref) => ???
       }
-      q"val $v = $value; ..$writes"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -167,6 +189,22 @@ trait Common {
   def app(f: Tree, argValue: Tree) =
     appSubs(f, argValue, identity)
 
+  def stabilized(tree: Tree)(f: Tree => Tree) = tree match {
+    case q"${refTree: RefTree}"
+      if refTree.symbol.isTerm
+      && refTree.symbol.asTerm.isStable =>
+      f(refTree)
+    case _ =>
+      if (tree.tpe == null) {
+        val stable = fresh("stable")
+        q"val $stable = $tree; ${f(q"$stable")}"
+      } else {
+        val stable = freshVal("stable", tree.tpe, tree)
+        val fapp = f(q"${stable.symbol}")
+        q"$stable; $fapp"
+      }
+  }
+
   def paramTpe(f: Tree) = f.tpe.typeArgs.head
 }
 
@@ -174,8 +212,8 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def offheapName(name: Name) =
-    TermName("$offheap$" + name.toString)
+  def offheapName(section: String, name: Name) =
+    TermName("$offheap$" + section + "$" + name.toString)
 
   // TODO: alias acessors don't have to perform null checks
   // TODO: pre-expand off-heap accessors?
@@ -184,6 +222,7 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: handle implicit parameters
   // TODO: hygienic reference to class type from companion
   // TODO: transform this to $self in offheap methods
+  // TODO: unapply
   def offheap(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
@@ -197,24 +236,24 @@ class Annotations(val c: whitebox.Context) extends Common {
       val Self = tq"$RefClass[$name]"
       val offheapAccessors: List[Tree] = args.map {
         case q"$_ val $name: $tpt" =>
-          q"def ${offheapName(name)}($self: $Self): $tpt = $self.get(_.$name)"
+          q"def ${offheapName("accessor", name)}($self: $Self): $tpt = $self.get(_.$name)"
       }
       val offheapScope: List[Tree] = {
         val aliasAcessors: List[Tree] = args.map {
           case q"$_ val $name: $tpt" =>
-            q"def $name: $tpt = ${offheapName(name)}($self)"
+            q"def $name: $tpt = ${offheapName("acessor", name)}($self)"
         }
         val aliasMethods: List[Tree] = stats.collect {
           case q"$_ def $name(...$args): $tpt = $body" =>
             val argNames = args.map { _.map { case q"$_ val $name: $_ = $_" => name } }
-            q"def $name(...$args): $tpt = ${offheapName(name)}($self)(...$argNames)"
+            q"def $name(...$args): $tpt = ${offheapName("method", name)}($self)(...$argNames)"
         }
         aliasAcessors ++ aliasMethods
       }
       val offheapMethods: List[Tree] = stats.map {
         case q"$_ def $name(...$args): $tpt = $body" =>
           q"""
-            def ${offheapName(name)}($self: $Self)(...$args): $tpt = {
+            def ${offheapName("method", name)}($self: $Self)(...$args): $tpt = {
               if ($self.isEmpty) throw $regions.EmptyRefException
               ..$offheapScope;
               $body
@@ -225,6 +264,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       val classArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
       val argNames = args.map(_.name)
       val r = fresh("r")
+      val msg = s"uninterpted instantiation of class $name"
       q"""
         @$rt.offheap final class $name private(..$classArgs) {
           ..$stats
@@ -233,9 +273,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         object ${name.toTermName} {
           ..$offheapAccessors
           ..$offheapMethods
-          def apply(..$args)(implicit $r: $regions.Region): $Self =
-            $rt.allocClass[$name]($r, ..$argNames)
-          def unapply($self: $Self): $Self = $self
+          @_root_.scala.annotation.compileTimeOnly($msg)
+          def apply(..$args): $name = ???
         }
       """
   }
@@ -261,17 +300,6 @@ class Ref(val c: blackbox.Context) extends Common {
 
   lazy val A = RefOf.unapply(c.prefix.tree.tpe).get
 
-  def stabilized(tree: Tree)(f: Tree => Tree) = tree match {
-    case q"${refTree: RefTree}"
-      if refTree.symbol.isTerm
-      && refTree.symbol.asTerm.isStable =>
-      println(s"$tree is stable")
-      f(refTree)
-    case _ =>
-      println(s"$tree is not stable")
-      val stable = fresh("stable")
-      q"val $stable = $tree; ${f(q"$stable")}"
-  }
 
   def stabilizedPrefix(f: Tree => Tree) =
     stabilized(c.prefix.tree)(f)
@@ -286,16 +314,19 @@ class Ref(val c: blackbox.Context) extends Common {
     q"null.asInstanceOf[$RefClass[$T]]"
 
   def allocRef(T: Type, value: Tree, r: Tree) = {
-    val v = fresh("v")
     val ref = fresh("ref")
     val size = T match {
       case Allocatable() => sizeof(T)
       case _             => abort(s"allocation of $T is not supported")
     }
-    stabilized(value) { v =>
+    def wrap(f: Tree => Tree) = value match {
+      case CtvRef(_) | CtvLit(_) => f(value)
+      case _                     => stabilized(value)(f)
+    }
+    wrap { v =>
       q"""
         val $ref = new $RefClass[$T]($rt.allocMemory($r, $size))
-        ${write(T, q"$ref.addr", q"$v")}
+        ${write(T, q"$ref.addr", v)}
         $ref
       """
     }
@@ -313,17 +344,14 @@ class Ref(val c: blackbox.Context) extends Common {
   def ctvTransform(f: Tree) =
     appSubs(f, c.prefix.tree, subs = arg => q"$ct.ref($arg)")
 
-  // TODO: use better pattern for ct.ref
   def ctvExpand(t: Tree) = typingTransform(t) { (tree, api) =>
     tree match {
-      case q"$pre.`package`.ref[$tpt]($ref).$name" if pre.symbol == ct =>
-        val ClassOf(fields) = tpt.tpe
+      case q"${CtvRef(ref)}.$name" =>
+        val RefOf(ClassOf(fields)) = ref.tpe
         fields.collectFirst {
           case f if f.name == name =>
             api.typecheck(read(f.tpe, q"$ref.addr + ${f.offset}"))
-        }.getOrElse {
-          abort(s"$tpt doesn't have field $name")
-        }
+        }.get
       case _ =>
         api.default(tree)
     }
@@ -357,7 +385,6 @@ class Ref(val c: blackbox.Context) extends Common {
 
   def flatten(ev: Tree) = {
     val RefOf(argtpe) = A
-    branchEmpty(readValue, emptyRef(argtpe))
   }
 
   def map(f: Tree)(r: Tree) =
