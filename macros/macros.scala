@@ -7,14 +7,15 @@ trait Common {
   val c: blackbox.Context
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
+  import rootMirror.{staticClass, staticPackage}
 
-  val OffheapClass      = rootMirror.staticClass("regions.internal.rt.offheap")
-  val RefClass          = rootMirror.staticClass("regions.Ref")
+  val OffheapClass = staticClass("regions.internal.rt.offheap")
+  val RefClass     = staticClass("regions.Ref")
 
-  val regions  = q"_root_.regions"
-  val internal = q"$regions.internal"
-  val rt       = q"$internal.rt"
-  val ct       = q"$internal.ct"
+  val regions  = staticPackage("regions")
+  val internal = staticPackage("regions.internal")
+  val rt       = staticPackage("regions.internal.rt")
+  val ct       = staticPackage("regions.internal.ct")
   val unsafe   = q"$rt.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
@@ -124,9 +125,8 @@ trait Common {
   }
 
   def app(f: Tree, argValue: Tree) = f match {
-    case q"($_ => $_)" =>
+    case q"($param => $body)" =>
       import c.internal._, c.internal.decorators._
-      val q"($param => $body)" = f
       val q"$_ val $_: $argTpt = $_" = param
       val arg = fresh("arg")
       val argSym = enclosingOwner.newTermSymbol(arg).setInfo(argTpt.tpe)
@@ -219,7 +219,7 @@ class Annotations(val c: whitebox.Context) extends Common {
   })
 }
 
-class Ensure(val c: blackbox.Context) extends Common {
+class Ct(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
@@ -238,18 +238,20 @@ class Ref(val c: blackbox.Context) extends Common {
   import c.internal._, c.internal.decorators._
 
   lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get
-  lazy val pre = fresh("pre")
 
-  def stabilized(value: Tree)(f: TermName => Tree) = {
-    val stable = fresh("stable")
-    q"val $stable = $value; ${f(stable)}"
+  def stabilized(tree: Tree)(f: TermName => Tree) = tree match {
+    case q"${name: TermName}" if name.toString.contains("$macro$") =>
+      f(name)
+    case _ =>
+      val stable = fresh("stable")
+      q"val $stable = $tree; ${f(stable)}"
   }
 
-  def stabilizedPrefix(body: Tree) =
-    q"val $pre = ${c.prefix}; $body"
+  def stabilizedPrefix(f: TermName => Tree) =
+    stabilized(c.prefix.tree)(f)
 
   def branchEmpty(nonEmpty: Tree, empty: Tree) =
-    stabilizedPrefix(q"if ($pre.addr != 0) $nonEmpty else $empty")
+    stabilizedPrefix(pre => q"if ($pre.addr != 0) $nonEmpty else $empty")
 
   def throwEmptyRef =
     q"throw $regions.EmptyRefException"
@@ -276,13 +278,13 @@ class Ref(val c: blackbox.Context) extends Common {
   def alloc[T: WeakTypeTag](value: Tree)(r: Tree) =
     allocRef(wt[T], value, r)
 
-  def readValue =
+  /*def readValue =
     read(A, q"$pre.addr")
 
   def writeValue(value: Tree) =
-    write(A, q"$pre.addr", value)
+    write(A, q"$pre.addr", value)*/
 
-  def ctoTransform(f: Tree) = debug("ctoTransform") {
+  def ctvTransform(f: Tree) = debug("ctvTransform") {
     val applied = debug("applied")(f match {
       case q"($param => $body)" =>
         val q"$_ val $_: $argTpt = $_" = param
@@ -305,9 +307,9 @@ class Ref(val c: blackbox.Context) extends Common {
   }
 
   // TODO: use better pattern for ct.ref
-  def ctoExpand(t: Tree) = typingTransform(t) { (tree, api) =>
+  def ctvExpand(t: Tree) = typingTransform(t) { (tree, api) =>
     tree match {
-      case q"$_.ct.`package`.ref[$tpt]($ref).$name" => debug("expand access") {
+      case q"$pre.`package`.ref[$tpt]($ref).$name" if pre.symbol == ct => debug("expand access") {
         val ClassOf(fields) = tpt.tpe
         fields.collectFirst {
           case f if f.name == name =>
@@ -322,7 +324,7 @@ class Ref(val c: blackbox.Context) extends Common {
   }
 
   def getF(f: Tree): Tree = {
-    branchEmpty(ctoExpand(ctoTransform(f)), throwEmptyRef)
+    branchEmpty(ctvExpand(ctvTransform(f)), throwEmptyRef)
   }
 
   /*debug("getF") {
