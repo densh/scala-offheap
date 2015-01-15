@@ -1,4 +1,5 @@
 package regions.internal.macros
+// TODO: handle non-function case
 
 import scala.collection.mutable
 import scala.reflect.macros.{whitebox, blackbox}
@@ -11,6 +12,7 @@ trait Common {
 
   val OffheapClass = staticClass("regions.internal.rt.offheap")
   val RefClass     = staticClass("regions.Ref")
+  val RegionClass  = staticClass("regions.Region")
 
   val regions  = staticPackage("regions")
   val internal = staticPackage("regions.internal")
@@ -19,11 +21,21 @@ trait Common {
   val unsafe   = q"$rt.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
-  def fresh(pre: String): TermName = TermName(c.freshName(pre))
   def debug[T](header: String)(f: => T): T = {
     val res = f
     println(s"$header = $res")
     res
+  }
+
+
+  def fresh(pre: String): TermName = TermName(c.freshName(pre))
+
+  def freshVal(pre: String, tpe: Type, value: Tree): ValDef = {
+    import c.internal._, c.internal.decorators._
+    val name = fresh(pre)
+    val sym = enclosingOwner.newTermSymbol(name).setInfo(tpe)
+    val vd = valDef(sym, value)
+    vd
   }
 
   object RefOf {
@@ -82,7 +94,7 @@ trait Common {
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
     case RefOf(targ) =>
       val value = read(LongTpe, address)
-      q"new $regions.Ref[$targ]($value)"
+      q"new $RefClass[$targ]($value)"
     case ClassOf(fields) =>
       val companion = tpe.typeSymbol.companion
       val tmps = fields.map { f => fresh(f.name.decoded) }
@@ -124,26 +136,38 @@ trait Common {
     case ClassOf(fields)                 => fields.map(f => sizeof(f.tpe)).sum
   }
 
-  def app(f: Tree, argValue: Tree) = f match {
+  // TODO: handle non-function literal cases
+  def appSubs(f: Tree, argValue: Tree, subs: Tree => Tree) = f match {
     case q"($param => $body)" =>
       import c.internal._, c.internal.decorators._
       val q"$_ val $_: $argTpt = $_" = param
-      val arg = fresh("arg")
-      val argSym = enclosingOwner.newTermSymbol(arg).setInfo(argTpt.tpe)
-      val argDef = valDef(argSym, argValue)
       changeOwner(body, f.symbol, enclosingOwner)
+      val (arg, argDef) = argValue match {
+        case refTree: RefTree
+          if refTree.symbol.isTerm
+          && refTree.symbol.asTerm.isStable =>
+          (refTree, q"")
+        case _ =>
+          val arg = fresh("arg")
+          val sym = enclosingOwner.newTermSymbol(arg).setInfo(argTpt.tpe)
+          val vd = valDef(sym, argValue)
+          (q"$sym", vd)
+      }
       val transformedBody = typingTransform(body) { (tree, api) =>
         tree match {
           case id: Ident if id.symbol == param.symbol =>
-            api.typecheck(q"$argSym")
+            api.typecheck(subs(q"$arg"))
           case _ =>
             api.default(tree)
         }
       }
-      q"$argDef; $transformedBody"
+      q"..$argDef; $transformedBody"
     case _             =>
       q"$f($argValue)"
   }
+
+  def app(f: Tree, argValue: Tree) =
+    appSubs(f, argValue, identity)
 
   def paramTpe(f: Tree) = f.tpe.typeArgs.head
 }
@@ -162,7 +186,7 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: handle implicit parameters
   // TODO: hygienic reference to class type from companion
   // TODO: transform this to $self in offheap methods
-  def offheap(annottees: Tree*): Tree = debug("@offheap")(annottees match {
+  def offheap(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
@@ -216,7 +240,7 @@ class Annotations(val c: whitebox.Context) extends Common {
           def unapply($self: $Self): $Self = $self
         }
       """
-  })
+  }
 }
 
 class Ct(val c: blackbox.Context) extends Common {
@@ -237,17 +261,21 @@ class Ref(val c: blackbox.Context) extends Common {
   import c.universe.definitions._
   import c.internal._, c.internal.decorators._
 
-  lazy val A   = RefOf.unapply(c.prefix.tree.tpe).get
+  lazy val A = RefOf.unapply(c.prefix.tree.tpe).get
 
-  def stabilized(tree: Tree)(f: TermName => Tree) = tree match {
-    case q"${name: TermName}" if name.toString.contains("$macro$") =>
-      f(name)
+  def stabilized(tree: Tree)(f: Tree => Tree) = tree match {
+    case q"${refTree: RefTree}"
+      if refTree.symbol.isTerm
+      && refTree.symbol.asTerm.isStable =>
+      println(s"$tree is stable")
+      f(refTree)
     case _ =>
+      println(s"$tree is not stable")
       val stable = fresh("stable")
-      q"val $stable = $tree; ${f(stable)}"
+      q"val $stable = $tree; ${f(q"$stable")}"
   }
 
-  def stabilizedPrefix(f: TermName => Tree) =
+  def stabilizedPrefix(f: Tree => Tree) =
     stabilized(c.prefix.tree)(f)
 
   def branchEmpty(nonEmpty: Tree, empty: Tree) =
@@ -284,32 +312,13 @@ class Ref(val c: blackbox.Context) extends Common {
   def writeValue(value: Tree) =
     write(A, q"$pre.addr", value)*/
 
-  def ctvTransform(f: Tree) = debug("ctvTransform") {
-    val applied = debug("applied")(f match {
-      case q"($param => $body)" =>
-        val q"$_ val $_: $argTpt = $_" = param
-        val arg = fresh("arg")
-        val argTpe = appliedType(RefClass.toType, argTpt.tpe)
-        val argSym = enclosingOwner.newTermSymbol(arg).setInfo(argTpe)
-        val argDef = debug("argDef")(valDef(argSym, c.prefix.tree))
-        changeOwner(body, f.symbol, enclosingOwner)
-        val transformedBody = typingTransform(body) { (tree, api) =>
-          tree match {
-            case id: Ident if id.symbol == param.symbol =>
-              api.typecheck(debug("typechecking")(q"$ct.ref($argSym)"))
-            case _ =>
-              debug("default")(api.default(tree))
-          }
-        }
-        q"$argDef; $transformedBody"
-    })
-    applied
-  }
+  def ctvTransform(f: Tree) =
+    appSubs(f, c.prefix.tree, subs = arg => q"$ct.ref($arg)")
 
   // TODO: use better pattern for ct.ref
   def ctvExpand(t: Tree) = typingTransform(t) { (tree, api) =>
     tree match {
-      case q"$pre.`package`.ref[$tpt]($ref).$name" if pre.symbol == ct => debug("expand access") {
+      case q"$pre.`package`.ref[$tpt]($ref).$name" if pre.symbol == ct =>
         val ClassOf(fields) = tpt.tpe
         fields.collectFirst {
           case f if f.name == name =>
@@ -317,9 +326,8 @@ class Ref(val c: blackbox.Context) extends Common {
         }.getOrElse {
           abort(s"$tpt doesn't have field $name")
         }
-      }
       case _ =>
-        debug("expand default")(api.default(tree))
+        api.default(tree)
     }
   }
 
@@ -377,11 +385,11 @@ class Region(val c: blackbox.Context) extends Common {
   import c.universe.definitions._
 
   def alloc[T: WeakTypeTag](f: Tree) = {
-    val r = fresh("r")
+    val r = freshVal("r", tpe = RegionClass.toType, value =q"$rt.allocRegion()")
     val res = fresh("res")
     q"""
-      val $r = $rt.allocRegion()
-      val $res = ${app(f, q"$r")}
+      $r
+      val $res = ${app(f, q"${r.symbol}")}
       $rt.disposeRegion($r)
       $res
     """
