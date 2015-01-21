@@ -10,9 +10,10 @@ trait Common {
   import c.universe.definitions._
   import rootMirror.{staticClass, staticPackage}
 
-  val OffheapClass = staticClass("regions.internal.rt.offheap")
-  val RefClass     = staticClass("regions.Ref")
-  val RegionClass  = staticClass("regions.Region")
+  val OffheapClass       = staticClass("regions.internal.rt.offheap")
+  val RefClass           = staticClass("regions.Ref")
+  val RegionClass        = staticClass("regions.Region")
+  val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
 
   val regions  = staticPackage("regions")
   val internal = staticPackage("regions.internal")
@@ -249,7 +250,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         case other =>
           abort("offheap classes may only contain methods")
       }
-      val caseClassSupport: List[Tree] = Nil
+      val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
       val nameBasedPatMatSupport: Tree = {
         val _ns = args.zipWithIndex.map {
           case (q"$_ val $argName: $_ = $_", i) =>
@@ -262,6 +263,30 @@ class Annotations(val c: whitebox.Context) extends Common {
           ..${_ns}
         """
       }
+      // can't generate custom equals & hashCode due to value class restrictions
+      val caseClassSupport: Tree = {
+        val r = fresh("r")
+        val copyArgs = args.map { case q"$_ val $name: $tpt = $_" =>
+          q"val $name: $tpt = this.$name"
+        }
+        val sb = fresh("sb")
+        val appendFields = argNames.flatMap { argName =>
+          List(q"$sb.append(this.$argName.toString)", q"""$sb.append(", ")""")
+        }.init
+        q"""
+          def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
+            ${name.toTermName}.apply(..$argNames)($r)
+
+          override def toString(): $StringClass = {
+            val $sb = new $StringBuilderClass
+            $sb.append(${name.toString})
+            $sb.append("(")
+            ..$appendFields
+            $sb.append(")")
+            $sb.toString
+          }
+        """
+      }
       val r = fresh("r")
       val scrutinee = fresh("scrutinee")
       val layout = {
@@ -270,15 +295,14 @@ class Annotations(val c: whitebox.Context) extends Common {
         }
         q"$rt.Layout(..$tuples)"
       }
-      val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
       debug("@offheap")(q"""
         @$rt.offheap($layout) final class $name private(val $addrName: $LongClass)
             extends $AnyValClass with $RefClass {
           def $$meta$$ = { ..$asserts }
           ..$accessors
           ..$methods
-          ..$caseClassSupport
           ..$nameBasedPatMatSupport
+          ..$caseClassSupport
         }
         object ${name.toTermName} {
           def apply(..$args)(implicit $r: $RegionClass): $name =
