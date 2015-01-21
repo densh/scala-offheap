@@ -215,7 +215,8 @@ class Annotations(val c: whitebox.Context) extends Common {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
-      val addr = TermName("__addr")
+      val addrName = TermName("__addr")
+      val addr = q"this.$addrName"
       val asserts = args.map { case q"$_ val $name: $tpt = $default" =>
         if (default.nonEmpty) abort("offheap classes don't support default arguments")
         q"$ct.assertAllocatable[$tpt]"
@@ -225,7 +226,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         val uncheckedArgName = TermName(argName.toString + "$unchecked$")
         val q"..$stats" = q"""
           def $argName: $tpt =
-            if ($addr != 0) $uncheckedArgName
+            if ($addr != 0) this.$uncheckedArgName
             else $throwNullRef
           def $uncheckedArgName: $tpt =
             $ct.uncheckedAccessor[$name, $tpt]($addr, ${argName.toString})
@@ -239,7 +240,7 @@ class Annotations(val c: whitebox.Context) extends Common {
           val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
           val q"..$stats" = q"""
             def $methodName[..$targs](...$args): $tpt =
-              if ($addr != 0) $uncheckedMethodName[..$targNames](...$argNames)
+              if ($addr != 0) this.$uncheckedMethodName[..$targNames](...$argNames)
               else $throwNullRef
             def $uncheckedMethodName[..$targs](...$args): $tpt =
               $ct.uncheckedMethodBody[$name, $tpt]($body)
@@ -249,7 +250,18 @@ class Annotations(val c: whitebox.Context) extends Common {
           abort("offheap classes may only contain methods")
       }
       val caseClassSupport: List[Tree] = Nil
-      val nameBasedPatMatSupport: List[Tree] = Nil
+      val nameBasedPatMatSupport: Tree = {
+        val _ns = args.zipWithIndex.map {
+          case (q"$_ val $argName: $_ = $_", i) =>
+            val _n = TermName("_" + (i + 1))
+            q"def ${_n} = this.$argName"
+        }
+        q"""
+          def isEmpty = $addr == 0
+          def get = this
+          ..${_ns}
+        """
+      }
       val r = fresh("r")
       val scrutinee = fresh("scrutinee")
       val layout = {
@@ -260,7 +272,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
       debug("@offheap")(q"""
-        @$rt.offheap($layout) final class $name private(val $addr: $LongClass)
+        @$rt.offheap($layout) final class $name private(val $addrName: $LongClass)
             extends $AnyValClass with $RefClass {
           def $$meta$$ = { ..$asserts }
           ..$accessors
