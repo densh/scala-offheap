@@ -4,8 +4,15 @@ import scala.annotation.compileTimeOnly
 import scala.language.experimental.{macros => CanMacro}
 
 package object ct {
-  def allocatable[T]: Unit = macro macros.Ct.allocatable[T]
+  def assertAllocatable[T]: Unit =
+    macro macros.Ct.assertAllocatable[T]
 
-  @compileTimeOnly("uninterpreted ct.ref")
-  def ref[T](ref: _root_.regions.Ref[T]): T = ???
+  def uncheckedAccessor[C, T](addr: Long, name: String): T =
+    macro macros.Ct.uncheckedAcessor[C, T]
+
+  def uncheckecMethodBody[C, T](body: T): T =
+    macro macros.Ct.uncheckedMethodBody[C, T]
+
+  def allocClass[C](r: regions.Region, args: Any*): C =
+    macro macros.Ct.allocClass[C]
 }

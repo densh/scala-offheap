@@ -66,21 +66,20 @@ trait Common {
     }
   }
 
-  case class StructField(name: TermName, tpe: Type, offset: Long)
+  case class StructField(name: String, tpe: Type, offset: Long)
 
   object ClassOf {
     def unapply(tpe: Type): Option[List[StructField]] = unapply(tpe.typeSymbol)
     def unapply(sym: Symbol): Option[List[StructField]] = sym match {
       case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == OffheapClass) =>
-        val args = sym.asClass.primaryConstructor
-                      .asMethod.paramLists.head.map { arg =>
-          (arg.name.toTermName, arg.info)
-        }
+        val q"new $_($_(..$descriptors))" = sym.annotations.collectFirst {
+          case ann if ann.tpe.typeSymbol == OffheapClass => ann
+        }.get.tree
         val buf = mutable.ListBuffer[StructField]()
         var offset = 0
-        args.foreach { case (name, tpe) =>
-          buf.append(StructField(name, tpe, offset))
-          offset += sizeof(tpe)
+        descriptors.foreach { case q"(${name: String}, $_[$tpt]())" =>
+          buf.append(StructField(name, tpt.tpe, offset))
+          offset += sizeof(tpt.tpe)
         }
         Some(buf.toList)
       case _ => None
@@ -204,71 +203,77 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def offheapName(section: String, name: Name) =
-    TermName("$offheap$" + section + "$" + name.toString)
-
-  // TODO: alias acessors don't have to perform null checks
-  // TODO: pre-expand off-heap accessors?
-  // TODO: handle mods properly
   // TODO: handle generics
   // TODO: handle implicit parameters
-  // TODO: hygienic reference to class type from companion
-  // TODO: transform this to $self in offheap methods
-  // TODO: unapply
+  // TODO: hygienic reference to class type from companion?
+  // TODO: handle mods properly
+  // TODO: case-class-like utility methods
+  //       https://github.com/scalamacros/paradise/blob/2.11.x/tests/src/main/scala/kase.scala
+  // TODO: name-based-pat-mat support
+  // TODO: support classes with existing companions
   def offheap(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
-      val checks = args.map {
-        case q"$_ val $name: $tpt = $default" =>
-          if (default.nonEmpty) abort("structs with default values are not supported")
-          q"$ct.allocatable[$tpt]"
+      val addr = TermName("__addr")
+      val asserts = args.map { case q"$_ val $name: $tpt = $default" =>
+        if (default.nonEmpty) abort("offheap classes don't support default arguments")
+        q"$ct.assertAllocatable[$tpt]"
       }
-      val self = fresh("self")
-      val Self = tq"$RefClass[$name]"
-      val offheapAccessors: List[Tree] = args.map {
-        case q"$_ val $name: $tpt" =>
-          q"def ${offheapName("accessor", name)}($self: $Self): $tpt = $self.get(_.$name)"
+      def throwNullRef = q"throw $regions.NullRefException"
+      val accessors = args.flatMap { case q"$_ val $argName: $tpt = $_" =>
+        val uncheckedArgName = TermName(argName.toString + "$unchecked$")
+        val q"..$stats" = q"""
+          def $argName: $tpt =
+            if ($addr != 0) $uncheckedArgName
+            else $throwNullRef
+          def $uncheckedArgName: $tpt =
+            $ct.uncheckedAccessor[$name, $tpt]($addr, ${argName.toString})
+        """
+        stats
       }
-      val offheapScope: List[Tree] = {
-        val aliasAcessors: List[Tree] = args.map {
-          case q"$_ val $name: $tpt" =>
-            q"def $name: $tpt = ${offheapName("acessor", name)}($self)"
-        }
-        val aliasMethods: List[Tree] = stats.collect {
-          case q"$_ def $name(...$args): $tpt = $body" =>
-            val argNames = args.map { _.map { case q"$_ val $name: $_ = $_" => name } }
-            q"def $name(...$args): $tpt = ${offheapName("method", name)}($self)(...$argNames)"
-        }
-        aliasAcessors ++ aliasMethods
-      }
-      val offheapMethods: List[Tree] = stats.map {
-        case q"$_ def $name(...$args): $tpt = $body" =>
-          q"""
-            def ${offheapName("method", name)}($self: $Self)(...$args): $tpt = {
-              if ($self.isEmpty) throw $regions.EmptyRefException
-              ..$offheapScope;
-              $body
-            }
+      val methods: List[Tree] = stats.flatMap {
+        case q"$_ def $methodName[..$targs](..$args): $tpt = $body" =>
+          val uncheckedMethodName = TermName(methodName.toString + "$unchecked$")
+          val targNames = targs.map { case q"$_ type $name[..$_] = $_" => name }
+          val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
+          val q"..$stats" = q"""
+            def $methodName[..$targs](...$args): $tpt =
+              if ($addr != 0) $uncheckedMethodName[..$targNames](...$argNames)
+              else $throwNullRef
+            def $uncheckedMethodName[..$targs](...$args): $tpt =
+              $ct.uncheckedMethodBody[$name, $tpt]($body)
           """
-        case m => abort("unsupported member", at = m.pos)
+          stats
+        case other =>
+          abort("offheap classes may only contain methods")
       }
-      val classArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
-      val argNames = args.map(_.name)
+      val caseClassSupport: List[Tree] = Nil
+      val nameBasedPatMatSupport: List[Tree] = Nil
       val r = fresh("r")
-      val msg = s"uninterpted instantiation of class $name"
-      q"""
-        @$rt.offheap final class $name private(..$classArgs) {
-          ..$stats
-          ..$checks
+      val scrutinee = fresh("scrutinee")
+      val layout = {
+        val tuples = args.map { case q"$_ val $name: $tpt = $_" =>
+          q"(${name.toString}, $rt.Tag[$tpt]())"
+        }
+        q"$rt.Layout(..$tuples)"
+      }
+      val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
+      debug("@offheap")(q"""
+        @$rt.offheap($layout) final class $name private(val $addr: $LongClass)
+            extends $AnyValClass with $RefClass {
+          def $$meta$$ = { ..$asserts }
+          ..$accessors
+          ..$methods
+          ..$caseClassSupport
+          ..$nameBasedPatMatSupport
         }
         object ${name.toTermName} {
-          ..$offheapAccessors
-          ..$offheapMethods
-          @_root_.scala.annotation.compileTimeOnly($msg)
-          def apply(..$args): $name = ???
+          def apply(..$args)(implicit $r: $RegionClass): $name =
+            $ct.allocClass[$name]($r, ..$argNames)
+          def unapply($scrutinee: $name): $name = $scrutinee
         }
-      """
+      """)
   }
 }
 
@@ -276,127 +281,42 @@ class Ct(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  def allocatable[T: WeakTypeTag]: Tree = {
+  def assertAllocatable[T: WeakTypeTag]: Tree = {
     val T = wt[T]
     T match {
       case Allocatable() => q""
       case _             => abort(s"$T is not fixed sized allocatable object")
     }
   }
-}
 
-class Ref(val c: blackbox.Context) extends Common {
-  import c.universe.{ weakTypeOf => wt, _ }
-  import c.universe.definitions._
-  import c.internal._, c.internal.decorators._
-
-  lazy val A = RefOf.unapply(c.prefix.tree.tpe).get
-
-
-  def stabilizedPrefix(f: Tree => Tree) =
-    stabilized(c.prefix.tree)(f)
-
-  def branchEmpty(nonEmpty: Tree => Tree, empty: Tree => Tree) =
-    stabilizedPrefix { pre =>
-      val thenp = nonEmpty(pre)
-      val elsep = empty(pre)
-      q"if ($pre.addr != 0) $thenp else $elsep"
-    }
-
-  def throwEmptyRef =
-    q"throw $regions.EmptyRefException"
-
-  def emptyRef(T: Type) =
-    q"null.asInstanceOf[$RefClass[$T]]"
-
-  def allocRef(T: Type, value: Tree, r: Tree) = {
-    val ref = fresh("ref")
-    val size = T match {
-      case Allocatable() => sizeof(T)
-      case _             => abort(s"allocation of $T is not supported")
-    }
-    def wrap(f: Tree => Tree) = value match {
-      case CtvRef(_) | CtvLit(_) => f(value)
-      case _                     => stabilized(value)(f)
-    }
-    wrap { v =>
-      q"""
-        val $ref = new $RefClass[$T]($rt.allocMemory($r, $size))
-        ${write(T, q"$ref.addr", v)}
-        $ref
-      """
+  def uncheckedAcessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
+    val C = wt[C]
+    val ClassOf(fields) = C
+    val q"${nameStr: String}" = name
+    fields.collectFirst {
+      case f if f.name.toString == nameStr =>
+        read(f.tpe, q"$addr + ${f.offset}")
+    }.getOrElse {
+      abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
   }
 
-  def alloc[T: WeakTypeTag](value: Tree)(r: Tree) =
-    allocRef(wt[T], value, r)
+  def uncheckedMethodBody[C: WeakTypeTag, T: WeakTypeTag](body: Tree): Tree = ???
 
-  /*def readValue =
-    read(A, q"$pre.addr")
-
-  def writeValue(value: Tree) =
-    write(A, q"$pre.addr", value)*/
-
-  def ctvTransform(f: Tree) =
-    appSubs(f, c.prefix.tree, subs = arg => q"$ct.ref($arg)")
-
-  def ctvExpand(t: Tree) = typingTransform(t) { (tree, api) =>
-    tree match {
-      case q"${CtvRef(ref)}.$name" =>
-        val RefOf(ClassOf(fields)) = ref.tpe
-        fields.collectFirst {
-          case f if f.name == name =>
-            api.typecheck(read(f.tpe, q"$ref.addr + ${f.offset}"))
-        }.get
-      case _ =>
-        api.default(tree)
+  def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
+    val C = wt[C]
+    val ClassOf(fields) = C
+    val size = sizeof(C)
+    val addr = fresh("addr")
+    val writes = fields.zip(args).map { case (f, arg) =>
+      write(f.tpe, q"$addr + ${f.offset}", arg)
     }
+    q"""
+      val $addr = $rt.allocMemory($r, $size)
+      ..$writes
+      new $C($addr)
+    """
   }
-
-  def getF(f: Tree): Tree = {
-    branchEmpty(_ => ctvExpand(ctvTransform(f)), _ => throwEmptyRef)
-  }
-
-  def get =
-    branchEmpty(pre => read(A, q"$pre.addr"), _ => throwEmptyRef)
-
-  /*def empty[T: WeakTypeTag] =
-    emptyRef(wt[T])
-
-  def isEmpty: Tree =
-    q"${c.prefix}.addr == 0"
-
-  def nonEmpty: Tree =
-    q"${c.prefix}.addr != 0"
-
-
-
-  def getOrElse(default: Tree) =
-    branchEmpty(readValue, default)
-
-  def contains(elem: Tree) =
-    branchEmpty(q"$readValue == $elem", q"false")
-
-  def flatten(ev: Tree) = {
-    val RefOf(argtpe) = A
-  }
-
-  def map(f: Tree)(r: Tree) =
-    branchEmpty(allocRef(paramTpe(f), app(f, readValue), r), q"$pre")
-
-  def fold(ifEmpty: Tree)(f: Tree) =
-    branchEmpty(app(f, readValue), ifEmpty)
-
-  def filter(p: Tree) =
-    stabilizedPrefix(q"""
-      if ($pre.addr == 0 || ${app(p, readValue)}) ${emptyRef(A)} else $pre
-    """)
-
-  def exists(p: Tree) =
-    stabilizedPrefix(q"($pre.addr != 0) && ${app(p, readValue)}")
-
-  def forall(p: Tree) =
-    stabilizedPrefix(q"($pre.addr == 0) || ${app(p, readValue)}")*/
 }
 
 class Region(val c: blackbox.Context) extends Common {
@@ -411,25 +331,6 @@ class Region(val c: blackbox.Context) extends Common {
       val $res = ${app(f, q"${r.symbol}")}
       $rt.disposeRegion(${r.symbol})
       $res
-    """
-  }
-}
-
-class Runtime(val c: blackbox.Context) extends Common {
-  import c.universe.{ weakTypeOf => wt, _ }
-
-  def allocClass[T: WeakTypeTag](r: Tree, args: Tree*): Tree = {
-    val ref = fresh("ref")
-    val T = wt[T]
-    val ClassOf(fields) = T
-    val size = sizeof(T)
-    val writes = fields.zip(args).map { case (f, arg) =>
-      write(f.tpe, q"$ref.addr + ${f.offset}", arg)
-    }
-    q"""
-      val $ref = new $RefClass[$T]($rt.allocMemory($r, $size))
-      ..$writes
-      $ref
     """
   }
 }

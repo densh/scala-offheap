@@ -7,8 +7,10 @@ import scala.language.experimental.{macros => CanMacro}
 import regions.{Region, Ref}
 
 package rt {
-  class offheap extends StaticAnnotation
-  case class Node(loc: Long, var next: Node)
+  final class offheap(layout: Layout) extends StaticAnnotation
+  final case class Node(loc: Long, var next: Node)
+  final case class Layout(fields: (String, Tag[_])*)
+  final case class Tag[T]()
 }
 
 package object rt {
@@ -87,7 +89,4 @@ package object rt {
       }
     region.node.loc + offset
   }
-
-  def allocClass[T](r: Region, args: Any*): _root_.regions.Ref[T] =
-    macro macros.Runtime.allocClass[T]
 }
