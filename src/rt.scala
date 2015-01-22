@@ -21,7 +21,7 @@ package object rt {
   }
 
   val PAGE_SIZE         = unsafe.pageSize()
-  val NODE_PAYLOAD_SIZE = 409600
+  val NODE_PAYLOAD_SIZE = PAGE_SIZE * 10
   val ARENA_NODE_COUNT  = 32
   val ARENA_SIZE        = NODE_PAYLOAD_SIZE * ARENA_NODE_COUNT
 

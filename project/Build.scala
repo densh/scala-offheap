@@ -43,10 +43,9 @@ object RegionsBuild extends Build {
       scalacOptions += "-Xprint:typer",
       //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
-      fork in run := true//,
+      fork in run := true,
       //javaOptions in run += "-Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=n"
-      //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib",
-      //javaOptions in run ++= Seq("-Xms1M", "-Xmx1M")
+      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
     ),
     dependencies = Seq(src)
   )
@@ -73,7 +72,8 @@ object RegionsBuild extends Build {
       parallelExecution in Test := false,
       fork in Test := true,
       logBuffered := false,
-      javaOptions in Test ++= Seq("-Xms256m", "-Xmx256m")
+      javaOptions in Test ++= Seq("-Xms64m", "-Xmx64m"),
+      scalacOptions += "-Xprint:typer"
     ),
     dependencies = Seq(src)
   )

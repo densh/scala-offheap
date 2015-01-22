@@ -1,7 +1,7 @@
 import org.scalameter.api._
 
 object BinaryTree extends PerformanceTest.Quickbenchmark {
-  def n = Gen.single("n")(20)
+  def n = Gen.single("n")(15)
   performance of "gc heap" in {
     measure method "run" in {
       using(n) in { n => GCHeap.run(n) }
@@ -47,8 +47,7 @@ object GCHeap {
 
 object OffHeap {
   import regions._
-  def run(n: Int) = {
-    val outer = Region()
+  def run(n: Int) = Region { outer =>
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = tree(0,maxDepth)(outer)
@@ -56,11 +55,8 @@ object OffHeap {
     while (depth <= maxDepth) {
       val iterations = 1 << (maxDepth - depth + minDepth)
       var i,sum = 0
-      def rsum(i: Int, depth: Int): Int = {
-        val r = Region()
-        val res = isum(tree(i, depth)(r))
-        r.dispose()
-        res
+      def rsum(i: Int, depth: Int): Int = Region { r =>
+        isum(tree(i, depth)(r))
       }
       while (i < iterations) {
         i += 1
@@ -68,19 +64,18 @@ object OffHeap {
       }
       depth += 2
     }
-    outer.dispose()
   }
-  @struct class Tree(i: Int, left: Ref[Tree], right: Ref[Tree])
-  def isum(tree: Ref[Tree]): Int = {
+  @offheap class Tree(i: Int, left: Tree, right: Tree)
+  def isum(tree: Tree): Int = {
     val left = tree.left
     if (left.isEmpty) tree.i
     else tree.i + isum(left) - isum(tree.right)
   }
-  def tree(i: Int, depth: Int)(implicit region: Region): Ref[Tree] = {
+  def tree(i: Int, depth: Int)(implicit region: Region): Tree = {
     if (depth > 0) {
       val left = tree(i*2-1, depth-1)
       val right = tree(i*2, depth-1)
-      Ref[Tree](i, left, right)
-    } else Ref[Tree](i, Ref.empty[Tree], Ref.empty[Tree])
+      Tree(i, left, right)
+    } else Tree(i, Tree.empty, Tree.empty)
   }
 }

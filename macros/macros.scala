@@ -39,19 +39,6 @@ trait Common {
     vd
   }
 
-  object RefOf {
-    def unapply(tpe: Type): Option[Type] = tpe.typeSymbol match {
-      case RefClass => Some(tpe.baseType(tpe.typeSymbol).typeArgs.head)
-      case _        => None
-    }
-  }
-
-  object ArrayOf {
-    def unapply(tpe: Type): Option[Type] =
-      if (tpe.typeSymbol == ArrayClass) Some(tpe.typeArgs.head)
-      else None
-  }
-
   object Primitive {
     def unapply(tpe: Type): Boolean = tpe.typeSymbol match {
       case sym: ClassSymbol if sym.isPrimitive && sym != UnitClass => true
@@ -62,45 +49,30 @@ trait Common {
 
   object Allocatable {
     def unapply(tpe: Type): Boolean = tpe match {
-      case Primitive() | RefOf(_) | ClassOf(_) => true
-      case _                                   => false
+      case Primitive() | ClassOf(_) => true
+      case _                        => false
     }
   }
 
-  case class StructField(name: String, tpe: Type, offset: Long)
+  case class Field(name: String, tpe: Type, offset: Long)
 
   object ClassOf {
-    def unapply(tpe: Type): Option[List[StructField]] = unapply(tpe.typeSymbol)
-    def unapply(sym: Symbol): Option[List[StructField]] = sym match {
-      case sym: ClassSymbol if sym.annotations.exists(_.tpe.typeSymbol == OffheapClass) =>
+    def is(sym: Symbol): Boolean =
+      sym.annotations.exists(_.tpe.typeSymbol == OffheapClass)
+    def unapply(tpe: Type): Option[List[Field]] = unapply(tpe.typeSymbol)
+    def unapply(sym: Symbol): Option[List[Field]] = sym match {
+      case sym: ClassSymbol if ClassOf.is(sym) =>
         val q"new $_($_(..$descriptors))" = sym.annotations.collectFirst {
           case ann if ann.tpe.typeSymbol == OffheapClass => ann
         }.get.tree
-        val buf = mutable.ListBuffer[StructField]()
+        val buf = mutable.ListBuffer[Field]()
         var offset = 0
         descriptors.foreach { case q"(${name: String}, $_[$tpt]())" =>
-          buf.append(StructField(name, tpt.tpe, offset))
+          buf.append(Field(name, tpt.tpe, offset))
           offset += sizeof(tpt.tpe)
         }
         Some(buf.toList)
       case _ => None
-    }
-  }
-
-  object CtvRef {
-    def unapply(t: Tree): Option[Tree] = t match {
-      case q"$pre.`package`.ref[$_]($ref)" if pre.symbol == ct => Some(ref)
-      case _ => None
-    }
-  }
-  object CtvLit {
-    def unapply(t: Tree): Option[(ClassSymbol, List[Tree])] = t match {
-      case q"${reft: RefTree}.apply(..$args)"
-        if reft.symbol.isModule
-        && reft.symbol.companion.annotations.exists(_.tpe.typeSymbol == OffheapClass) =>
-        Some((reft.symbol.companion.asClass, args))
-      case _ =>
-        None
     }
   }
 
@@ -110,11 +82,9 @@ trait Common {
       q"$unsafe.$method($address)"
     case BooleanTpe =>
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
-    case RefOf(targ) =>
-      val value = read(LongTpe, address)
-      q"new $RefClass[$targ]($value)"
     case ClassOf(fields) =>
-      q"$ct.ref[$tpe](new $RefClass[$tpe]($address))"
+      val sym = tpe.typeSymbol
+      q"${sym.companion}.apply$$unchecked$$($unsafe.getLong($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -127,27 +97,16 @@ trait Common {
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
-    case RefOf(_) =>
-      write(LongTpe, address, q"$value.addr")
     case ClassOf(fields) =>
-      value match {
-        case CtvLit(sym, args) =>
-          val ClassOf(fields) = sym
-          val writes = fields.zip(args).map { case (f, arg) =>
-            write(f.tpe, q"$address + ${f.offset}", arg)
-          }
-          q"..$writes"
-        case CtvRef(ref) =>
-          q"$unsafe.copyMemory($ref.addr, $address, ${sizeof(tpe)})"
-      }
+      q"$unsafe.putLong($address, $value.__addr)"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
-    case ByteTpe  | BooleanTpe           => 1
-    case ShortTpe | CharTpe              => 2
-    case IntTpe   | FloatTpe             => 4
-    case LongTpe  | DoubleTpe | RefOf(_) => 8
-    case ClassOf(fields)                 => fields.map(f => sizeof(f.tpe)).sum
+    case ByteTpe  | BooleanTpe             => 1
+    case ShortTpe | CharTpe                => 2
+    case IntTpe   | FloatTpe               => 4
+    case LongTpe  | DoubleTpe              => 8
+    case tpe if ClassOf.is(tpe.typeSymbol) => 8
   }
 
   // TODO: handle non-function literal cases
@@ -275,9 +234,13 @@ class Annotations(val c: whitebox.Context) extends Common {
         }.init
         q"""
           def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
+            if ($addr != 0) this.copy$$unchecked(..$argNames)($r)
+            else $throwNullRef
+          def copy$$unchecked(..$copyArgs)(implicit $r: $RegionClass): $name =
             ${name.toTermName}.apply(..$argNames)($r)
-
-          override def toString(): $StringClass = {
+          override def toString(): $StringClass =
+            if ($addr != 0) this.toString$$unchecked() else $throwNullRef
+          def toString$$unchecked(): $StringClass = {
             val $sb = new $StringBuilderClass
             $sb.append(${name.toString})
             $sb.append("(")
@@ -307,7 +270,10 @@ class Annotations(val c: whitebox.Context) extends Common {
         object ${name.toTermName} {
           def apply(..$args)(implicit $r: $RegionClass): $name =
             $ct.allocClass[$name]($r, ..$argNames)
+          def apply$$unchecked$$($addrName: $LongClass): $name =
+            new $name($addrName)
           def unapply($scrutinee: $name): $name = $scrutinee
+          def empty: $name = null.asInstanceOf[$name]
         }
       """)
   }
@@ -341,8 +307,8 @@ class Ct(val c: blackbox.Context) extends Common {
 
   def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
     val C = wt[C]
-    val ClassOf(fields) = C
-    val size = sizeof(C)
+    val ClassOf(fields) = C.typeSymbol
+    val size = fields.map(f => sizeof(f.tpe)).sum
     val addr = fresh("addr")
     val writes = fields.zip(args).map { case (f, arg) =>
       write(f.tpe, q"$addr + ${f.offset}", arg)
