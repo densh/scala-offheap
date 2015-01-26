@@ -10,7 +10,7 @@ package object ct {
   def uncheckedAccessor[C, T](addr: Long, name: String): T =
     macro macros.Ct.uncheckedAcessor[C, T]
 
-  def uncheckecMethodBody[C, T](body: T): T =
+  def uncheckedMethodBody[C, T](body: T): T =
     macro macros.Ct.uncheckedMethodBody[C, T]
 
   def allocClass[C](r: regions.Region, args: Any*): C =

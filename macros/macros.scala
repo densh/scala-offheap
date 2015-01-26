@@ -186,28 +186,30 @@ class Annotations(val c: whitebox.Context) extends Common {
         val uncheckedArgName = TermName(argName.toString + "$unchecked$")
         val q"..$stats" = q"""
           def $argName: $tpt =
-            if ($addr != 0) this.$uncheckedArgName
-            else $throwNullRef
+            if (this.isEmpty) $throwNullRef
+            else this.$uncheckedArgName
           def $uncheckedArgName: $tpt =
             $ct.uncheckedAccessor[$name, $tpt]($addr, ${argName.toString})
         """
         stats
       }
       val methods: List[Tree] = stats.flatMap {
-        case q"$_ def $methodName[..$targs](..$args): $tpt = $body" =>
+        case q"$_ def $methodName[..$targs](...$argss): $tpt = $body" =>
+          if (tpt.isEmpty)
+            abort("offheap class method require explicit return type annotations")
           val uncheckedMethodName = TermName(methodName.toString + "$unchecked$")
           val targNames = targs.map { case q"$_ type $name[..$_] = $_" => name }
-          val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
+          val argNamess = argss.map { _.map { case q"$_ val $name: $_ = $_" => name } }
           val q"..$stats" = q"""
-            def $methodName[..$targs](...$args): $tpt =
-              if ($addr != 0) this.$uncheckedMethodName[..$targNames](...$argNames)
-              else $throwNullRef
-            def $uncheckedMethodName[..$targs](...$args): $tpt =
+            def $methodName[..$targs](...$argss): $tpt =
+              if (this.isEmpty) $throwNullRef
+              else this.$uncheckedMethodName[..$targNames](...$argNamess)
+            def $uncheckedMethodName[..$targs](...$argss): $tpt =
               $ct.uncheckedMethodBody[$name, $tpt]($body)
           """
           stats
         case other =>
-          abort("offheap classes may only contain methods")
+          abort(s"offheap classes may only contain methods ($other)")
       }
       val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
       val nameBasedPatMatSupport: Tree = {
@@ -218,6 +220,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         }
         q"""
           def isEmpty = $addr == 0
+          def nonEmpty = $addr != 0
           def get = this
           ..${_ns}
         """
@@ -234,13 +237,14 @@ class Annotations(val c: whitebox.Context) extends Common {
         }.init
         q"""
           def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
-            if ($addr != 0) this.copy$$unchecked(..$argNames)($r)
-            else $throwNullRef
-          def copy$$unchecked(..$copyArgs)(implicit $r: $RegionClass): $name =
+            if (this.isEmpty) $throwNullRef
+            else this.copy$$unchecked$$(..$argNames)($r)
+          def copy$$unchecked$$(..$copyArgs)(implicit $r: $RegionClass): $name =
             ${name.toTermName}.apply(..$argNames)($r)
           override def toString(): $StringClass =
-            if ($addr != 0) this.toString$$unchecked() else $throwNullRef
-          def toString$$unchecked(): $StringClass = {
+            if (this.isEmpty) $throwNullRef
+            else this.toString$$unchecked$$()
+          def toString$$unchecked$$(): $StringClass = {
             val $sb = new $StringBuilderClass
             $sb.append(${name.toString})
             $sb.append("(")
@@ -303,7 +307,28 @@ class Ct(val c: blackbox.Context) extends Common {
     }
   }
 
-  def uncheckedMethodBody[C: WeakTypeTag, T: WeakTypeTag](body: Tree): Tree = ???
+  def uncheckedMethodBody[C: WeakTypeTag, T: WeakTypeTag](body: Tree): Tree = {
+    import c.internal._, c.internal.decorators._
+    val C = wt[C]
+    val CThis = C.typeSymbol.asClass.thisPrefix
+    val T = wt[T]
+    typingTransform(body) { (tree, api) =>
+      tree match {
+        case sel @ q"$pre.$name" if pre.tpe == CThis =>
+          val uncheckedName = TermName(name.toString + "$unchecked$")
+          val uncheckedSymbol =
+            C.members.collectFirst {
+              case sym if sym.name == uncheckedName =>
+                sym
+            }.get
+          q"$pre.$uncheckedName"
+            .setType(sel.tpe)
+            .setSymbol(uncheckedSymbol)
+        case _ =>
+          api.default(tree)
+      }
+    }
+  }
 
   def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
     val C = wt[C]
