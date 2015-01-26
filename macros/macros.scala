@@ -167,15 +167,12 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: handle implicit parameters
   // TODO: hygienic reference to class type from companion?
   // TODO: handle mods properly
-  // TODO: case-class-like utility methods
-  //       https://github.com/scalamacros/paradise/blob/2.11.x/tests/src/main/scala/kase.scala
-  // TODO: name-based-pat-mat support
   // TODO: support classes with existing companions
   def offheap(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
-      val addrName = TermName("__addr")
+      val addrName = TermName("$addr$")
       val addr = q"this.$addrName"
       val asserts = args.map { case q"$_ val $name: $tpt = $default" =>
         if (default.nonEmpty) abort("offheap classes don't support default arguments")
@@ -255,6 +252,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         """
       }
       val r = fresh("r")
+      val instance = fresh("instance")
+      val address = fresh("address")
       val scrutinee = fresh("scrutinee")
       val layout = {
         val tuples = args.map { case q"$_ val $name: $tpt = $_" =>
@@ -263,7 +262,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         q"$rt.Layout(..$tuples)"
       }
       debug("@offheap")(q"""
-        @$rt.offheap($layout) final class $name private(val $addrName: $LongClass)
+        @$rt.offheap($layout) final class $name private(private val $addrName: $LongClass)
             extends $AnyValClass with $RefClass {
           def $$meta$$ = { ..$asserts }
           ..$accessors
@@ -274,10 +273,12 @@ class Annotations(val c: whitebox.Context) extends Common {
         object ${name.toTermName} {
           def apply(..$args)(implicit $r: $RegionClass): $name =
             $ct.allocClass[$name]($r, ..$argNames)
-          def apply$$unchecked$$($addrName: $LongClass): $name =
-            new $name($addrName)
           def unapply($scrutinee: $name): $name = $scrutinee
-          def empty: $name = null.asInstanceOf[$name]
+          val empty: $name = null.asInstanceOf[$name]
+          def $$unsafe$$fromAddress$$($address: $LongClass): $name =
+            new $name($address)
+          def $$unsafe$$toAddress$$($instance: $name): $LongClass =
+            $instance.$addrName
         }
       """)
   }
@@ -312,7 +313,7 @@ class Ct(val c: blackbox.Context) extends Common {
     val C = wt[C]
     val CThis = C.typeSymbol.asClass.thisPrefix
     val T = wt[T]
-    typingTransform(body) { (tree, api) =>
+    debug("unchecked method body")(typingTransform(body) { (tree, api) =>
       tree match {
         case sel @ q"$pre.$name" if pre.tpe == CThis =>
           val uncheckedName = TermName(name.toString + "$unchecked$")
@@ -327,7 +328,7 @@ class Ct(val c: blackbox.Context) extends Common {
         case _ =>
           api.default(tree)
       }
-    }
+    })
   }
 
   def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
@@ -355,8 +356,9 @@ class Region(val c: blackbox.Context) extends Common {
     val res = fresh("res")
     q"""
       $r
-      val $res = ${app(f, q"${r.symbol}")}
-      $rt.disposeRegion(${r.symbol})
+      val $res =
+        try ${app(f, q"${r.symbol}")}
+        finally $rt.disposeRegion(${r.symbol})
       $res
     """
   }
