@@ -168,10 +168,13 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: hygienic reference to class type from companion?
   // TODO: handle mods properly
   // TODO: support classes with existing companions
+  // TODO: move layout annotation to $meta$ member
   def offheap(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
+      val r = fresh("r")
+      val R = fresh("R").toTypeName
       val addrName = TermName("$addr$")
       val addr = q"this.$addrName"
       val asserts = args.map { case q"$_ val $name: $tpt = $default" =>
@@ -179,14 +182,17 @@ class Annotations(val c: whitebox.Context) extends Common {
         q"$ct.assertAllocatable[$tpt]"
       }
       def throwNullRef = q"throw $regions.NullRefException"
+      def throwInaccRegion = q"throw $regions.InaccessibleRegionException"
       val accessors = args.flatMap { case q"$_ val $argName: $tpt = $_" =>
         val uncheckedArgName = TermName(argName.toString + "$unchecked$")
         val q"..$stats" = q"""
-          def $argName: $tpt =
+          def $argName(implicit $r: $R): $tpt =
             if (this.isEmpty) $throwNullRef
+            else if ($r == null || $r.isClosed) $throwInaccRegion
             else this.$uncheckedArgName
+
           def $uncheckedArgName: $tpt =
-            $ct.uncheckedAccessor[$name, $tpt]($addr, ${argName.toString})
+            $ct.uncheckedAccessor[$name[$R], $tpt]($addr, ${argName.toString})
         """
         stats
       }
@@ -201,8 +207,9 @@ class Annotations(val c: whitebox.Context) extends Common {
             def $methodName[..$targs](...$argss): $tpt =
               if (this.isEmpty) $throwNullRef
               else this.$uncheckedMethodName[..$targNames](...$argNamess)
+
             def $uncheckedMethodName[..$targs](...$argss): $tpt =
-              $ct.uncheckedMethodBody[$name, $tpt]($body)
+              $ct.uncheckedMethodBody[$name[$R], $tpt]($body)
           """
           stats
         case other =>
@@ -213,7 +220,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         val _ns = args.zipWithIndex.map {
           case (q"$_ val $argName: $_ = $_", i) =>
             val _n = TermName("_" + (i + 1))
-            q"def ${_n} = this.$argName"
+            q"def ${_n}(implicit $r: $R) = this.$argName"
         }
         q"""
           def isEmpty = $addr == 0
@@ -224,7 +231,6 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       // can't generate custom equals & hashCode due to value class restrictions
       val caseClassSupport: Tree = {
-        val r = fresh("r")
         val copyArgs = args.map { case q"$_ val $name: $tpt = $_" =>
           q"val $name: $tpt = this.$name"
         }
@@ -232,15 +238,21 @@ class Annotations(val c: whitebox.Context) extends Common {
         val appendFields = argNames.flatMap { argName =>
           List(q"$sb.append(this.$argName.toString)", q"""$sb.append(", ")""")
         }.init
+        val dest = fresh("dest")
+        val Dest = fresh("Dest").toTypeName
         q"""
-          def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
+          def copy[$Dest <: $RegionClass[_]](..$copyArgs)(implicit $dest: $Dest): $name[$Dest] =
             if (this.isEmpty) $throwNullRef
-            else this.copy$$unchecked$$(..$argNames)($r)
-          def copy$$unchecked$$(..$copyArgs)(implicit $r: $RegionClass): $name =
-            ${name.toTermName}.apply(..$argNames)($r)
+            else this.copy$$unchecked$$[$Dest](..$argNames)($dest)
+
+          def copy$$unchecked$$[$Dest <: $RegionClass[_]]
+              (..$copyArgs)(implicit $dest: $Dest): $name[$Dest] =
+            ${name.toTermName}.apply[$Dest](..$argNames)($dest)
+
           override def toString(): $StringClass =
             if (this.isEmpty) $throwNullRef
             else this.toString$$unchecked$$()
+
           def toString$$unchecked$$(): $StringClass = {
             val $sb = new $StringBuilderClass
             $sb.append(${name.toString})
@@ -251,7 +263,6 @@ class Annotations(val c: whitebox.Context) extends Common {
           }
         """
       }
-      val r = fresh("r")
       val instance = fresh("instance")
       val address = fresh("address")
       val scrutinee = fresh("scrutinee")
@@ -261,23 +272,27 @@ class Annotations(val c: whitebox.Context) extends Common {
         }
         q"$rt.Layout(..$tuples)"
       }
+// ..$methods
+//        ..$caseClassSupport
       debug("@offheap")(q"""
-        @$rt.offheap($layout) final class $name private(private val $addrName: $LongClass)
-            extends $AnyValClass with $RefClass {
+        @$rt.offheap($layout) final class $name[$R <: $RegionClass[_]] private(
+          private val $addrName: $LongClass
+        ) extends $AnyValClass with $RefClass[$R] {
           def $$meta$$ = { ..$asserts }
           ..$accessors
-          ..$methods
           ..$nameBasedPatMatSupport
-          ..$caseClassSupport
         }
         object ${name.toTermName} {
-          def apply(..$args)(implicit $r: $RegionClass): $name =
-            $ct.allocClass[$name]($r, ..$argNames)
-          def unapply($scrutinee: $name): $name = $scrutinee
-          val empty: $name = null.asInstanceOf[$name]
-          def $$unsafe$$fromAddress$$($address: $LongClass): $name =
-            new $name($address)
-          def $$unsafe$$toAddress$$($instance: $name): $LongClass =
+          def apply[$R <: $RegionClass[_]](..$args)(implicit $r: $R): $name[$R] =
+            $ct.allocClass[$R, $name[$R]]($r, ..$argNames)
+
+          def unapply[$R <: $RegionClass[_]]($scrutinee: $name[$R]): $name[$R] =
+            $scrutinee
+
+          def $$unsafe$$fromAddress$$[$R <: $RegionClass[_]]($address: $LongClass): $name[$R] =
+            new $name[$R]($address)
+
+          def $$unsafe$$toAddress$$($instance: $name[_]): $LongClass =
             $instance.$addrName
         }
       """)
@@ -339,11 +354,22 @@ class Ct(val c: blackbox.Context) extends Common {
     val writes = fields.zip(args).map { case (f, arg) =>
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
-    q"""
+    debug("allocClass")(q"""
       val $addr = $rt.allocMemory($r, $size)
       ..$writes
       new $C($addr)
-    """
+    """)
+  }
+
+}
+
+class FreshId(val c: whitebox.Context) extends Common {
+  import c.universe._
+
+  def materialize = {
+    import compat._
+    val id = fresh("").toString.replace("$macro$", "").toInt
+    q"null.asInstanceOf[FreshId[${ConstantType(Constant(id))}]]"
   }
 }
 
@@ -351,7 +377,7 @@ class Region(val c: blackbox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def alloc[T: WeakTypeTag](f: Tree) = {
+  def alloc(f: Tree)(id: Tree) = {
     val r = freshVal("r", tpe = RegionClass.toType, value =q"$rt.allocRegion()")
     val res = fresh("res")
     q"""
@@ -362,4 +388,6 @@ class Region(val c: blackbox.Context) extends Common {
       $res
     """
   }
+
+
 }

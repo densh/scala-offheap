@@ -43,7 +43,7 @@ object RegionsBuild extends Build {
       scalacOptions += "-Xprint:typer",
       //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
-      fork in run := true,
+      //fork in run := true,
       //javaOptions in run += "-Xrunjdwp:transport=dt_socket,address=8000,server=y,suspend=n"
       javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
     ),

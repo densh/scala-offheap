@@ -2,6 +2,7 @@ package regions.internal
 
 import scala.annotation.compileTimeOnly
 import scala.language.experimental.{macros => CanMacro}
+import regions.{Region, Ref}
 
 package object ct {
   def assertAllocatable[T]: Unit =
@@ -13,6 +14,6 @@ package object ct {
   def uncheckedMethodBody[C, T](body: T): T =
     macro macros.Ct.uncheckedMethodBody[C, T]
 
-  def allocClass[C](r: regions.Region, args: Any*): C =
+  def allocClass[R <: Region[_], C <: Ref[_]](r: R, args: Any*): C =
     macro macros.Ct.allocClass[C]
 }

@@ -29,7 +29,7 @@ package object rt {
   assert(ARENA_SIZE % NODE_PAYLOAD_SIZE == 0)
 
   var free: Node = null
-  var regions: Array[Region] = (1 to 16).map { _ => new Region(null, 0) }.toArray
+  var regions: Array[Region[_]] = (1 to 16).map { _ => new Region(null, 0) }.toArray
   var regionNext: Int = 0
 
   def retainNode(): Node = {
@@ -60,7 +60,7 @@ package object rt {
     }
   }
 
-  def allocRegion(): Region = {
+  def allocRegion(): Region[_] = {
     val region = regions(regionNext)
     regionNext += 1
     region.node = retainNode()
@@ -68,13 +68,13 @@ package object rt {
     region
   }
 
-  def disposeRegion(region: Region): Unit = {
+  def disposeRegion(region: Region[_]): Unit = {
     releaseNode(region.node)
     region.node = null
     regionNext -= 1
   }
 
-  def allocMemory(region: Region, size: Long): Long = {
+  def allocMemory(region: Region[_], size: Long): Long = {
     val old = region.offset
     val offset =
       if (old + size < NODE_PAYLOAD_SIZE) {
