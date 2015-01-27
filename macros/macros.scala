@@ -83,8 +83,8 @@ trait Common {
     case BooleanTpe =>
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
     case ClassOf(fields) =>
-      val sym = tpe.typeSymbol
-      q"${sym.companion}.apply$$unchecked$$($unsafe.getLong($address))"
+      val companion = tpe.typeSymbol.companion
+      q"$companion.fromAddress$$unsafe($unsafe.getLong($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -98,7 +98,8 @@ trait Common {
                         else ${Literal(Constant(0.toByte))})
       """
     case ClassOf(fields) =>
-      q"$unsafe.putLong($address, $value.__addr)"
+      val companion = tpe.typeSymbol.companion
+      q"$unsafe.putLong($address, $companion.toAddress$$unsafe($value))"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -180,7 +181,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       def throwNullRef = q"throw $regions.NullRefException"
       val accessors = args.flatMap { case q"$_ val $argName: $tpt = $_" =>
-        val uncheckedArgName = TermName(argName.toString + "$unchecked$")
+        val uncheckedArgName = TermName(argName.toString + "$unchecked")
         val q"..$stats" = q"""
           def $argName: $tpt =
             if (this.isEmpty) $throwNullRef
@@ -194,7 +195,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         case q"$_ def $methodName[..$targs](...$argss): $tpt = $body" =>
           if (tpt.isEmpty)
             abort("offheap class method require explicit return type annotations")
-          val uncheckedMethodName = TermName(methodName.toString + "$unchecked$")
+          val uncheckedMethodName = TermName(methodName.toString + "$unchecked")
           val targNames = targs.map { case q"$_ type $name[..$_] = $_" => name }
           val argNamess = argss.map { _.map { case q"$_ val $name: $_ = $_" => name } }
           val q"..$stats" = q"""
@@ -235,13 +236,13 @@ class Annotations(val c: whitebox.Context) extends Common {
         q"""
           def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
             if (this.isEmpty) $throwNullRef
-            else this.copy$$unchecked$$(..$argNames)($r)
-          def copy$$unchecked$$(..$copyArgs)(implicit $r: $RegionClass): $name =
+            else this.copy$$unchecked(..$argNames)($r)
+          def copy$$unchecked(..$copyArgs)(implicit $r: $RegionClass): $name =
             ${name.toTermName}.apply(..$argNames)($r)
           override def toString(): $StringClass =
             if (this.isEmpty) $throwNullRef
-            else this.toString$$unchecked$$()
-          def toString$$unchecked$$(): $StringClass = {
+            else this.toString$$unchecked()
+          def toString$$unchecked(): $StringClass = {
             val $sb = new $StringBuilderClass
             $sb.append(${name.toString})
             $sb.append("(")
@@ -275,9 +276,9 @@ class Annotations(val c: whitebox.Context) extends Common {
             $ct.allocClass[$name]($r, ..$argNames)
           def unapply($scrutinee: $name): $name = $scrutinee
           val empty: $name = null.asInstanceOf[$name]
-          def $$unsafe$$fromAddress$$($address: $LongClass): $name =
+          def fromAddress$$unsafe($address: $LongClass): $name =
             new $name($address)
-          def $$unsafe$$toAddress$$($instance: $name): $LongClass =
+          def toAddress$$unsafe($instance: $name): $LongClass =
             $instance.$addrName
         }
       """)
