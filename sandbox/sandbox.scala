@@ -1,18 +1,11 @@
 import regions._
 object Test extends App {
-  def f = {
-    val r = Region.open
-  }
-  f
-  f
-  Thread.sleep(1000)
-  f
-  f
-  Thread.sleep(1000)
-  f
-  f
-  class C
-  while(true) {
-    val arr = new Array[Long](640000)
+  @region(R) class Point(x: Int, y: Int)
+
+  {
+    implicit val r = Region.open
+    val p = Point(10, 20)
+    val Point(x, y) = p
+    println(x + y)
   }
 }

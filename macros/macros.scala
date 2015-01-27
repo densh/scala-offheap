@@ -92,7 +92,7 @@ trait Common {
     case ClassOf(fields) =>
       val sym = tpe.typeSymbol
       val R = tpe.typeArgs.head
-      q"${sym.companion}.$$unsafe$$fromAddress$$[$R]($unsafe.getLong($address))"
+      q"${sym.companion}.fromAddress$$unsafe[$R]($unsafe.getLong($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -107,7 +107,7 @@ trait Common {
       """
     case ClassOf(fields) =>
       val sym = tpe.typeSymbol
-      q"$unsafe.putLong($address, ${sym.companion}.$$unsafe$$toAddress$$($value))"
+      q"$unsafe.putLong($address, ${sym.companion}.toAddress$$unsafe($value))"
   }
 
   def sizeof(tpe: Type): Int = {
@@ -204,86 +204,32 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       def throwNullRef = q"throw $regions.NullRefException"
       def throwInaccRegion = q"throw $regions.InaccessibleRegionException"
-      val accessors = args.flatMap { case q"$_ val $argName: $tpt = $_" =>
-        val uncheckedArgName = TermName(argName.toString + "$unchecked$")
-        val q"..$stats" = q"""
+      val accessors = args.map { case q"$_ val $argName: $tpt = $_" =>
+        q"""
           def $argName(implicit $r: $R): $tpt =
             if (this.isEmpty) $throwNullRef
             else if ($r == null || $r.isClosed) $throwInaccRegion
-            else this.$uncheckedArgName
-
-          def $uncheckedArgName: $tpt =
-            $ct.uncheckedAccessor[$name[$R], $tpt]($addr, ${argName.toString})
+            else $ct.uncheckedAccessor[$name[$R], $tpt]($addr, ${argName.toString})
         """
-        stats
       }
-      val methods: List[Tree] = stats.flatMap {
-        case q"$_ def $methodName[..$targs](...$argss): $tpt = $body" =>
+      val methods: List[Tree] = stats.map {
+        case q"$_ def $methodName[..$targs](...$argss)(implicit ..$impl): $tpt = $body" =>
           if (tpt.isEmpty)
             abort("offheap class method require explicit return type annotations")
-          val uncheckedMethodName = TermName(methodName.toString + "$unchecked$")
+          val uncheckedMethodName = TermName(methodName.toString + "$unchecked")
           val targNames = targs.map { case q"$_ type $name[..$_] = $_" => name }
           val argNamess = argss.map { _.map { case q"$_ val $name: $_ = $_" => name } }
-          val q"..$stats" = q"""
-            def $methodName[..$targs](...$argss): $tpt =
+          val implNames = impl.map { case q"$_ val $name: $_ = $_" => name }
+          q"""
+            def $methodName[..$targs](...$argss)(implicit ..$impl, $r: $R): $tpt =
               if (this.isEmpty) $throwNullRef
-              else this.$uncheckedMethodName[..$targNames](...$argNamess)
-
-            def $uncheckedMethodName[..$targs](...$argss): $tpt =
-              $ct.uncheckedMethodBody[$name[$R], $tpt]($body)
+              else if ($r == null || $r.isClosed) $throwInaccRegion
+              else $body
           """
-          stats
         case other =>
           abort(s"offheap classes may only contain methods ($other)")
       }
       val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
-      val nameBasedPatMatSupport: Tree = {
-        val _ns = args.zipWithIndex.map {
-          case (q"$_ val $argName: $_ = $_", i) =>
-            val _n = TermName("_" + (i + 1))
-            q"def ${_n}(implicit $r: $R) = this.$argName"
-        }
-        q"""
-          def isEmpty = $addr == 0
-          def nonEmpty = $addr != 0
-          def get = this
-          ..${_ns}
-        """
-      }
-      // can't generate custom equals & hashCode due to value class restrictions
-      val caseClassSupport: Tree = {
-        val copyArgs = args.map { case q"$_ val $name: $tpt = $_" =>
-          q"val $name: $tpt = this.$name"
-        }
-        val sb = fresh("sb")
-        val appendFields = argNames.flatMap { argName =>
-          List(q"$sb.append(this.$argName.toString)", q"""$sb.append(", ")""")
-        }.init
-        val dest = fresh("dest")
-        val Dest = fresh("Dest").toTypeName
-        q"""
-          def copy[$Dest <: $RegionClass[_]](..$copyArgs)(implicit $dest: $Dest): $name[$Dest] =
-            if (this.isEmpty) $throwNullRef
-            else this.copy$$unchecked$$[$Dest](..$argNames)($dest)
-
-          def copy$$unchecked$$[$Dest <: $RegionClass[_]]
-              (..$copyArgs)(implicit $dest: $Dest): $name[$Dest] =
-            ${name.toTermName}.apply[$Dest](..$argNames)($dest)
-
-          override def toString(): $StringClass =
-            if (this.isEmpty) $throwNullRef
-            else this.toString$$unchecked$$()
-
-          def toString$$unchecked$$(): $StringClass = {
-            val $sb = new $StringBuilderClass
-            $sb.append(${name.toString})
-            $sb.append("(")
-            ..$appendFields
-            $sb.append(")")
-            $sb.toString
-          }
-        """
-      }
       val instance = fresh("instance")
       val address = fresh("address")
       val scrutinee = fresh("scrutinee")
@@ -293,27 +239,30 @@ class Annotations(val c: whitebox.Context) extends Common {
         }
         q"new $rt.Layout(..$tuples)"
       }
-// ..$methods
-// ..$caseClassSupport
-      debug("@offheap")(q"""
+      val C = fresh("C").toTypeName
+      val canMacro = fresh("canMacro")
+      debug("region")(q"""
         @$rt.Offheap final class $name[$R <: $RegionClass[_]] private(
           private val $addrName: $LongClass
         ) extends $AnyValClass with $RefClass[$R] {
+          import scala.language.experimental.{macros => $canMacro}
           @$layout def $$meta$$ = { ..$asserts }
+          def isEmpty = $addr == 0
+          def nonEmpty = $addr != 0
           ..$accessors
-          ..$nameBasedPatMatSupport
+          ..$methods
         }
         object ${name.toTermName} {
           def apply[$R <: $RegionClass[_]](..$args)(implicit $r: $R): $name[$R] =
             $ct.allocClass[$R, $name[$R]]($r, ..$argNames)
 
-          def unapply[$R <: $RegionClass[_]]($scrutinee: $name[$R]): $name[$R] =
+          def unapply[$C <: $name[_]]($scrutinee: $C): $C =
             $scrutinee
 
-          def $$unsafe$$fromAddress$$[$R <: $RegionClass[_]]($address: $LongClass): $name[$R] =
+          def fromAddress$$unsafe[$R <: $RegionClass[_]]($address: $LongClass): $name[$R] =
             new $name[$R]($address)
 
-          def $$unsafe$$toAddress$$($instance: $name[_]): $LongClass =
+          def toAddress$$unsafe($instance: $name[_]): $LongClass =
             $instance.$addrName
         }
       """)
@@ -344,27 +293,17 @@ class Ct(val c: blackbox.Context) extends Common {
     }
   }
 
-  def uncheckedMethodBody[C: WeakTypeTag, T: WeakTypeTag](body: Tree): Tree = {
-    import c.internal._, c.internal.decorators._
-    val C = wt[C]
-    val CThis = C.typeSymbol.asClass.thisPrefix
-    val T = wt[T]
-    typingTransform(body) { (tree, api) =>
-      tree match {
-        case sel @ q"$pre.$name" if pre.tpe == CThis =>
-          val uncheckedName = TermName(name.toString + "$unchecked$")
-          val uncheckedSymbol =
-            C.members.collectFirst {
-              case sym if sym.name == uncheckedName =>
-                sym
-            }.get
-          q"$pre.$uncheckedName"
-            .setType(sel.tpe)
-            .setSymbol(uncheckedSymbol)
-        case _ =>
-          api.default(tree)
-      }
-    }
+  def capturingAccessor: Tree = {
+    val C = c.prefix.tree.tpe
+    val R = C.typeArgs.head
+    val ClassOf(fields) = C
+    val q"$_.$name" = c.macroApplication
+    val r = c.inferImplicitValue(R, silent = true)
+    if (r.isEmpty) abort(s"couldn't find implicit value of type $R")
+    fields.zipWithIndex.collectFirst {
+      case (f, i) if s"_${i+1}" == name.toString =>
+        q"${c.prefix}.${TermName(f.name)}"
+    }.get
   }
 
   def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
@@ -381,7 +320,6 @@ class Ct(val c: blackbox.Context) extends Common {
       new $C($addr)
     """
   }
-
 }
 
 class FreshId(val c: whitebox.Context) extends Common {

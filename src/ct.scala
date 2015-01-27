@@ -11,9 +11,6 @@ package object ct {
   def uncheckedAccessor[C, T](addr: Long, name: String): T =
     macro macros.Ct.uncheckedAcessor[C, T]
 
-  def uncheckedMethodBody[C, T](body: T): T =
-    macro macros.Ct.uncheckedMethodBody[C, T]
-
   def allocClass[R <: Region[_], C <: Ref[_]](r: R, args: Any*): C =
     macro macros.Ct.allocClass[C]
 }

@@ -3,7 +3,7 @@ import sbt._, Keys._
 object RegionsBuild extends Build {
   val paradiseVersion = "2.0.1"
   val defaults = Defaults.defaultSettings ++ Seq(
-    scalaVersion := "2.11.2",
+    scalaVersion := "2.11.4",
     resolvers += Resolver.sonatypeRepo("snapshots"),
     resolvers += Resolver.sonatypeRepo("releases"),
     addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)
@@ -40,7 +40,7 @@ object RegionsBuild extends Build {
     file("sandbox"),
     settings = defaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
-      scalacOptions += "-Xprint:typer",
+      scalacOptions += "-Xprint:posterasure",
       //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
       //fork in run := true,
