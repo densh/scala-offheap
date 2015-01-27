@@ -10,7 +10,8 @@ trait Common {
   import c.universe.definitions._
   import rootMirror.{staticClass, staticPackage}
 
-  val OffheapClass       = staticClass("regions.internal.rt.offheap")
+  val OffheapClass       = staticClass("regions.internal.rt.Offheap")
+  val LayoutClass        = staticClass("regions.internal.rt.Layout")
   val RefClass           = staticClass("regions.Ref")
   val RegionClass        = staticClass("regions.Region")
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
@@ -42,7 +43,6 @@ trait Common {
   object Primitive {
     def unapply(tpe: Type): Boolean = tpe.typeSymbol match {
       case sym: ClassSymbol if sym.isPrimitive && sym != UnitClass => true
-      case sym if sym == RefClass                                  => true
       case _                                                       => false
     }
   }
@@ -59,15 +59,22 @@ trait Common {
   object ClassOf {
     def is(sym: Symbol): Boolean =
       sym.annotations.exists(_.tpe.typeSymbol == OffheapClass)
-    def unapply(tpe: Type): Option[List[Field]] = unapply(tpe.typeSymbol)
+
+    def unapply(tpe: Type): Option[List[Field]] =
+      unapply(tpe.typeSymbol)
+
     def unapply(sym: Symbol): Option[List[Field]] = sym match {
       case sym: ClassSymbol if ClassOf.is(sym) =>
-        val q"new $_($_(..$descriptors))" = sym.annotations.collectFirst {
-          case ann if ann.tpe.typeSymbol == OffheapClass => ann
+        val q"new $_(..$descriptors)" = sym.asType.toType.members.collectFirst {
+          case meta if meta.name == TermName("$meta$") =>
+            meta.annotations.collectFirst {
+              case ann if ann.tpe.typeSymbol == LayoutClass =>
+                ann
+            }.get
         }.get.tree
         val buf = mutable.ListBuffer[Field]()
         var offset = 0
-        descriptors.foreach { case q"(${name: String}, $_[$tpt]())" =>
+        descriptors.foreach { case q"(${name: String}, new $_[$tpt]())" =>
           buf.append(Field(name, tpt.tpe, offset))
           offset += sizeof(tpt.tpe)
         }
@@ -84,7 +91,8 @@ trait Common {
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
     case ClassOf(fields) =>
       val sym = tpe.typeSymbol
-      q"${sym.companion}.apply$$unchecked$$($unsafe.getLong($address))"
+      val R = tpe.typeArgs.head
+      q"${sym.companion}.$$unsafe$$fromAddress$$[$R]($unsafe.getLong($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -98,15 +106,19 @@ trait Common {
                         else ${Literal(Constant(0.toByte))})
       """
     case ClassOf(fields) =>
-      q"$unsafe.putLong($address, $value.__addr)"
+      val sym = tpe.typeSymbol
+      q"$unsafe.putLong($address, ${sym.companion}.$$unsafe$$toAddress$$($value))"
   }
 
-  def sizeof(tpe: Type): Int = tpe match {
-    case ByteTpe  | BooleanTpe             => 1
-    case ShortTpe | CharTpe                => 2
-    case IntTpe   | FloatTpe               => 4
-    case LongTpe  | DoubleTpe              => 8
-    case tpe if ClassOf.is(tpe.typeSymbol) => 8
+  def sizeof(tpe: Type): Int = {
+    assert(tpe != null)
+    tpe match {
+      case ByteTpe  | BooleanTpe             => 1
+      case ShortTpe | CharTpe                => 2
+      case IntTpe   | FloatTpe               => 4
+      case LongTpe  | DoubleTpe              => 8
+      case tpe if ClassOf.is(tpe.typeSymbol) => 8
+    }
   }
 
   // TODO: handle non-function literal cases
@@ -169,12 +181,21 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: handle mods properly
   // TODO: support classes with existing companions
   // TODO: move layout annotation to $meta$ member
-  def offheap(annottees: Tree*): Tree = annottees match {
+  def region(annottees: Tree*): Tree = annottees match {
+    case q"$mods def $name[..$targs](...$argss)(implicit ..$impl): $tpt = $body" :: Nil =>
+      val q"new $_(${regionGivenName: TermName})" = c.prefix.tree
+      val r = fresh("r")
+      val R = regionGivenName.toTypeName
+      q"""
+        $mods def $name[..$targs, $R <: $RegionClass[_]]
+                       (...$argss)(implicit ..$impl, $r: $R): $tpt = $body
+      """
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
+      val q"new $_(${regionGivenName: TermName})" = c.prefix.tree
       val r = fresh("r")
-      val R = fresh("R").toTypeName
+      val R = regionGivenName.toTypeName
       val addrName = TermName("$addr$")
       val addr = q"this.$addrName"
       val asserts = args.map { case q"$_ val $name: $tpt = $default" =>
@@ -268,17 +289,17 @@ class Annotations(val c: whitebox.Context) extends Common {
       val scrutinee = fresh("scrutinee")
       val layout = {
         val tuples = args.map { case q"$_ val $name: $tpt = $_" =>
-          q"(${name.toString}, $rt.Tag[$tpt]())"
+          q"(${name.toString}, new $rt.Tag[$tpt]())"
         }
-        q"$rt.Layout(..$tuples)"
+        q"new $rt.Layout(..$tuples)"
       }
 // ..$methods
-//        ..$caseClassSupport
+// ..$caseClassSupport
       debug("@offheap")(q"""
-        @$rt.offheap($layout) final class $name[$R <: $RegionClass[_]] private(
+        @$rt.Offheap final class $name[$R <: $RegionClass[_]] private(
           private val $addrName: $LongClass
         ) extends $AnyValClass with $RefClass[$R] {
-          def $$meta$$ = { ..$asserts }
+          @$layout def $$meta$$ = { ..$asserts }
           ..$accessors
           ..$nameBasedPatMatSupport
         }
@@ -328,7 +349,7 @@ class Ct(val c: blackbox.Context) extends Common {
     val C = wt[C]
     val CThis = C.typeSymbol.asClass.thisPrefix
     val T = wt[T]
-    debug("unchecked method body")(typingTransform(body) { (tree, api) =>
+    typingTransform(body) { (tree, api) =>
       tree match {
         case sel @ q"$pre.$name" if pre.tpe == CThis =>
           val uncheckedName = TermName(name.toString + "$unchecked$")
@@ -343,7 +364,7 @@ class Ct(val c: blackbox.Context) extends Common {
         case _ =>
           api.default(tree)
       }
-    })
+    }
   }
 
   def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
@@ -354,11 +375,11 @@ class Ct(val c: blackbox.Context) extends Common {
     val writes = fields.zip(args).map { case (f, arg) =>
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
-    debug("allocClass")(q"""
+    q"""
       val $addr = $rt.allocMemory($r, $size)
       ..$writes
       new $C($addr)
-    """)
+    """
   }
 
 }

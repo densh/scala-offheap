@@ -7,10 +7,10 @@ import scala.language.experimental.{macros => CanMacro}
 import regions.{Region, Ref}
 
 package rt {
-  final class offheap(layout: Layout) extends StaticAnnotation
   final case class Node(loc: Long, var next: Node)
-  final case class Layout(fields: (String, Tag[_])*)
-  final case class Tag[T]()
+  final class Offheap extends StaticAnnotation
+  final class Layout(fields: (String, Tag[_])*) extends StaticAnnotation
+  final class Tag[T]()
 }
 
 package object rt {
@@ -29,8 +29,6 @@ package object rt {
   assert(ARENA_SIZE % NODE_PAYLOAD_SIZE == 0)
 
   var free: Node = null
-  var regions: Array[Region[_]] = (1 to 16).map { _ => new Region(null, 0) }.toArray
-  var regionNext: Int = 0
 
   def retainNode(): Node = {
     if (free == null)
@@ -61,17 +59,12 @@ package object rt {
   }
 
   def allocRegion(): Region[_] = {
-    val region = regions(regionNext)
-    regionNext += 1
-    region.node = retainNode()
-    region.offset = 0
-    region
+    new Region[Int](retainNode(), 0)
   }
 
   def disposeRegion(region: Region[_]): Unit = {
     releaseNode(region.node)
     region.node = null
-    regionNext -= 1
   }
 
   def allocMemory(region: Region[_], size: Long): Long = {
