@@ -1,7 +1,7 @@
 package regions.internal
 
 import sun.misc.Unsafe
-import scala.collection.immutable.IntMap
+import scala.collection.mutable.BitSet
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.{macros => CanMacro}
 import regions.{Region, Ref}
@@ -31,6 +31,10 @@ package object rt {
   var free: Node = null
   var regions: Array[Region] = (1 to 16).map { _ => new Region(null, 0) }.toArray
   var regionNext: Int = 0
+
+  val regionIds: BitSet = BitSet.empty
+
+  def regionOffset(id: Int): Long = ???
 
   def retainNode(): Node = {
     if (free == null)

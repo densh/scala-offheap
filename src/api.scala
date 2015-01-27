@@ -19,6 +19,9 @@ trait Ref extends Any
 /** Exception that is thrown whenever null is dereferenced. */
 case object NullRefException extends Exception
 
+/** */
+case object InaccessibleRegionException extends  Exception
+
 final class offheap extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro macros.Annotations.offheap
 }
