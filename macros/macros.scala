@@ -84,7 +84,7 @@ trait Common {
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
     case ClassOf(fields) =>
       val companion = tpe.typeSymbol.companion
-      q"$companion.fromAddress$$unsafe($unsafe.getLong($address))"
+      q"$companion.fromPackedAddr$$unsafe($unsafe.getLong($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -99,7 +99,7 @@ trait Common {
       """
     case ClassOf(fields) =>
       val companion = tpe.typeSymbol.companion
-      q"$unsafe.putLong($address, $companion.toAddress$$unsafe($value))"
+      q"$unsafe.putLong($address, $companion.toPackedAddr$$unsafe($value))"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -173,8 +173,8 @@ class Annotations(val c: whitebox.Context) extends Common {
     case q"class $name(..$args) { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
-      val addrName = TermName("$addr$")
-      val addr = q"this.$addrName"
+      val paddrName = TermName("$addr$")
+      val paddr = q"this.$paddrName"
       val asserts = args.map { case q"$_ val $name: $tpt = $default" =>
         if (default.nonEmpty) abort("offheap classes don't support default arguments")
         q"$ct.assertAllocatable[$tpt]"
@@ -187,7 +187,7 @@ class Annotations(val c: whitebox.Context) extends Common {
             if (this.isEmpty) $throwNullRef
             else this.$uncheckedArgName
           def $uncheckedArgName: $tpt =
-            $ct.uncheckedAccessor[$name, $tpt]($addr, ${argName.toString})
+            $ct.uncheckedAccessor[$name, $tpt]($rt.unpack($paddr), ${argName.toString})
         """
         stats
       }
@@ -217,8 +217,8 @@ class Annotations(val c: whitebox.Context) extends Common {
             q"def ${_n} = this.$argName"
         }
         q"""
-          def isEmpty = $addr == 0
-          def nonEmpty = $addr != 0
+          def isEmpty  = $paddr == 0
+          def nonEmpty = $paddr != 0
           def get = this
           ..${_ns}
         """
@@ -263,8 +263,9 @@ class Annotations(val c: whitebox.Context) extends Common {
         q"$rt.Layout(..$tuples)"
       }
       debug("@offheap")(q"""
-        @$rt.offheap($layout) final class $name private(private val $addrName: $LongClass)
-            extends $AnyValClass with $RefClass {
+        @$rt.offheap($layout) final class $name private(
+          private val $paddrName: $rt.PackedAddr
+        ) extends $AnyValClass with $RefClass {
           def $$meta$$ = { ..$asserts }
           ..$accessors
           ..$methods
@@ -276,10 +277,12 @@ class Annotations(val c: whitebox.Context) extends Common {
             $ct.allocClass[$name]($r, ..$argNames)
           def unapply($scrutinee: $name): $name = $scrutinee
           val empty: $name = null.asInstanceOf[$name]
-          def fromAddress$$unsafe($address: $LongClass): $name =
+          def fromPackedAddr$$unsafe($address: $rt.PackedAddr): $name = {
             new $name($address)
-          def toAddress$$unsafe($instance: $name): $LongClass =
-            $instance.$addrName
+          }
+          def toPackedAddr$$unsafe($instance: $name): $rt.PackedAddr = {
+            $instance.$paddrName
+          }
         }
       """)
   }
@@ -317,7 +320,7 @@ class Ct(val c: blackbox.Context) extends Common {
     debug("unchecked method body")(typingTransform(body) { (tree, api) =>
       tree match {
         case sel @ q"$pre.$name" if pre.tpe == CThis =>
-          val uncheckedName = TermName(name.toString + "$unchecked$")
+          val uncheckedName = TermName(name.toString + "$unchecked")
           val uncheckedSymbol =
             C.members.collectFirst {
               case sym if sym.name == uncheckedName =>
@@ -337,13 +340,15 @@ class Ct(val c: blackbox.Context) extends Common {
     val ClassOf(fields) = C.typeSymbol
     val size = fields.map(f => sizeof(f.tpe)).sum
     val addr = fresh("addr")
+    val paddr = fresh("paddr")
     val writes = fields.zip(args).map { case (f, arg) =>
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
     q"""
-      val $addr = $rt.allocMemory($r, $size)
+      val $paddr: $rt.PackedAddr = $rt.regionAllocate($r, $size)
+      val $addr: $rt.Addr = $rt.unpack($paddr)
       ..$writes
-      new $C($addr)
+      new $C($paddr)
     """
   }
 }
@@ -353,13 +358,13 @@ class Region(val c: blackbox.Context) extends Common {
   import c.universe.definitions._
 
   def alloc[T: WeakTypeTag](f: Tree) = {
-    val r = freshVal("r", tpe = RegionClass.toType, value =q"$rt.allocRegion()")
+    val r = freshVal("r", tpe = RegionClass.toType, value =q"$rt.regionOpen()")
     val res = fresh("res")
     q"""
       $r
       val $res =
         try ${app(f, q"${r.symbol}")}
-        finally $rt.disposeRegion(${r.symbol})
+        finally $rt.regionClose(${r.symbol})
       $res
     """
   }

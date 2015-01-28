@@ -1,10 +1,10 @@
 package regions.internal
 
 import sun.misc.Unsafe
-import scala.collection.mutable.BitSet
+import scala.collection.mutable.LongMap
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.{macros => CanMacro}
-import regions.{Region, Ref}
+import regions.{Region, Ref, InaccessiblePageException}
 
 package rt {
   final class offheap(layout: Layout) extends StaticAnnotation
@@ -14,83 +14,155 @@ package rt {
 }
 
 package object rt {
+  // --- Internal runtime API as used in implementation of the Public API ---
+
   val unsafe: Unsafe = {
     val f = classOf[Unsafe].getDeclaredField("theUnsafe");
     f.setAccessible(true);
     f.get(null).asInstanceOf[Unsafe]
   }
 
-  val PAGE_SIZE         = unsafe.pageSize()
-  val NODE_PAYLOAD_SIZE = PAGE_SIZE * 10
-  val ARENA_NODE_COUNT  = 32
-  val ARENA_SIZE        = NODE_PAYLOAD_SIZE * ARENA_NODE_COUNT
+  type Addr       = Long
+  type PackedAddr = Long
+  type Size       = Long
+  type Offset     = Long
 
-  assert(NODE_PAYLOAD_SIZE % PAGE_SIZE == 0)
-  assert(ARENA_SIZE % NODE_PAYLOAD_SIZE == 0)
+  def regionOpen(): regions.Region =
+    new regions.Region(claimRegion())
 
-  var free: Node = null
-  var regions: Array[Region] = (1 to 16).map { _ => new Region(null, 0) }.toArray
-  var regionNext: Int = 0
+  def regionClose(r: regions.Region): Unit =
+    releaseRegion(r.region)
 
-  val regionIds: BitSet = BitSet.empty
+  def regionAllocate(r: regions.Region, size: Size): PackedAddr =
+    claimMemoryInRegion(r.region, size)
 
-  def regionOffset(id: Int): Long = ???
+  def unpack(paddr: PackedAddr): Addr =
+    registeredPageAddr(packedPageId(paddr)) + packedOffset(paddr)
 
-  def retainNode(): Node = {
-    if (free == null)
-      allocArena()
-    val res = free
-    free = free.next
-    res.next = null
-    res
-  }
+  // --- Implementation Details ---
 
-  def allocArena(): Unit = {
-    val arena = unsafe.allocateMemory(ARENA_SIZE)
-    var i = 0
-    while (i < ARENA_NODE_COUNT) {
-      free = Node(arena + i * NODE_PAYLOAD_SIZE, free)
-      i += 1
-    }
-  }
+  type PageId = Long
 
-  def releaseNode(node: Node): Unit = {
-    var n = node
-    while (n != null) {
-      val cur = n
-      n = n.next
-      cur.next = free
-      free = cur
-    }
-  }
+  val PAGE_SIZE    = unsafe.pageSize()
+  val ADDRESS_SIZE = unsafe.addressSize()
+  val SHORT_SIZE   = 2
+  val CHUNK_SIZE   = PAGE_SIZE * 1024  // approx 4MB per chunk
+  val MAX_PAGE_ID  = 4503599627370496L // 2^52
 
-  def allocRegion(): Region = {
-    val region = regions(regionNext)
-    regionNext += 1
-    region.node = retainNode()
-    region.offset = 0
-    region
-  }
+  assert(PAGE_SIZE == 4096,
+    "region based memory is only support on systems with 4096 bytes long pages")
+  assert(ADDRESS_SIZE == 8,
+    "region based memory is only supported on 64-bit systems")
+  assert(CHUNK_SIZE % PAGE_SIZE == 0)
 
-  def disposeRegion(region: Region): Unit = {
-    releaseNode(region.node)
-    region.node = null
-    regionNext -= 1
-  }
+  /*def validPackedAddr(paddr: PackedAddr): Boolean = {
+    val pageId = packedPageId(paddr)
+    val offset = packedOffset(paddr)
+    pageId < MAX_PAGE_ID && pageId >= 0 &&
+    (pageMap.contains(pageId) || paddr == 0) &&
+    offset < PAGE_SIZE && offset >= 0
+  }*/
 
-  def allocMemory(region: Region, size: Long): Long = {
-    val old = region.offset
-    val offset =
-      if (old + size < NODE_PAYLOAD_SIZE) {
-        region.offset = old + size
-        old
+  def pack(pageId: PageId, offset: Offset): PackedAddr = (pageId << 12) + offset
+  def packedPageId(paddr: PackedAddr): PageId = (paddr & 0xffffffffff000L) >> 12
+  def packedOffset(paddr: PackedAddr): PageId = (paddr & 0x0000000000fffL).toShort
+
+  final class Region(var pageId:       PageId,
+                     var pageAddr:     Addr,
+                     var pageOffset:   Short,
+                     var dirtyPageIds: LongStack)
+
+  final class LongStack(startingSize: Int) {
+    private var arr: Array[Long] = new Array[Long](startingSize)
+    private var idx: Int = 0
+
+    def isEmpty: Boolean  = idx == 0
+    def nonEmpty: Boolean = idx != 0
+
+    def push(value: Long): Unit =
+      if (idx < arr.length) {
+        arr(idx) = value
+        idx += 1
       } else {
-        val newnode = retainNode()
-        newnode.next = region.node
-        region.node = newnode
-        region.offset = size
+        val newarr = new Array[Long](arr.size * 2)
+        System.arraycopy(arr, 0, newarr, 0, arr.size)
+        arr = newarr
+        push(value)
+      }
+
+    def pop(): Long = {
+      assert(idx >= 1)
+      idx -= 1
+      arr(idx)
+    }
+  }
+
+  val freePageStack: LongStack =
+    new LongStack(CHUNK_SIZE / PAGE_SIZE)
+  def claimPage(): Addr = {
+    if (freePageStack.isEmpty) {
+      val chunk = unsafe.allocateMemory(CHUNK_SIZE)
+      var i = 0
+      while (i < CHUNK_SIZE / PAGE_SIZE) {
+        freePageStack.push(chunk + i * PAGE_SIZE)
+        i += 1
+      }
+    }
+    freePageStack.pop()
+  }
+  def releasePage(page: Addr) =
+    freePageStack.push(page)
+
+  val pageMap: LongMap[Addr] = LongMap.empty[Addr]
+  var nextPageId: Long = 0
+  def registerPage(page: Addr): PageId = {
+    nextPageId += 1
+    assert(nextPageId < MAX_PAGE_ID)
+    val id = nextPageId
+    pageMap(id) = page
+    id
+  }
+  def registeredPageAddr(pageId: PageId): Addr =
+    if (!pageMap.contains(pageId)) {
+      if (pageId == 0)
+        0
+      else {
+        throw InaccessiblePageException
+      }
+    } else {
+      pageMap(pageId)
+    }
+  def deregisterPage(pageId: PageId): Unit = {
+    val pageAddr = pageMap(pageId)
+    pageMap -= pageId
+    releasePage(pageAddr)
+  }
+
+  def claimRegion(): Region = {
+    val pageAddr = claimPage()
+    val pageId   = registerPage(pageAddr)
+    new Region(pageId, pageAddr, 0, new LongStack(64))
+  }
+  def releaseRegion(r: Region): Unit = {
+    deregisterPage(r.pageId)
+    while (r.dirtyPageIds.nonEmpty)
+      deregisterPage(r.dirtyPageIds.pop())
+  }
+  def claimMemoryInRegion(r: Region, size: Size): PackedAddr = {
+    assert(size < PAGE_SIZE)
+    val offset = r.pageOffset
+    val resOffset =
+      if (offset + size < PAGE_SIZE) {
+        r.pageOffset = (offset + size).toShort
+        offset
+      } else {
+        val pageAddr = claimPage()
+        val pageId   = registerPage(pageAddr)
+        r.dirtyPageIds.push(r.pageId)
+        r.pageId = pageId
+        r.pageOffset = size.toShort
         0
       }
-    region.node.loc + offset
+    pack(r.pageId, resOffset)
   }
 }

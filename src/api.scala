@@ -3,12 +3,11 @@ package regions
 import scala.language.dynamics
 import scala.language.experimental.{macros => CanMacro}
 import scala.annotation.StaticAnnotation
-import regions.internal.{rt, macros}
 
 final class Region private[regions](
-  private[regions] var node: rt.Node,
-  private[regions] var offset: Long
-)
+  private[regions] val region: internal.rt.Region
+) extends AnyVal
+
 object Region {
   def apply[T](f: Region => T): T = macro internal.macros.Region.alloc[T]
 }
@@ -20,8 +19,8 @@ trait Ref extends Any
 case object NullRefException extends Exception
 
 /** */
-case object InaccessibleRegionException extends  Exception
+case object InaccessiblePageException extends  Exception
 
 final class offheap extends StaticAnnotation {
-  def macroTransform(annottees: Any*): Any = macro macros.Annotations.offheap
+  def macroTransform(annottees: Any*): Any = macro internal.macros.Annotations.offheap
 }
