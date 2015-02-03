@@ -1,4 +1,6 @@
-package regions.internal.macros
+package offheap
+package internal
+package macros
 // TODO: handle non-function case
 
 import scala.collection.mutable
@@ -10,15 +12,15 @@ trait Common {
   import c.universe.definitions._
   import rootMirror.{staticClass, staticPackage}
 
-  val OffheapClass       = staticClass("regions.internal.rt.offheap")
-  val RefClass           = staticClass("regions.Ref")
-  val RegionClass        = staticClass("regions.Region")
+  val OffheapClass       = staticClass("offheap.internal.rt.offheap")
+  val RefClass           = staticClass("offheap.Ref")
+  val RegionClass        = staticClass("offheap.Region")
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
 
-  val regions  = staticPackage("regions")
-  val internal = staticPackage("regions.internal")
-  val rt       = staticPackage("regions.internal.rt")
-  val ct       = staticPackage("regions.internal.ct")
+  val regions  = staticPackage("offheap")
+  val internal = staticPackage("offheap.internal")
+  val rt       = staticPackage("offheap.internal.rt")
+  val ct       = staticPackage("offheap.internal.ct")
   val unsafe   = q"$rt.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
@@ -262,7 +264,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         }
         q"$rt.Layout(..$tuples)"
       }
-      debug("@offheap")(q"""
+      q"""
         @$rt.offheap($layout) final class $name private(
           private val $paddrName: $rt.PackedAddr
         ) extends $AnyValClass with $RefClass {
@@ -284,7 +286,7 @@ class Annotations(val c: whitebox.Context) extends Common {
             $instance.$paddrName
           }
         }
-      """)
+      """
   }
 }
 
@@ -317,7 +319,7 @@ class Ct(val c: blackbox.Context) extends Common {
     val C = wt[C]
     val CThis = C.typeSymbol.asClass.thisPrefix
     val T = wt[T]
-    debug("unchecked method body")(typingTransform(body) { (tree, api) =>
+    typingTransform(body) { (tree, api) =>
       tree match {
         case sel @ q"$pre.$name" if pre.tpe == CThis =>
           val uncheckedName = TermName(name.toString + "$unchecked")
@@ -332,7 +334,7 @@ class Ct(val c: blackbox.Context) extends Common {
         case _ =>
           api.default(tree)
       }
-    })
+    }
   }
 
   def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {

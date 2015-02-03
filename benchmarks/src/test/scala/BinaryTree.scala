@@ -2,16 +2,14 @@ import org.scalameter.api._
 
 object BinaryTree extends PerformanceTest.Quickbenchmark {
   def n = Gen.single("n")(15)
-/*
   performance of "gc heap" in {
     measure method "run" in {
       using(n) in { n => GCHeap.run(n) }
     }
   }
-*/
   performance of "off heap" in {
     measure method "run" in {
-      using(n) in { n => OffHeap.run(n) }
+      using(n) in { n => Offheap.run(n) }
     }
   }
 }
@@ -47,8 +45,8 @@ object GCHeap {
   }
 }
 
-object OffHeap {
-  import regions._
+object Offheap {
+  import offheap._
   def run(n: Int) = Region { outer =>
     val minDepth = 4
     val maxDepth = n max (minDepth+2)

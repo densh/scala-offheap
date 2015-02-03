@@ -1,10 +1,10 @@
-package regions.internal
+package offheap
+package internal
 
 import sun.misc.Unsafe
 import scala.collection.mutable.LongMap
 import scala.annotation.StaticAnnotation
 import scala.language.experimental.{macros => CanMacro}
-import regions.{Region, Ref, InaccessiblePageException}
 
 package rt {
   final class offheap(layout: Layout) extends StaticAnnotation
@@ -27,13 +27,13 @@ package object rt {
   type Size       = Long
   type Offset     = Long
 
-  def regionOpen(): regions.Region =
-    new regions.Region(claimRegion())
+  def regionOpen(): offheap.Region =
+    new offheap.Region(claimRegion())
 
-  def regionClose(r: regions.Region): Unit =
+  def regionClose(r: offheap.Region): Unit =
     releaseRegion(r.region)
 
-  def regionAllocate(r: regions.Region, size: Size): PackedAddr =
+  def regionAllocate(r: offheap.Region, size: Size): PackedAddr =
     claimMemoryInRegion(r.region, size)
 
   def unpack(paddr: PackedAddr): Addr =
@@ -97,17 +97,21 @@ package object rt {
     }
   }
 
+
+  var chunks = 0
   val freePageStack: LongStack =
     new LongStack(CHUNK_SIZE / PAGE_SIZE)
-  def claimPage(): Addr = {
-    if (freePageStack.isEmpty) {
-      val chunk = unsafe.allocateMemory(CHUNK_SIZE)
-      var i = 0
-      while (i < CHUNK_SIZE / PAGE_SIZE) {
-        freePageStack.push(chunk + i * PAGE_SIZE)
-        i += 1
-      }
+  def claimChunk(): Unit = {
+    val chunk = unsafe.allocateMemory(CHUNK_SIZE)
+    var i = 0
+    chunks += 1
+    while (i < CHUNK_SIZE / PAGE_SIZE) {
+      freePageStack.push(chunk + i * PAGE_SIZE)
+      i += 1
     }
+  }
+  def claimPage(): Addr = {
+    if (freePageStack.isEmpty) claimChunk()
     freePageStack.pop()
   }
   def releasePage(page: Addr) =

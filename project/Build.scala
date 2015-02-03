@@ -72,8 +72,8 @@ object RegionsBuild extends Build {
       parallelExecution in Test := false,
       fork in Test := true,
       logBuffered := false,
-      javaOptions in Test ++= Seq("-Xms64m", "-Xmx64m"),
-      scalacOptions += "-Xprint:typer"
+      javaOptions in Test ++= Seq("-Xms256m", "-Xmx256m")
+      //scalacOptions += "-Xprint:typer"
     ),
     dependencies = Seq(src)
   )

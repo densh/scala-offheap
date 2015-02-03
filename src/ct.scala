@@ -1,4 +1,5 @@
-package regions.internal
+package offheap
+package internal
 
 import scala.annotation.compileTimeOnly
 import scala.language.experimental.{macros => CanMacro}
@@ -13,6 +14,6 @@ package object ct {
   def uncheckedMethodBody[C, T](body: T): T =
     macro macros.Ct.uncheckedMethodBody[C, T]
 
-  def allocClass[C](r: regions.Region, args: Any*): C =
+  def allocClass[C](r: offheap.Region, args: Any*): C =
     macro macros.Ct.allocClass[C]
 }

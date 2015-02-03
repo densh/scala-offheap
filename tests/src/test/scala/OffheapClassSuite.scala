@@ -1,5 +1,5 @@
 import org.scalatest.FunSuite
-import regions._
+import offheap._
 
 @offheap class Point(x: Double, y: Double) {
   def distanceTo(other: Point): Double =

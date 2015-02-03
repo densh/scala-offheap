@@ -1,3 +1,4 @@
+package test
 import regions._
 object OffHeap extends App {
   import regions._

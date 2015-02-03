@@ -1,11 +1,11 @@
-package regions
+package offheap
 
 import scala.language.dynamics
 import scala.language.experimental.{macros => CanMacro}
 import scala.annotation.StaticAnnotation
 
-final class Region private[regions](
-  private[regions] val region: internal.rt.Region
+final class Region private[offheap](
+  private[offheap] val region: internal.rt.Region
 ) extends AnyVal
 
 object Region {
