@@ -1,7 +1,7 @@
 import org.scalatest.FunSuite
 import offheap._
 
-@offheap class Point(x: Double, y: Double) {
+@offheap case class Point(x: Double, y: Double) {
   def distanceTo(other: Point): Double =
     math.sqrt(math.pow(other.x - x, 2) + math.pow(other.y - y, 2))
 }

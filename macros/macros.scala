@@ -12,16 +12,14 @@ trait Common {
   import c.universe.definitions._
   import rootMirror.{staticClass, staticPackage}
 
-  val OffheapClass       = staticClass("offheap.internal.rt.offheap")
+  val OffheapClass       = staticClass("offheap.internal.offheap")
   val RefClass           = staticClass("offheap.Ref")
   val RegionClass        = staticClass("offheap.Region")
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
 
   val regions  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
-  val rt       = staticPackage("offheap.internal.rt")
-  val ct       = staticPackage("offheap.internal.ct")
-  val unsafe   = q"$rt.unsafe"
+  val unsafe   = q"$internal.Unsafe.unsafe"
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
@@ -160,99 +158,62 @@ trait Common {
   }
 
   def paramTpe(f: Tree) = f.tpe.typeArgs.head
+
+  def ensureAllocatable(T: Type): Unit =  T match {
+    case Allocatable() => ()
+    case _             => abort(s"$T is not fixed sized allocatable object")
+  }
 }
 
 class Annotations(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
+  // TODO: handle default arguments
+  // TODO: handle parents
   // TODO: handle generics
   // TODO: handle implicit parameters
+  // TODO: handle non-term/non-def stats
+  // TODO: handle existing companions
+  // TODO: modifiers propagation
   // TODO: hygienic reference to class type from companion?
-  // TODO: handle mods properly
-  // TODO: support classes with existing companions
   def offheap(annottees: Tree*): Tree = annottees match {
-    case q"class $name(..$args) { ..$stats }" :: Nil =>
+    case q"$cmods class $name(..$args) extends ..$parents { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
-      val paddrName = TermName("$addr$")
-      val paddr = q"this.$paddrName"
-      val asserts = args.map { case q"$_ val $name: $tpt = $default" =>
-        if (default.nonEmpty) abort("offheap classes don't support default arguments")
-        q"$ct.assertAllocatable[$tpt]"
-      }
-      def throwNullRef = q"throw $regions.NullRefException"
-      val accessors = args.flatMap { case q"$_ val $argName: $tpt = $_" =>
-        val uncheckedArgName = TermName(argName.toString + "$unchecked")
-        val q"..$stats" = q"""
-          def $argName: $tpt =
-            if (this.isEmpty) $throwNullRef
-            else this.$uncheckedArgName
-          def $uncheckedArgName: $tpt =
-            $ct.uncheckedAccessor[$name, $tpt]($rt.unpack($paddr), ${argName.toString})
-        """
-        stats
-      }
-      val methods: List[Tree] = stats.flatMap {
-        case q"$_ def $methodName[..$targs](...$argss): $tpt = $body" =>
-          if (tpt.isEmpty)
-            abort("offheap class method require explicit return type annotations")
-          val uncheckedMethodName = TermName(methodName.toString + "$unchecked")
-          val targNames = targs.map { case q"$_ type $name[..$_] = $_" => name }
-          val argNamess = argss.map { _.map { case q"$_ val $name: $_ = $_" => name } }
+      val addrName = TermName("$addr$")
+      val addr = q"this.$addrName"
+      val accessors = args.flatMap {
+        case q"$_ var $argName: $tpt = $_" =>
+          val value = fresh("value")
+          val assignerName = TermName(argName.toString + "_=")
           val q"..$stats" = q"""
-            def $methodName[..$targs](...$argss): $tpt =
-              if (this.isEmpty) $throwNullRef
-              else this.$uncheckedMethodName[..$targNames](...$argNamess)
-            def $uncheckedMethodName[..$targs](...$argss): $tpt =
-              $ct.uncheckedMethodBody[$name, $tpt]($body)
+            def $argName: $tpt =
+              $internal.Method.accessor[$name, $tpt]($addr, ${argName.toString})
+
+            def $assignerName($value: $tpt): Unit =
+              $internal.Method.assigner[$name, $tpt]($addr, ${argName.toString}, $value)
           """
           stats
-        case other =>
-          abort(s"offheap classes may only contain methods ($other)")
+        case q"$_ val $argName: $tpt = $_" =>
+          q"""
+            def $argName: $tpt =
+              $internal.Method.accessor[$name, $tpt]($addr, ${argName.toString})
+          """ :: Nil
       }
+      val methods: List[Tree] = stats.collect {
+        case q"$_ def $methodName[..$targs](...$argss): $tpt = $body" =>
+          q"""
+            def $methodName[..$targs](...$argss): $tpt =
+              $internal.Method.method($body)
+          """
+      }
+      val init = stats.filter { _.isTerm }
       val argNames = args.map { case q"$_ val $name: $_ = $_" => name }
-      val nameBasedPatMatSupport: Tree = {
-        val _ns = args.zipWithIndex.map {
-          case (q"$_ val $argName: $_ = $_", i) =>
-            val _n = TermName("_" + (i + 1))
-            q"def ${_n} = this.$argName"
-        }
-        q"""
-          def isEmpty  = $paddr == 0
-          def nonEmpty = $paddr != 0
-          def get = this
-          ..${_ns}
-        """
-      }
-      // can't generate custom equals & hashCode due to value class restrictions
-      val caseClassSupport: Tree = {
-        val r = fresh("r")
-        val copyArgs = args.map { case q"$_ val $name: $tpt = $_" =>
-          q"val $name: $tpt = this.$name"
-        }
-        val sb = fresh("sb")
-        val appendFields = argNames.flatMap { argName =>
-          List(q"$sb.append(this.$argName.toString)", q"""$sb.append(", ")""")
-        }.init
-        q"""
-          def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
-            if (this.isEmpty) $throwNullRef
-            else this.copy$$unchecked(..$argNames)($r)
-          def copy$$unchecked(..$copyArgs)(implicit $r: $RegionClass): $name =
-            ${name.toTermName}.apply(..$argNames)($r)
-          override def toString(): $StringClass =
-            if (this.isEmpty) $throwNullRef
-            else this.toString$$unchecked()
-          def toString$$unchecked(): $StringClass = {
-            val $sb = new $StringBuilderClass
-            $sb.append(${name.toString})
-            $sb.append("(")
-            ..$appendFields
-            $sb.append(")")
-            $sb.toString
-          }
-        """
+      val _ns = args.zipWithIndex.map {
+        case (q"$_ val $argName: $_ = $_", i) =>
+          val _n = TermName("_" + (i + 1))
+          q"def ${_n} = this.$argName"
       }
       val r = fresh("r")
       val instance = fresh("instance")
@@ -260,51 +221,75 @@ class Annotations(val c: whitebox.Context) extends Common {
       val scrutinee = fresh("scrutinee")
       val layout = {
         val tuples = args.map { case q"$_ val $name: $tpt = $_" =>
-          q"(${name.toString}, $rt.Tag[$tpt]())"
+          q"(${name.toString}, $internal.Tag[$tpt]())"
         }
-        q"$rt.Layout(..$tuples)"
+        q"$internal.Layout(..$tuples)"
       }
+      val copyArgs = args.map { case q"$_ val $name: $tpt = $_" =>
+        q"val $name: $tpt = this.$name"
+      }
+      val caseClassSupport =
+        if (!cmods.hasFlag(Flag.CASE)) { println("not a case class"); q"" }
+        else q"""
+          def isEmpty  = $addr == 0
+          def nonEmpty = $addr != 0
+          def get      = this
+          ..${_ns}
+          def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
+            $internal.Method.copy[$name]($r, ..$argNames)
+          override def toString(): $StringClass =
+            $internal.Method.toString[$name]
+        """
       q"""
-        @$rt.offheap($layout) final class $name private(
-          private val $paddrName: $rt.PackedAddr
+        @$internal.offheap($layout) final class $name private(
+          private val $addrName: $LongClass
         ) extends $AnyValClass with $RefClass {
-          def $$meta$$ = { ..$asserts }
+          def $$initialize$$ = { ..$init }
           ..$accessors
           ..$methods
-          ..$nameBasedPatMatSupport
           ..$caseClassSupport
         }
         object ${name.toTermName} {
           def apply(..$args)(implicit $r: $RegionClass): $name =
-            $ct.allocClass[$name]($r, ..$argNames)
+            $internal.Method.allocator[$name]($r, ..$argNames)
           def unapply($scrutinee: $name): $name = $scrutinee
           val empty: $name = null.asInstanceOf[$name]
-          def fromPackedAddr$$unsafe($address: $rt.PackedAddr): $name = {
+          def fromPackedAddr$$unsafe($address: $LongClass): $name =
             new $name($address)
-          }
-          def toPackedAddr$$unsafe($instance: $name): $rt.PackedAddr = {
-            $instance.$paddrName
-          }
+          def toPackedAddr$$unsafe($instance: $name): $LongClass =
+            $instance.$addrName
         }
       """
   }
 }
 
-class Ct(val c: blackbox.Context) extends Common {
+class Region(val c: blackbox.Context) extends Common {
+  import c.universe._
+  import c.universe.definitions._
+
+  def apply[T: WeakTypeTag](f: Tree) = {
+    val r = freshVal("r", tpe = RegionClass.toType, value =q"$internal.Region.open()")
+    val res = fresh("res")
+    q"""
+      $r
+      val $res =
+        try ${app(f, q"${r.symbol}")}
+        finally $internal.Region.close(${r.symbol})
+      $res
+    """
+  }
+}
+
+class Method(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  def assertAllocatable[T: WeakTypeTag]: Tree = {
-    val T = wt[T]
-    T match {
-      case Allocatable() => q""
-      case _             => abort(s"$T is not fixed sized allocatable object")
-    }
-  }
+  def throwNullRef = q"throw $regions.NullRefException"
 
-  def uncheckedAcessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
+  def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
     val C = wt[C]
     val ClassOf(fields) = C
+    ensureAllocatable(wt[C])
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
@@ -314,60 +299,26 @@ class Ct(val c: blackbox.Context) extends Common {
     }
   }
 
-  def uncheckedMethodBody[C: WeakTypeTag, T: WeakTypeTag](body: Tree): Tree = {
-    import c.internal._, c.internal.decorators._
-    val C = wt[C]
-    val CThis = C.typeSymbol.asClass.thisPrefix
-    val T = wt[T]
-    typingTransform(body) { (tree, api) =>
-      tree match {
-        case sel @ q"$pre.$name" if pre.tpe == CThis =>
-          val uncheckedName = TermName(name.toString + "$unchecked")
-          val uncheckedSymbol =
-            C.members.collectFirst {
-              case sym if sym.name == uncheckedName =>
-                sym
-            }.get
-          q"$pre.$uncheckedName"
-            .setType(sel.tpe)
-            .setSymbol(uncheckedSymbol)
-        case _ =>
-          api.default(tree)
-      }
-    }
-  }
+  def assigner[C, T](addr: Tree,  name: Tree, value: Tree) = q"???"
 
-  def allocClass[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
+  def allocator[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
     val C = wt[C]
     val ClassOf(fields) = C.typeSymbol
     val size = fields.map(f => sizeof(f.tpe)).sum
     val addr = fresh("addr")
-    val paddr = fresh("paddr")
     val writes = fields.zip(args).map { case (f, arg) =>
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
     q"""
-      val $paddr: $rt.PackedAddr = $rt.regionAllocate($r, $size)
-      val $addr: $rt.Addr = $rt.unpack($paddr)
+      val $addr = $internal.Region.allocate($r, $size)
       ..$writes
-      new $C($paddr)
+      new $C($addr)
     """
   }
-}
 
-class Region(val c: blackbox.Context) extends Common {
-  import c.universe._
-  import c.universe.definitions._
+  def method[T](body: Tree): Tree = body
 
-  def alloc[T: WeakTypeTag](f: Tree) = {
-    val r = freshVal("r", tpe = RegionClass.toType, value =q"$rt.regionOpen()")
-    val res = fresh("res")
-    q"""
-      $r
-      val $res =
-        try ${app(f, q"${r.symbol}")}
-        finally $rt.regionClose(${r.symbol})
-      $res
-    """
-  }
+  def copy[C](r: Tree, args: Tree*): Tree = q"???"
+
+  def toString[C]: Tree = q"???"
 }

@@ -1,26 +1,10 @@
 package offheap
 package internal
 
-import sun.misc.Unsafe
+/*
 import scala.collection.mutable.LongMap
-import scala.annotation.StaticAnnotation
-import scala.language.experimental.{macros => CanMacro}
-
-package rt {
-  final class offheap(layout: Layout) extends StaticAnnotation
-  final case class Node(loc: Long, var next: Node)
-  final case class Layout(fields: (String, Tag[_])*)
-  final case class Tag[T]()
-}
-
 package object rt {
   // --- Internal runtime API as used in implementation of the Public API ---
-
-  val unsafe: Unsafe = {
-    val f = classOf[Unsafe].getDeclaredField("theUnsafe");
-    f.setAccessible(true);
-    f.get(null).asInstanceOf[Unsafe]
-  }
 
   type Addr       = Long
   type PackedAddr = Long
@@ -55,13 +39,13 @@ package object rt {
     "region based memory is only supported on 64-bit systems")
   assert(CHUNK_SIZE % PAGE_SIZE == 0)
 
-  /*def validPackedAddr(paddr: PackedAddr): Boolean = {
+  def validPackedAddr(paddr: PackedAddr): Boolean = {
     val pageId = packedPageId(paddr)
     val offset = packedOffset(paddr)
     pageId < MAX_PAGE_ID && pageId >= 0 &&
     (pageMap.contains(pageId) || paddr == 0) &&
     offset < PAGE_SIZE && offset >= 0
-  }*/
+  }
 
   def pack(pageId: PageId, offset: Offset): PackedAddr = (pageId << 12) + offset
   def packedPageId(paddr: PackedAddr): PageId = (paddr & 0xffffffffff000L) >> 12
@@ -170,3 +154,4 @@ package object rt {
     pack(r.pageId, resOffset)
   }
 }
+*/

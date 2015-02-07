@@ -1,9 +1,9 @@
 import sbt._, Keys._
 
 object RegionsBuild extends Build {
-  val paradiseVersion = "2.0.1"
+  val paradiseVersion = "2.1.0-M5"
   val defaults = Defaults.defaultSettings ++ Seq(
-    scalaVersion := "2.11.2",
+    scalaVersion := "2.11.4",
     resolvers += Resolver.sonatypeRepo("snapshots"),
     resolvers += Resolver.sonatypeRepo("releases"),
     addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)
@@ -57,7 +57,8 @@ object RegionsBuild extends Build {
       libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false,
-      fork in Test := true
+      fork in Test := true,
+      scalacOptions += "-Xprint:typer"
     ),
     dependencies = Seq(src)
   )
