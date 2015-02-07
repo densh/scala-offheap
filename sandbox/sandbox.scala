@@ -1,7 +1,6 @@
 package test
-import regions._
-object OffHeap extends App {
-  import regions._
+object Offheap extends App {
+  import offheap._
   def run(n: Int) = Region { outer =>
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
@@ -20,7 +19,7 @@ object OffHeap extends App {
       depth += 2
     }
   }
-  @offheap class Tree(i: Int, left: Tree, right: Tree)
+  @offheap case class Tree(i: Int, left: Tree, right: Tree)
   def isum(tree: Tree): Int = {
     val left = tree.left
     if (left.isEmpty) tree.i
