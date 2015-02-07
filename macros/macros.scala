@@ -293,7 +293,11 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        read(f.tpe, q"$addr + ${f.offset}")
+        val r = read(f.tpe, q"$addr + ${f.offset}")
+        q"""
+          if ($addr == 0) $throwNullRef
+          $r
+        """
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }

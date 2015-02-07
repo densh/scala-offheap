@@ -57,8 +57,8 @@ object RegionsBuild extends Build {
       libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false,
-      fork in Test := true,
-      scalacOptions += "-Xprint:typer"
+      fork in Test := true
+      //scalacOptions += "-Xprint:typer"
     ),
     dependencies = Seq(src)
   )
@@ -73,7 +73,7 @@ object RegionsBuild extends Build {
       parallelExecution in Test := false,
       fork in Test := true,
       logBuffered := false,
-      javaOptions in Test ++= Seq("-Xms256m", "-Xmx256m")
+      javaOptions in Test ++= Seq("-Xms64m", "-Xmx64m")
       //scalacOptions += "-Xprint:typer"
     ),
     dependencies = Seq(src)
