@@ -1,7 +1,6 @@
 package offheap
 package internal
 package macros
-// TODO: handle non-function case
 
 import scala.collection.mutable
 import scala.reflect.macros.{whitebox, blackbox}
@@ -334,23 +333,27 @@ class Ptr(val c: blackbox.Context) extends Common {
   lazy val T =
     c.prefix.tree.tpe.baseType(PtrClass).typeArgs.head
 
-  def apply() = debug("Ptr.apply")(read(T, q"${c.prefix}.addr"))
+  def apply() = read(T, q"${c.prefix}.addr")
 
-  def update(v: Tree) = debug("Ptr.update")(write(T, q"${c.prefix}.addr", v))
+  def applyN(n: Tree) = read(T, q"${c.prefix}.addr + $n * ${sizeof(T)}")
 
-  def +(n: Tree) = q"new $PtrClass(${c.prefix}.addr + $n * ${sizeof(T)})"
+  def update(v: Tree) = write(T, q"${c.prefix}.addr", v)
 
-  def -(n: Tree) = q"new $PtrClass(${c.prefix}.addr - $n * ${sizeof(T)})"
+  def updateN(n: Tree, v: Tree) = write(T, q"${c.prefix}.addr + $n * ${sizeof(T)}", v)
+
+  def +(offset: Tree) = q"new $PtrClass(${c.prefix}.addr + $offset)"
+
+  def -(offset: Tree) = q"new $PtrClass(${c.prefix}.addr - $offset)"
 
   def free = q"$unsafe.freeMemory(${c.prefix}.addr)"
 
-  def alloc[T: WeakTypeTag](v: Tree) = debug("Ptr.apply"){
+  def resize(n: Tree) =
+    q"new $PtrClass[$T]($unsafe.reallocateMemory(${c.prefix}.addr, $n * ${sizeof(T)}))"
+
+  def alloc[T: WeakTypeTag](n: Tree) = {
     val T = wt[T]
-    val ptr = fresh("ptr")
-    q"""
-      val $ptr = new Ptr[$T]($unsafe.allocateMemory(${sizeof(T)}))
-      $ptr() = $v
-      $ptr
-    """
+    q"new $PtrClass[$T]($unsafe.allocateMemory($n * ${sizeof(T)}))"
   }
+
+  def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree, to: Tree, toIndex: Tree) = ???
 }
