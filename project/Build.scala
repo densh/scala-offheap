@@ -13,12 +13,12 @@ object RegionsBuild extends Build {
     "root",
     file("."),
     settings = defaults,
-    aggregate = Seq(src, macros)
+    aggregate = Seq(core, macros)
   )
 
-  lazy val src = Project(
-    "src",
-    file("src"),
+  lazy val core = Project(
+    "core",
+    file("core"),
     settings = defaults,
     dependencies = Seq(macros)
   )
@@ -47,7 +47,7 @@ object RegionsBuild extends Build {
       //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
       javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
     ),
-    dependencies = Seq(src)
+    dependencies = Seq(core)
   )
 
   lazy val tests = Project(
@@ -60,7 +60,7 @@ object RegionsBuild extends Build {
       fork in Test := true
       //scalacOptions += "-Xprint:typer"
     ),
-    dependencies = Seq(src)
+    dependencies = Seq(core)
   )
 
   lazy val benchmarks = Project(
@@ -76,6 +76,6 @@ object RegionsBuild extends Build {
       javaOptions in Test ++= Seq("-Xms64m", "-Xmx64m")
       //scalacOptions += "-Xprint:typer"
     ),
-    dependencies = Seq(src)
+    dependencies = Seq(core)
   )
 }
