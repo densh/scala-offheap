@@ -44,10 +44,8 @@ object RegionsBuild extends Build {
       //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
       fork in run := true,
-      javaOptions in run += "-Dcom.sun.management.jmxremote.port=3333",
-      javaOptions in run += "-Dcom.sun.management.jmxremote.ssl=false",
-      javaOptions in run += "-Dcom.sun.management.jmxremote.authenticate=false"
       //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
+      javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
     ),
     dependencies = Seq(src)
   )

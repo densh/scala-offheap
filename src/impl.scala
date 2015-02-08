@@ -154,7 +154,4 @@ object PagePool {
   val currentPool = new ThreadLocal[PagePool] {
     override protected def initialValue(): PagePool = new PagePool
   }
-  /*val currentPool = new {
-    val get = new PagePool
-  }*/
 }
