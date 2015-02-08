@@ -13,6 +13,7 @@ trait Common {
   import rootMirror.{staticClass, staticPackage}
 
   val OffheapClass       = staticClass("offheap.internal.offheap")
+  val PtrClass           = staticClass("offheap.internal.Ptr")
   val RefClass           = staticClass("offheap.Ref")
   val RegionClass        = staticClass("offheap.Region")
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
@@ -24,6 +25,7 @@ trait Common {
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
   def debug[T](header: String)(f: => T): T = {
+    println(s"computing $header")
     val res = f
     println(s"$header = $res")
     res
@@ -324,4 +326,31 @@ class Method(val c: blackbox.Context) extends Common {
   def copy[C](r: Tree, args: Tree*): Tree = q"???"
 
   def toString[C]: Tree = q"???"
+}
+
+class Ptr(val c: blackbox.Context) extends Common {
+  import c.universe.{ weakTypeOf => wt, _ }
+
+  lazy val T =
+    c.prefix.tree.tpe.baseType(PtrClass).typeArgs.head
+
+  def apply() = debug("Ptr.apply")(read(T, q"${c.prefix}.addr"))
+
+  def update(v: Tree) = debug("Ptr.update")(write(T, q"${c.prefix}.addr", v))
+
+  def +(n: Tree) = q"new $PtrClass(${c.prefix}.addr + $n * ${sizeof(T)})"
+
+  def -(n: Tree) = q"new $PtrClass(${c.prefix}.addr - $n * ${sizeof(T)})"
+
+  def free = q"$unsafe.freeMemory(${c.prefix}.addr)"
+
+  def alloc[T: WeakTypeTag](v: Tree) = debug("Ptr.apply"){
+    val T = wt[T]
+    val ptr = fresh("ptr")
+    q"""
+      val $ptr = new Ptr[$T]($unsafe.allocateMemory(${sizeof(T)}))
+      $ptr() = $v
+      $ptr
+    """
+  }
 }
