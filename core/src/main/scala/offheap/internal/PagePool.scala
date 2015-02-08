@@ -18,6 +18,8 @@ class PagePool {
   override protected def finalize: Unit = {
     while (chunks.nonEmpty)
       unsafe.freeMemory(chunks.pop)
+    chunks.dispose
+    pages.dispose
   }
   def claim: Addr = {
     if (pages.isEmpty) claimChunks

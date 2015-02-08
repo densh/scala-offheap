@@ -16,6 +16,7 @@ object Region {
     val pool = currentPool.get
     pool.reclaim(h.page)
     pool.reclaim(h.dirty)
+    h.dirty.dispose
   }
 
   def allocate(r: Region, size: Size): Addr = {

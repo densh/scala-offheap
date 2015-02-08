@@ -296,6 +296,7 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         val r = read(f.tpe, q"$addr + ${f.offset}")
         q"""
+          if ($addr == 0) $throwNullRef
           $r
         """
     }.getOrElse {
@@ -355,5 +356,12 @@ class Ptr(val c: blackbox.Context) extends Common {
     q"new $PtrClass[$T]($unsafe.allocateMemory($n * ${sizeof(T)}))"
   }
 
-  def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree, to: Tree, toIndex: Tree) = ???
+  def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree,
+                           to: Tree, toIndex: Tree, length: Tree) = {
+    val T = wt[T]
+    val size = sizeof(T)
+    val fromAddr: Tree = q"$from.addr + $fromIndex * $size"
+    val toAddr: Tree = q"$to.addr + $toIndex * $size"
+    q"$unsafe.copyMemory($fromAddr, $toAddr, $length * $size)"
+  }
 }
