@@ -342,10 +342,6 @@ class Ptr(val c: blackbox.Context) extends Common {
 
   def updateN(n: Tree, v: Tree) = write(T, q"${c.prefix}.addr + $n * ${sizeof(T)}", v)
 
-  def +(offset: Tree) = q"new $PtrClass(${c.prefix}.addr + $offset)"
-
-  def -(offset: Tree) = q"new $PtrClass(${c.prefix}.addr - $offset)"
-
   def free = q"$unsafe.freeMemory(${c.prefix}.addr)"
 
   def resize(n: Tree) =
@@ -364,4 +360,12 @@ class Ptr(val c: blackbox.Context) extends Common {
     val toAddr: Tree = q"$to.addr + $toIndex * $size"
     q"$unsafe.copyMemory($fromAddr, $toAddr, $length * $size)"
   }
+
+  def unary_! = apply()
+
+  def `unary_!_=`(v: Tree) = update(v)
+
+  def +(n: Tree) = q"new $PtrClass(${c.prefix}.addr + $n * ${sizeof(T)})"
+
+  def -(n: Tree) = q"new $PtrClass(${c.prefix}.addr - $n * ${sizeof(T)})"
 }

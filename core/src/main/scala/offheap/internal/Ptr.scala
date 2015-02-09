@@ -10,8 +10,10 @@ class Ptr[T](val addr: Long) extends AnyVal {
   def update(n: Long, v: T): Unit = macro macros.Ptr.updateN
   def free: Unit                  = macro macros.Ptr.free
   def resize(n: Long): Ptr[T]     = macro macros.Ptr.resize
-  def +(offset: Long): Ptr[T]     = macro macros.Ptr.+
-  def -(offset: Long): Ptr[T]     = macro macros.Ptr.-
+  def unary_! : T                 = macro macros.Ptr.unary_!
+  def `unary_!_=`(v: T): Unit     = macro macros.Ptr.`unary_!_=`
+  def +(n: Long): Ptr[T]          = macro macros.Ptr.+
+  def -(n: Long): Ptr[T]          = macro macros.Ptr.-
 }
 
 object Ptr {
