@@ -11,8 +11,9 @@ trait Common {
   import c.universe.definitions._
   import rootMirror.{staticClass, staticPackage}
 
-  val OffheapClass       = staticClass("offheap.internal.offheap")
-  val PtrClass           = staticClass("offheap.internal.Ptr")
+  val OffheapClass       = staticClass("offheap.internal.annot.offheap")
+  val StructClass        = staticClass("offheap.internal.annot.struct")
+  val PtrClass           = staticClass("offheap.internal.C.Ptr")
   val RefClass           = staticClass("offheap.Ref")
   val RegionClass        = staticClass("offheap.Region")
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
@@ -24,7 +25,6 @@ trait Common {
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
   def debug[T](header: String)(f: => T): T = {
-    println(s"computing $header")
     val res = f
     println(s"$header = $res")
     res
@@ -57,14 +57,14 @@ trait Common {
 
   case class Field(name: String, tpe: Type, offset: Long)
 
-  object ClassOf {
+  class LayoutAnnotatedClass(val classSym: Symbol) {
     def is(sym: Symbol): Boolean =
-      sym.annotations.exists(_.tpe.typeSymbol == OffheapClass)
+      sym.annotations.exists(_.tpe.typeSymbol == classSym)
     def unapply(tpe: Type): Option[List[Field]] = unapply(tpe.typeSymbol)
     def unapply(sym: Symbol): Option[List[Field]] = sym match {
-      case sym: ClassSymbol if ClassOf.is(sym) =>
+      case sym: ClassSymbol if this.is(sym) =>
         val q"new $_($_(..$descriptors))" = sym.annotations.collectFirst {
-          case ann if ann.tpe.typeSymbol == OffheapClass => ann
+          case ann if ann.tpe.typeSymbol == classSym => ann
         }.get.tree
         val buf = mutable.ListBuffer[Field]()
         var offset = 0
@@ -77,12 +77,26 @@ trait Common {
     }
   }
 
+  object ClassOf extends LayoutAnnotatedClass(OffheapClass)
+
+  object StructOf extends LayoutAnnotatedClass(StructClass)
+
+  object PtrOf {
+    def unapply(tpe: Type): Option[Type] =
+      if (tpe.typeSymbol == PtrClass)
+        Some(tpe.baseType(PtrClass).typeArgs.head)
+      else
+        None
+  }
+
   def read(tpe: Type, address: Tree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
       val method = TermName(s"get$tpe")
       q"$unsafe.$method($address)"
     case BooleanTpe =>
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
+    case PtrOf(t) =>
+      q"new $PtrClass[$t]($unsafe.getLong($address))"
     case ClassOf(fields) =>
       val companion = tpe.typeSymbol.companion
       q"$companion.fromPackedAddr$$unsafe($unsafe.getLong($address))"
@@ -98,6 +112,8 @@ trait Common {
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
+    case PtrOf(_) =>
+      q"$unsafe.putLong($address, $value.addr)"
     case ClassOf(fields) =>
       val companion = tpe.typeSymbol.companion
       q"$unsafe.putLong($address, $companion.toPackedAddr$$unsafe($value))"
@@ -107,8 +123,9 @@ trait Common {
     case ByteTpe  | BooleanTpe             => 1
     case ShortTpe | CharTpe                => 2
     case IntTpe   | FloatTpe               => 4
-    case LongTpe  | DoubleTpe              => 8
+    case LongTpe  | DoubleTpe | PtrOf(_)   => 8
     case tpe if ClassOf.is(tpe.typeSymbol) => 8
+    case StructOf(fields)                  => fields.map(f => sizeof(f.tpe)).sum
   }
 
   // TODO: handle non-function literal cases
@@ -170,6 +187,13 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
+  def layout(args: List[Tree]): Tree = {
+    val tuples = args.map { case q"$_ val $name: $tpt = $_" =>
+      q"(${name.toString}, $internal.annot.Tag[$tpt]())"
+    }
+    q"$internal.annot.Layout(..$tuples)"
+  }
+
   // TODO: handle default arguments
   // TODO: handle parents
   // TODO: handle generics
@@ -220,12 +244,6 @@ class Annotations(val c: whitebox.Context) extends Common {
       val instance = fresh("instance")
       val address = fresh("address")
       val scrutinee = fresh("scrutinee")
-      val layout = {
-        val tuples = args.map { case q"$_ val $name: $tpt = $_" =>
-          q"(${name.toString}, $internal.Tag[$tpt]())"
-        }
-        q"$internal.Layout(..$tuples)"
-      }
       val copyArgs = args.map { case q"$_ val $name: $tpt = $_" =>
         q"val $name: $tpt = this.$name"
       }
@@ -242,7 +260,7 @@ class Annotations(val c: whitebox.Context) extends Common {
             $internal.Method.toString[$name]
         """
       q"""
-        @$internal.offheap($layout) final class $name private(
+        @$internal.annot.offheap(${layout(args)}) final class $name private(
           private val $addrName: $LongClass
         ) extends $AnyValClass with $RefClass {
           def $$initialize$$ = { ..$init }
@@ -262,6 +280,14 @@ class Annotations(val c: whitebox.Context) extends Common {
         }
       """
   }
+
+  def struct(annottees: Tree*): Tree = annottees match {
+    case q"class $name(..$args)" :: Nil =>
+      val newArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
+      q"@$internal.annot.struct(${layout(args)}) class $name private(..$newArgs)"
+  }
+
+  def union(annottees: Tree*): Tree = ???
 }
 
 class Region(val c: blackbox.Context) extends Common {
@@ -328,7 +354,7 @@ class Method(val c: blackbox.Context) extends Common {
   def toString[C]: Tree = q"???"
 }
 
-class Ptr(val c: blackbox.Context) extends Common {
+class Ptr(val c: whitebox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
 
   lazy val T =
@@ -347,7 +373,9 @@ class Ptr(val c: blackbox.Context) extends Common {
   def resize(n: Tree) =
     q"new $PtrClass[$T]($unsafe.reallocateMemory(${c.prefix}.addr, $n * ${sizeof(T)}))"
 
-  def alloc[T: WeakTypeTag](n: Tree) = {
+  def alloc[T: WeakTypeTag] = allocArray[T](q"1")
+
+  def allocArray[T: WeakTypeTag](n: Tree) = {
     val T = wt[T]
     q"new $PtrClass[$T]($unsafe.allocateMemory($n * ${sizeof(T)}))"
   }
@@ -361,11 +389,32 @@ class Ptr(val c: blackbox.Context) extends Common {
     q"$unsafe.copyMemory($fromAddr, $toAddr, $length * $size)"
   }
 
-  def unary_! = apply()
+  def atN(n: Tree) = q"new $PtrClass[$T](${c.prefix}.addr + $n * ${sizeof(T)})"
 
-  def `unary_!_=`(v: Tree) = update(v)
+  def atName(name: Tree) = {
+    val q"scala.Symbol.apply(${nameStr: String})" = name
+    project(nameStr)
+  }
 
-  def +(n: Tree) = q"new $PtrClass(${c.prefix}.addr + $n * ${sizeof(T)})"
+  def project(name: Tree): Tree = {
+    val q"${nameStr: String}" = name
+    project(nameStr)
+  }
 
-  def -(n: Tree) = q"new $PtrClass(${c.prefix}.addr - $n * ${sizeof(T)})"
+  def project(name: String): Tree = {
+    val StructOf(fields) = T
+    fields.collectFirst {
+      case f if f.name.toString == name =>
+        q"(new $PtrClass[${f.tpe}](${c.prefix}.addr + ${f.offset}))"
+    }.get
+  }
+
+  def selectDynamic(name: Tree) =
+    q"${project(name)}()"
+
+  def updateDynamic(name: Tree)(v: Tree) =
+    q"${project(name)}.update($v)"
+
+  def applyDynamic(name: Tree)(args: Tree*) =
+    q"${selectDynamic(name)}(..$args)"
 }

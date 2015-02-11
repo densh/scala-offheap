@@ -1,9 +1,11 @@
 package offheap
 package internal
 
+import C._
+
 class AddrStack(startingSize: Long, growthFactor: Double = 1.5) {
   private var arrSize = startingSize
-  private var arr     = Ptr.alloc[Long](arrSize)
+  private var arr     = Ptr.allocArray[Long](arrSize)
   private var idx     = 0L
 
   def size: Long        = idx
