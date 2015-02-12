@@ -32,7 +32,7 @@ class PagePool {
   def reclaim(page: Addr): Unit =
     AddrStack.push(pages, page)
 
-  def reclaim(otherPages: AddrStack.T) =
+  def reclaimStack(otherPages: AddrStack.T) =
     AddrStack.merge(pages, otherPages)
 }
 

@@ -15,7 +15,7 @@ object Region {
     val h    = r.handle.asInstanceOf[Handle]
     val pool = currentPool.get
     pool.reclaim(h.page)
-    pool.reclaim(h.dirty)
+    pool.reclaimStack(h.dirty)
     AddrStack.free(h.dirty)
   }
 

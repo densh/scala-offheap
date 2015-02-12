@@ -32,7 +32,6 @@ object AddrStack {
   }
 
   def pop(stack: AddrStack.T): Addr = {
-    assert(nonEmpty(stack))
     stack.size = stack.size - 1
     stack.arr(stack.size)
   }
@@ -46,5 +45,8 @@ object AddrStack {
     stack.size = stack.size + other.size
   }
 
-  def free(stack: AddrStack.T): Unit = stack.free
+  def free(stack: AddrStack.T): Unit = {
+    stack.arr.free
+    stack.free
+  }
 }
