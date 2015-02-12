@@ -16,7 +16,4 @@ case object NullRefException extends Exception
 
 case object InaccessiblePageException extends  Exception
 
-final class offheap extends StaticAnnotation {
-  def macroTransform(annottees: Any*): Any =
-    macro internal.macros.Annotations.offheap
-}
+

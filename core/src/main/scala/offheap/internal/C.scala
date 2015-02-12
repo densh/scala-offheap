@@ -2,7 +2,6 @@ package offheap
 package internal
 package C
 
-import scala.annotation.StaticAnnotation
 import scala.language.dynamics
 import scala.language.experimental.{macros => CanMacro}
 
@@ -21,18 +20,12 @@ final class Ptr[T](val addr: Long) extends AnyVal with Dynamic {
 }
 
 object Ptr {
-  def alloc[T]: Ptr[T] =
+  def alloc[T](n: Long): Ptr[T] =
     macro macros.Ptr.alloc[T]
-
-  def allocArray[T](n: Long): Ptr[T] =
-    macro macros.Ptr.allocArray[T]
 
   def copy[T](from: Ptr[T], fromIndex: Long,
               to: Ptr[T], toIndex: Long, length: Long): Unit =
     macro macros.Ptr.copy[T]
 }
 
-final class struct extends StaticAnnotation {
-  def macroTransform(annottees: Any*): Any =
-    macro internal.macros.Annotations.struct
-}
+

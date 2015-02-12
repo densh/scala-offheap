@@ -25,7 +25,6 @@ trait Common {
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
   def debug[T](header: String)(f: => T): T = {
-    println(s"computing $header")
     val res = f
     println(s"$header = $res")
     res
@@ -60,9 +59,7 @@ trait Common {
 
   class LayoutAnnotatedClass(val classSym: Symbol) {
     def is(sym: Symbol): Boolean =
-      debug(s"is $sym (${sym.annotations}) a $classSym ?") {
       sym.annotations.exists(_.tpe.typeSymbol == classSym)
-      }
     def unapply(tpe: Type): Option[List[Field]] = unapply(tpe.widen.typeSymbol)
     def unapply(sym: Symbol): Option[List[Field]] = sym match {
       case sym: ClassSymbol if this.is(sym) =>
@@ -286,11 +283,11 @@ class Annotations(val c: whitebox.Context) extends Common {
       """
   }
 
-  def struct(annottees: Tree*): Tree = debug("struct")(annottees match {
+  def struct(annottees: Tree*): Tree = annottees match {
     case q"class $name(..$args)" :: Nil =>
       val newArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
       q"@$internal.annot.struct(${layout(args)}) class $name private(..$newArgs)"
-  })
+  }
 }
 
 class Region(val c: blackbox.Context) extends Common {
@@ -376,9 +373,7 @@ class Ptr(val c: whitebox.Context) extends Common {
   def resize(n: Tree) =
     q"new $PtrClass[$T]($unsafe.reallocateMemory(${c.prefix}.addr, $n * ${sizeof(T)}))"
 
-  def alloc[T: WeakTypeTag] = allocArray[T](q"1")
-
-  def allocArray[T: WeakTypeTag](n: Tree) = {
+  def alloc[T: WeakTypeTag](n: Tree) = {
     val T = wt[T]
     q"new $PtrClass[$T]($unsafe.allocateMemory($n * ${sizeof(T)}))"
   }
@@ -416,7 +411,7 @@ class Ptr(val c: whitebox.Context) extends Common {
     q"${project(name)}()"
 
   def updateDynamic(name: Tree)(v: Tree) =
-    debug(s"update $name")(q"${project(name)}.update($v)")
+    q"${project(name)}.update($v)"
 
   def applyDynamic(name: Tree)(args: Tree*) =
     q"${selectDynamic(name)}(..$args)"
