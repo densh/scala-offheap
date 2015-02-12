@@ -4,7 +4,7 @@ import scala.language.dynamics
 import scala.language.experimental.{macros => CanMacro}
 import scala.annotation.StaticAnnotation
 
-final class Region(val handle: Object) extends AnyVal
+trait Region extends internal.Region
 object Region {
   def apply[T](f: Region => T): T =
     macro internal.macros.Region.apply[T]

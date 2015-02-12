@@ -3,26 +3,23 @@ package internal
 
 import C._
 
+@struct class AddrStack(arrSize: Long, arr: Ptr[Long], size: Long)
 object AddrStack {
   final val GROWTH_FACTOR = 2
 
-  @struct class Data(arrSize: Long, arr: Ptr[Long], size: Long)
-
-  type T = Ptr[AddrStack.Data]
-
-  def alloc(startingSize: Long): AddrStack.T = {
-    val ptr = Ptr.alloc[AddrStack.Data](1)
+  def alloc(startingSize: Long): Ptr[AddrStack] = {
+    val ptr = Ptr.alloc[AddrStack](1)
     ptr.arrSize = startingSize
     ptr.arr = Ptr.alloc[Long](startingSize)
     ptr.size = 0L
     ptr
   }
 
-  def isEmpty(stack: AddrStack.T): Boolean = stack.size == 0
+  def isEmpty(stack: Ptr[AddrStack]): Boolean = stack.size == 0
 
-  def nonEmpty(stack: AddrStack.T): Boolean = stack.size != 0
+  def nonEmpty(stack: Ptr[AddrStack]): Boolean = stack.size != 0
 
-  def push(stack: AddrStack.T, value: Addr): Unit = {
+  def push(stack: Ptr[AddrStack], value: Addr): Unit = {
     if (stack.size >= stack.arrSize) {
       stack.arrSize = (stack.arrSize * GROWTH_FACTOR).toLong
       stack.arr     = stack.arr.resize(stack.arrSize)
@@ -31,12 +28,13 @@ object AddrStack {
     stack.size = stack.size + 1
   }
 
-  def pop(stack: AddrStack.T): Addr = {
-    stack.size = stack.size - 1
-    stack.arr(stack.size)
+  def pop(stack: Ptr[AddrStack]): Addr = {
+    val newsize = stack.size - 1
+    stack.size = newsize
+    stack.arr(newsize)
   }
 
-  def merge(stack: AddrStack.T, other: AddrStack.T): Unit = {
+  def merge(stack: Ptr[AddrStack], other: Ptr[AddrStack]): Unit = {
     if (stack.size + other.size >= stack.arrSize) {
       stack.arrSize = ((stack.size + other.size) * GROWTH_FACTOR).toLong
       stack.arr     = stack.arr.resize(stack.arrSize)
@@ -45,7 +43,7 @@ object AddrStack {
     stack.size = stack.size + other.size
   }
 
-  def free(stack: AddrStack.T): Unit = {
+  def free(stack: Ptr[AddrStack]): Unit = {
     stack.arr.free
     stack.free
   }

@@ -1,6 +1,7 @@
 package offheap
 package internal
 
+import C._
 import Unsafe.unsafe
 
 class PagePool {
@@ -24,16 +25,18 @@ class PagePool {
     }
   }
 
-  def claim: Addr = {
+  def claim: Addr = this.synchronized {
     if (AddrStack.isEmpty(pages)) claimChunks
     AddrStack.pop(pages)
   }
 
-  def reclaim(page: Addr): Unit =
+  def reclaim(page: Addr): Unit = this.synchronized {
     AddrStack.push(pages, page)
+  }
 
-  def reclaimStack(otherPages: AddrStack.T) =
+  def reclaimStack(otherPages: Ptr[AddrStack]) = this.synchronized {
     AddrStack.merge(pages, otherPages)
+  }
 }
 
 object PagePool {

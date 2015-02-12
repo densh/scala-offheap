@@ -1,4 +1,4 @@
-package offheap
+ package offheap
 package internal
 package macros
 
@@ -283,10 +283,17 @@ class Annotations(val c: whitebox.Context) extends Common {
       """
   }
 
-  def struct(annottees: Tree*): Tree = annottees match {
-    case q"class $name(..$args)" :: Nil =>
+  def struct(annottees: Tree*): Tree = {
+    def handle(name: TypeName, args: List[Tree]) = {
       val newArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
       q"@$internal.annot.struct(${layout(args)}) class $name private(..$newArgs)"
+    }
+    annottees match {
+      case q"class $name(..$args)" :: Nil =>
+        handle(name, args)
+      case q"class $name(..$args)" :: companion :: Nil =>
+        q"${handle(name, args)}; $companion"
+    }
   }
 }
 
@@ -294,8 +301,12 @@ class Region(val c: blackbox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
+  def open =
+    q"new $internal.UncheckedRegion"
+
   def apply[T: WeakTypeTag](f: Tree) = {
-    val r = freshVal("r", tpe = RegionClass.toType, value =q"$internal.Region.open()")
+    val r = freshVal("r", tpe = RegionClass.toType,
+                     value = q"$internal.Region.open()")
     val res = fresh("res")
     q"""
       $r
