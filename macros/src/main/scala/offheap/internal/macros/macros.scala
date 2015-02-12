@@ -25,6 +25,7 @@ trait Common {
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
   def debug[T](header: String)(f: => T): T = {
+    println(s"computing $header")
     val res = f
     println(s"$header = $res")
     res
@@ -100,6 +101,8 @@ trait Common {
     case ClassOf(fields) =>
       val companion = tpe.typeSymbol.companion
       q"$companion.fromPackedAddr$$unsafe($unsafe.getLong($address))"
+    case StructOf(_) =>
+      abort(s"can't read struct $tpe as a value")
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -413,7 +416,7 @@ class Ptr(val c: whitebox.Context) extends Common {
     q"${project(name)}()"
 
   def updateDynamic(name: Tree)(v: Tree) =
-    q"${project(name)}.update($v)"
+    debug(s"update $name")(q"${project(name)}.update($v)")
 
   def applyDynamic(name: Tree)(args: Tree*) =
     q"${selectDynamic(name)}(..$args)"
