@@ -60,8 +60,10 @@ trait Common {
 
   class LayoutAnnotatedClass(val classSym: Symbol) {
     def is(sym: Symbol): Boolean =
+      debug(s"is $sym (${sym.annotations}) a $classSym ?") {
       sym.annotations.exists(_.tpe.typeSymbol == classSym)
-    def unapply(tpe: Type): Option[List[Field]] = unapply(tpe.typeSymbol)
+      }
+    def unapply(tpe: Type): Option[List[Field]] = unapply(tpe.widen.typeSymbol)
     def unapply(sym: Symbol): Option[List[Field]] = sym match {
       case sym: ClassSymbol if this.is(sym) =>
         val q"new $_($_(..$descriptors))" = sym.annotations.collectFirst {
@@ -284,13 +286,11 @@ class Annotations(val c: whitebox.Context) extends Common {
       """
   }
 
-  def struct(annottees: Tree*): Tree = annottees match {
+  def struct(annottees: Tree*): Tree = debug("struct")(annottees match {
     case q"class $name(..$args)" :: Nil =>
       val newArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
       q"@$internal.annot.struct(${layout(args)}) class $name private(..$newArgs)"
-  }
-
-  def union(annottees: Tree*): Tree = ???
+  })
 }
 
 class Region(val c: blackbox.Context) extends Common {

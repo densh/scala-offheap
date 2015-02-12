@@ -4,31 +4,36 @@ package internal
 import Unsafe.unsafe
 
 class PagePool {
-  private val chunks = new AddrStack(startingSize = 4, growthFactor = 2)
-  private val pages  = new AddrStack(startingSize = 1024, growthFactor = 2)
-  private def claimChunks: Unit = {
+  protected val chunks = AddrStack.alloc(startingSize = 4)
+  protected val pages  = AddrStack.alloc(startingSize = 1024)
+
+  override protected def finalize: Unit = {
+    while (AddrStack.nonEmpty(chunks))
+      unsafe.freeMemory(AddrStack.pop(chunks))
+    AddrStack.free(chunks)
+    AddrStack.free(pages)
+  }
+
+  protected def claimChunks: Unit = {
     val chunk = unsafe.allocateMemory(CHUNK_SIZE)
-    chunks.push(chunk)
+    AddrStack.push(chunks, chunk)
     var i = 0
     while (i < CHUNK_SIZE / PAGE_SIZE) {
-      pages.push(chunk + i * PAGE_SIZE)
+      AddrStack.push(pages, chunk + i * PAGE_SIZE)
       i += 1
     }
   }
-  override protected def finalize: Unit = {
-    while (chunks.nonEmpty)
-      unsafe.freeMemory(chunks.pop)
-    chunks.dispose
-    pages.dispose
-  }
+
   def claim: Addr = {
-    if (pages.isEmpty) claimChunks
-    pages.pop
+    if (AddrStack.isEmpty(pages)) claimChunks
+    AddrStack.pop(pages)
   }
+
   def reclaim(page: Addr): Unit =
-    pages.push(page)
-  def reclaim(otherPages: AddrStack) =
-    pages.merge(otherPages)
+    AddrStack.push(pages, page)
+
+  def reclaim(otherPages: AddrStack.T) =
+    AddrStack.merge(pages, otherPages)
 }
 
 object PagePool {

@@ -36,8 +36,3 @@ final class struct extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any =
     macro internal.macros.Annotations.struct
 }
-
-final class union extends StaticAnnotation {
-  def macroTransform(annottees: Any*): Any =
-    macro internal.macros.Annotations.union
-}

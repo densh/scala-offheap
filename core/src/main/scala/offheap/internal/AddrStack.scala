@@ -3,38 +3,48 @@ package internal
 
 import C._
 
-class AddrStack(startingSize: Long, growthFactor: Double = 1.5) {
-  private var arrSize = startingSize
-  private var arr     = Ptr.allocArray[Long](arrSize)
-  private var idx     = 0L
+object AddrStack {
+  final val GROWTH_FACTOR = 2
 
-  def size: Long        = idx
-  def isEmpty: Boolean  = idx == 0
-  def nonEmpty: Boolean = idx != 0
+  @struct class Data(arrSize: Long, arr: Ptr[Long], size: Long)
 
-  def push(value: Addr): Unit = {
-    if (idx >= arrSize) {
-      arrSize = (arrSize * growthFactor).toLong
-      arr     = arr.resize(arrSize)
+  type T = Ptr[AddrStack.Data]
+
+  def alloc(startingSize: Long): AddrStack.T = {
+    val ptr = Ptr.alloc[AddrStack.Data]
+    ptr.arrSize = startingSize
+    ptr.arr = Ptr.alloc[Long](arrSize)
+    ptr.size = 0L
+    ptr
+  }
+
+  def isEmpty(stack: AddrStack.T): Boolean = stack.size == 0
+
+  def nonEmpty(stack: AddrStack.T): Boolean = stack.size != 0
+
+  def push(stack: AddrStack.T, value: Addr): Unit = {
+    if (stack.size >= stack.arrSize) {
+      stack.arrSize = (stack.arrSize * GROWTH_FACTOR).toLong
+      stack.arr     = stack.arr.resize(arrSize)
     }
-    arr(idx) = value
-    idx += 1
+    stack.arr(stack.size) = value
+    stack.size += 1
   }
 
-  def pop: Addr = {
-    assert(nonEmpty)
-    idx -= 1
-    arr(idx)
+  def pop(stack: AddrStack.T): Addr = {
+    assert(nonEmpty(stack))
+    stack.size -= 1
+    stack.arr(stack.size)
   }
 
-  def merge(other: AddrStack): Unit = {
-    if (idx + other.size >= arrSize) {
-      arrSize = ((size + other.size) * growthFactor).toLong
-      arr     = arr.resize(arrSize)
+  def merge(stack: AddrStack.T, other: AddrStack.T): Unit = {
+    if (stack.size + other.size >= arrSize) {
+      stack.arrSize = ((stack.size + other.size) * GROWTH_FACTOR).toLong
+      stack.arr     = stack.arr.resize(stack.arrSize)
     }
-    Ptr.copy(other.arr, 0, arr, idx, other.size)
-    idx += other.size
+    Ptr.copy(other.arr, 0, stack.arr, stack.size, other.size)
+    stack.size += other.size
   }
 
-  def dispose: Unit = arr.free
+  def free(stack: AddrStack.T): Uni = stack.free
 }
