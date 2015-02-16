@@ -2,6 +2,7 @@ package offheap
 package internal
 
 import C._
+import Unsafe.unsafe
 
 @struct class AddrStack(arrSize: Long, arr: Ptr[Long], size: Long)
 object AddrStack {
@@ -46,5 +47,79 @@ object AddrStack {
   def free(stack: Ptr[AddrStack]): Unit = {
     stack.arr.free
     stack.free
+  }
+}
+
+final class AddrStackPagePool {
+  protected val chunks = AddrStack.alloc(startingSize = 4)
+  protected val pages  = AddrStack.alloc(startingSize = 1024)
+
+  override protected def finalize: Unit = {
+    while (AddrStack.nonEmpty(chunks))
+      unsafe.freeMemory(AddrStack.pop(chunks))
+    AddrStack.free(chunks)
+    AddrStack.free(pages)
+  }
+
+  protected def claimChunks: Unit = {
+    val chunk = unsafe.allocateMemory(CHUNK_SIZE)
+    AddrStack.push(chunks, chunk)
+    var i = 0
+    while (i < CHUNK_SIZE / PAGE_SIZE) {
+      AddrStack.push(pages, chunk + i * PAGE_SIZE)
+      i += 1
+    }
+  }
+
+  def claim: Addr = {
+    if (AddrStack.isEmpty(pages)) claimChunks
+    AddrStack.pop(pages)
+  }
+
+  def reclaim(page: Addr): Unit = {
+    AddrStack.push(pages, page)
+  }
+
+  def reclaimStack(otherPages: Ptr[AddrStack]) = this.synchronized {
+    AddrStack.merge(pages, otherPages)
+  }
+}
+object AddrStackPagePool {
+  val currentPool = new ThreadLocal[AddrStackPagePool] {
+    override protected def initialValue(): AddrStackPagePool = new AddrStackPagePool
+  }
+}
+
+final class AddrStackRegion extends offheap.Region {
+  private var pool   = AddrStackPagePool.currentPool.get
+  private var dirty  = AddrStack.alloc(8)
+  private var page   = pool.claim
+  private var offset = 0
+
+  protected[internal] def isOpen = pool != null
+
+  protected[internal] def close(): Unit = {
+    assert(isOpen)
+    pool.reclaim(page)
+    pool.reclaimStack(dirty)
+    AddrStack.free(dirty)
+    pool = null
+  }
+
+  protected[internal] def allocate(size: Size): Addr = {
+    assert(isOpen)
+    assert(size < PAGE_SIZE)
+    val currentOffset = offset
+    val resOffset =
+      if (currentOffset + size < PAGE_SIZE) {
+        offset = (currentOffset + size).toShort
+        currentOffset
+      } else {
+        AddrStack.push(dirty, page)
+        page   = pool.claim
+        offset = size.toShort
+        0
+      }
+    page + resOffset
   }
 }
