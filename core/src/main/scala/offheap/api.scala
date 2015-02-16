@@ -14,6 +14,6 @@ trait Ref extends Any
 
 case object NullRefException extends Exception
 
-case object InaccessiblePageException extends  Exception
+case object InaccessiblePageException extends Exception
 
 

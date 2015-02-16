@@ -1,4 +1,5 @@
 import sbt._, Keys._
+import pl.project13.scala.sbt.SbtJmh._
 
 object RegionsBuild extends Build {
   val paradiseVersion = "2.1.0-M5"
@@ -52,8 +53,8 @@ object RegionsBuild extends Build {
       //scalacOptions += "-uniqid",
       fork in run := true,
       javaOptions in run ++= Seq("-Xms64m", "-Xmx64m"),
-      //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
-      javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
+      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
+      //javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
     ),
     dependencies = Seq(core)
   )
@@ -84,6 +85,13 @@ object RegionsBuild extends Build {
       javaOptions in Test ++= Seq("-Xms64m", "-Xmx64m")
       //scalacOptions += "-Xprint:typer"
     ),
+    dependencies = Seq(core)
+  )
+
+  lazy val jmh = Project(
+    "jmh",
+    file("jmh"),
+    settings = defaults ++ jmhSettings,
     dependencies = Seq(core)
   )
 }

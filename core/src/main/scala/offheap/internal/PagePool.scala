@@ -25,12 +25,12 @@ class PagePool {
     }
   }
 
-  def claim: Addr = this.synchronized {
+  def claim: Addr = {
     if (AddrStack.isEmpty(pages)) claimChunks
     AddrStack.pop(pages)
   }
 
-  def reclaim(page: Addr): Unit = this.synchronized {
+  def reclaim(page: Addr): Unit = {
     AddrStack.push(pages, page)
   }
 

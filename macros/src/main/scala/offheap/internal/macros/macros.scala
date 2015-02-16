@@ -301,9 +301,6 @@ class Region(val c: blackbox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def open =
-    q"new $internal.UncheckedRegion"
-
   def apply[T: WeakTypeTag](f: Tree) = {
     val r = freshVal("r", tpe = RegionClass.toType,
                      value = q"$internal.Region.open()")
@@ -333,7 +330,6 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         val r = read(f.tpe, q"$addr + ${f.offset}")
         q"""
-          if ($addr == 0) $throwNullRef
           $r
         """
     }.getOrElse {
