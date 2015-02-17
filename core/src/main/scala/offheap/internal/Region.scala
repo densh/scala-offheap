@@ -9,7 +9,7 @@ trait Region { self: offheap.Region =>
   protected[internal] def allocate(size: Size): Addr
 }
 object Region {
-  def open(): offheap.Region = new AddrStackRegion
+  def open(): offheap.Region = new LinkedRegion
   def close(r: offheap.Region): Unit = r.close()
   def isOpen(r: offheap.Region): Boolean = r.isOpen
   def allocate(r: offheap.Region, size: Size): Addr = r.allocate(size)
