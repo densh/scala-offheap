@@ -43,10 +43,10 @@ final class LinkedRegion extends offheap.Region {
   }
   protected[internal] def allocate(size: Size): Addr = {
     assert(isOpen)
-    assert(size < PAGE_SIZE)
+    assert(size <= PAGE_SIZE)
     val currentOffset = page.offset
     val resOffset =
-      if (currentOffset + size < PAGE_SIZE) {
+      if (currentOffset + size <= PAGE_SIZE) {
         page.offset = (currentOffset + size).toShort
         currentOffset
       } else {

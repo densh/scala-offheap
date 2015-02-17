@@ -2,18 +2,16 @@ package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
 
+@State(Scope.Thread)
 class BinaryTree {
-  @Benchmark
-  def gc10 = GCHeap.run(10)
+  @Param(Array("10", "15"))
+  var n: Int = _
 
   @Benchmark
-  def gc15 = GCHeap.run(15)
+  def gc = GCHeap.run(n)
 
   @Benchmark
-  def offheap10 = Offheap.run(10)
-
-  @Benchmark
-  def offheap15 = Offheap.run(15)
+  def offheap = Offheap.run(n)
 }
 
 object GCHeap {

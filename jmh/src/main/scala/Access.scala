@@ -1,11 +1,10 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
-import java.util.concurrent.TimeUnit
 import offheap._
 
 @State(Scope.Thread)
-class AccessJMH {
+class Access {
   var r: Region = _
   var op1: OffheapPoint1 = _
   var op2: OffheapPoint2 = _
@@ -14,7 +13,7 @@ class AccessJMH {
   var p2: Point2 = _
   var p4: Point4 = _
 
-  @Setup
+  @Setup(Level.Trial)
   def setup(): Unit = {
     r = internal.Region.open()
     op1 = OffheapPoint1(10)(r)
@@ -25,7 +24,7 @@ class AccessJMH {
     p4 = new Point4(10, 20, 30, 40)
   }
 
-  @TearDown
+  @TearDown(Level.Trial)
   def tearDown(): Unit =
     internal.Region.close(r)
 
