@@ -330,6 +330,7 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         val r = read(f.tpe, q"$addr + ${f.offset}")
         q"""
+          if ($addr == 0) $throwNullRef
           $r
         """
     }.getOrElse {
