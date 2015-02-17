@@ -72,22 +72,6 @@ object RegionsBuild extends Build {
     dependencies = Seq(core)
   )
 
-  lazy val benchmarks = Project(
-    "benchmarks",
-    file("benchmarks"),
-    settings = defaults ++ Seq(
-      libraryDependencies += "com.github.axel22" %% "scalameter" % "0.5-M2",
-      testFrameworks += new TestFramework("org.scalameter.ScalaMeterFramework"),
-      incOptions := incOptions.value.withNameHashing(false),
-      parallelExecution in Test := false,
-      fork in Test := true,
-      logBuffered := false,
-      javaOptions in Test ++= Seq("-Xms64m", "-Xmx64m")
-      //scalacOptions += "-Xprint:typer"
-    ),
-    dependencies = Seq(core)
-  )
-
   lazy val jmh = Project(
     "jmh",
     file("jmh"),

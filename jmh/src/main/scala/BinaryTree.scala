@@ -1,17 +1,19 @@
-import org.scalameter.api._
+package offheap.test.jmh
 
-object BinaryTree extends PerformanceTest.Quickbenchmark {
-  def n = Gen.single("n")(15)
-  performance of "gc heap" in {
-    measure method "run" in {
-      using(n) in { n => GCHeap.run(n) }
-    }
-  }
-  performance of "off heap" in {
-    measure method "run" in {
-      using(n) in { n => Offheap.run(n) }
-    }
-  }
+import org.openjdk.jmh.annotations._
+
+class BinaryTree {
+  @Benchmark
+  def gc10 = GCHeap.run(10)
+
+  @Benchmark
+  def gc15 = GCHeap.run(15)
+
+  @Benchmark
+  def offheap10 = Offheap.run(10)
+
+  @Benchmark
+  def offheap15 = Offheap.run(15)
 }
 
 object GCHeap {

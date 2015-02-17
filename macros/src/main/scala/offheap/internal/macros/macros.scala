@@ -250,7 +250,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         q"val $name: $tpt = this.$name"
       }
       val caseClassSupport =
-        if (!cmods.hasFlag(Flag.CASE)) { println("not a case class"); q"" }
+        if (!cmods.hasFlag(Flag.CASE)) q""
         else q"""
           def isEmpty  = $addr == 0
           def nonEmpty = $addr != 0
