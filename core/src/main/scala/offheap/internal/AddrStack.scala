@@ -80,7 +80,7 @@ final class AddrStackPagePool {
     AddrStack.push(pages, page)
   }
 
-  def reclaimStack(otherPages: Ptr[AddrStack]) = this.synchronized {
+  def reclaimStack(otherPages: Ptr[AddrStack]) = {
     AddrStack.merge(pages, otherPages)
   }
 }
@@ -108,10 +108,10 @@ final class AddrStackRegion extends offheap.Region {
 
   protected[internal] def allocate(size: Size): Addr = {
     assert(isOpen)
-    assert(size < PAGE_SIZE)
+    assert(size <= PAGE_SIZE)
     val currentOffset = offset
     val resOffset =
-      if (currentOffset + size < PAGE_SIZE) {
+      if (currentOffset + size <= PAGE_SIZE) {
         offset = (currentOffset + size).toShort
         currentOffset
       } else {

@@ -66,8 +66,8 @@ object RegionsBuild extends Build {
       libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false,
-      fork in Test := true
-      //scalacOptions += "-Xprint:typer"
+      fork in Test := true,
+      scalacOptions += "-Xprint:typer"
     ),
     dependencies = Seq(core)
   )

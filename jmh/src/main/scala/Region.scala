@@ -7,7 +7,7 @@ import offheap._
 class RegionClose {
   var r: Region = _
 
-  @Param(Array("1", "2", "4", "8", "16"))
+  @Param(Array("1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1024"))
   var allocatedPages: Int = _
 
   @Setup(Level.Invocation)

@@ -1,8 +1,6 @@
 package offheap
 package internal
 
-import C._
-
 trait Region { self: offheap.Region =>
   protected[internal] def isOpen: Boolean
   protected[internal] def close(): Unit
