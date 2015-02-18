@@ -309,7 +309,7 @@ class Region(val c: blackbox.Context) extends Common {
       $r
       val $res =
         try ${app(f, q"${r.symbol}")}
-        finally $internal.Region.close(${r.symbol})
+        finally ${r.symbol}.close()
       $res
     """
   }
@@ -349,7 +349,7 @@ class Method(val c: blackbox.Context) extends Common {
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
     q"""
-      val $addr = $internal.Region.allocate($r, $size)
+      val $addr = $r.allocate($size)
       ..$writes
       new $C($addr)
     """

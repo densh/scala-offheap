@@ -1,17 +1,38 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
+import offheap._
 
 @State(Scope.Thread)
-class BinaryTree {
+class GCBinaryTree {
   @Param(Array("16", "18", "20"))
   var n: Int = _
 
   @Benchmark
-  def gc = GCHeap.run(n)
+  def run = GCHeap.run(n)
+}
+
+@State(Scope.Thread)
+class OffheapBinaryTree {
+  @Param(Array("16", "18", "20"))
+  var n: Int = _
+
+  @Param(Array("linked", "slinked", "caslinked", "stack", "sstack"))
+  var allocator: String = _
+
+  @Setup
+  def setup(): Unit = {
+    Offheap.region = allocator match {
+      case "linked"    => () => new internal.LinkedRegion
+      case "slinked"   => () => new internal.SynchronizedLinkedRegion
+      case "caslinked" => () => new internal.CASLinkedRegion
+      case "stack"     => () => new internal.AddrStackRegion
+      case "sstack"    => () => new internal.SynchronizedAddrStackRegion
+    }
+  }
 
   @Benchmark
-  def offheap = Offheap.run(n)
+  def run = Offheap.run(n)
 }
 
 object GCHeap {
@@ -46,8 +67,9 @@ object GCHeap {
 }
 
 object Offheap {
-  import offheap._
-  def run(n: Int) = Region { outer =>
+  var region: () => Region = _
+  def run(n: Int) = {
+    val outer = region()
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = tree(0,maxDepth)(outer)
@@ -55,8 +77,11 @@ object Offheap {
     while (depth <= maxDepth) {
       val iterations = 1 << (maxDepth - depth + minDepth)
       var i,sum = 0
-      def rsum(i: Int, depth: Int): Int = Region { r =>
-        isum(tree(i, depth)(r))
+      def rsum(i: Int, depth: Int): Int = {
+        val r = region()
+        val res = isum(tree(i, depth)(r))
+        r.close()
+        res
       }
       while (i < iterations) {
         i += 1
@@ -64,6 +89,7 @@ object Offheap {
       }
       depth += 2
     }
+    outer.close()
   }
   @offheap case class Tree(i: Int, left: Tree, right: Tree)
   def isum(tree: Tree): Int = {

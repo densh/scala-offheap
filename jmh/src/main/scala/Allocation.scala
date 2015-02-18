@@ -5,16 +5,25 @@ import java.util.concurrent.TimeUnit
 import offheap._
 
 @State(Scope.Thread)
-class Allocation {
+class OffheapAllocation {
+  @Param(Array("linked", "slinked", "caslinked", "stack", "sstack"))
+  var allocator: String = _
+
   var r: Region = _
 
-  @Setup
+  @Setup(Level.Iteration)
   def setup(): Unit =
-    r = internal.Region.open()
+    r = allocator match {
+      case "linked"    => new internal.LinkedRegion
+      case "slinked"   => new internal.SynchronizedLinkedRegion
+      case "caslinked" => new internal.CASLinkedRegion
+      case "stack"     => new internal.AddrStackRegion
+      case "sstack"    => new internal.SynchronizedAddrStackRegion
+    }
 
-  @TearDown
+  @TearDown(Level.Iteration)
   def tearDown(): Unit =
-    internal.Region.close(r)
+    r.close()
 
   @Benchmark
   def offheapPoint1() =
@@ -27,7 +36,9 @@ class Allocation {
   @Benchmark
   def offheapPoint4() =
     OffheapPoint4(10, 20, 30, 40)(r)
+}
 
+class GCAllocation {
   @Benchmark
   def point1(): Point1 =
     new Point1(10)

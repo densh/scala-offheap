@@ -2,9 +2,9 @@ package offheap
 package internal
 
 trait Region { self: offheap.Region =>
-  protected[internal] def isOpen: Boolean
-  protected[internal] def close(): Unit
-  protected[internal] def allocate(size: Size): Addr
+  def isOpen: Boolean
+  def close(): Unit
+  def allocate(size: Size): Addr
 }
 object Region {
   def open(): offheap.Region = new LinkedRegion

@@ -96,9 +96,9 @@ final class AddrStackRegion extends offheap.Region {
   private var page   = pool.claim
   private var offset = 0
 
-  protected[internal] def isOpen = pool != null
+  def isOpen = pool != null
 
-  protected[internal] def close(): Unit = {
+  def close(): Unit = {
     assert(isOpen)
     pool.reclaim(page)
     pool.reclaimStack(dirty)
@@ -106,7 +106,7 @@ final class AddrStackRegion extends offheap.Region {
     pool = null
   }
 
-  protected[internal] def allocate(size: Size): Addr = {
+  def allocate(size: Size): Addr = {
     assert(isOpen)
     assert(size <= PAGE_SIZE)
     val currentOffset = offset
