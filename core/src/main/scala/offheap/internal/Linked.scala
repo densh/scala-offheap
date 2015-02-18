@@ -85,19 +85,20 @@ final class LinkedRegion extends offheap.Region {
     var commit = false
     do {
       val page = this.page
+      if (page == null) throw InaccessibleRegionException
       commit = this.compareAndSwapPage(page, null)
-      if (commit && page != null) LinkedPagePool.reclaim(page)
+      if (commit) LinkedPagePool.reclaim(page)
     } while (!commit)
   }
   protected[internal] def allocate(size: Size): Addr = {
-    assert(size <= PAGE_SIZE)
+    if (size > PAGE_SIZE) throw new IllegalArgumentException
     var res = 0L
     do {
       val page = this.page
-      assert(page != null)
+      if (page == null) throw InaccessibleRegionException
       val pageOffset = page.offset
       if (pageOffset + size <= PAGE_SIZE) {
-        val newOffset = (pageOffset + size)
+        val newOffset = pageOffset + size
         if (page.compareAndSwapOffset(pageOffset, newOffset)) {
           res = page.start + pageOffset
         }

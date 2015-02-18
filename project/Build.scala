@@ -52,7 +52,7 @@ object RegionsBuild extends Build {
       //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
       fork in run := true,
-      javaOptions in run ++= Seq("-Xms64m", "-Xmx64m"),
+      javaOptions in run ++= Seq("-Xms64m", "-Xmx64m")
       //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
       //javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
     ),
