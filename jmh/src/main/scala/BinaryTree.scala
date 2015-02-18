@@ -4,7 +4,7 @@ import org.openjdk.jmh.annotations._
 
 @State(Scope.Thread)
 class BinaryTree {
-  @Param(Array("10", "15", "20"))
+  @Param(Array("16", "18", "20"))
   var n: Int = _
 
   @Benchmark
