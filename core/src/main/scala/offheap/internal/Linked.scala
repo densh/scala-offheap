@@ -41,7 +41,6 @@ class LinkedPagePool {
     res
   }
   def reclaim(head: LinkedPage): Unit = {
-    assert(head != null)
     var tail = head
     while (tail.next != null)  tail = tail.next
     var commit = false
@@ -79,7 +78,6 @@ object LinkedPage {
 
 final class LinkedRegion extends offheap.Region {
   private var page = LinkedPagePool.claim
-  assert(page != null)
   private def compareAndSwapPage(expected: LinkedPage, value: LinkedPage) =
     unsafe.compareAndSwapObject(this, LinkedRegion.pageFieldOffset, expected, value)
   protected[internal] def isOpen: Boolean = page != null
