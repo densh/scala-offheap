@@ -6,7 +6,7 @@ import offheap._
 
 @State(Scope.Thread)
 class OffheapAllocation {
-  @Param(Array("linked", "slinked", "caslinked", "stack", "sstack"))
+  @Param(Array("linked", "slinked", "caslinked", "hybridlinked", "stack", "sstack"))
   var allocator: String = _
 
   var r: Region = _
@@ -14,11 +14,12 @@ class OffheapAllocation {
   @Setup(Level.Iteration)
   def setup(): Unit =
     r = allocator match {
-      case "linked"    => new internal.LinkedRegion
-      case "slinked"   => new internal.SynchronizedLinkedRegion
-      case "caslinked" => new internal.CASLinkedRegion
-      case "stack"     => new internal.AddrStackRegion
-      case "sstack"    => new internal.SynchronizedAddrStackRegion
+      case "linked"       => new internal.LinkedRegion
+      case "slinked"      => new internal.SynchronizedLinkedRegion
+      case "caslinked"    => new internal.CASLinkedRegion
+      case "hybridlinked" => new internal.HybridLinkedRegion
+      case "stack"        => new internal.AddrStackRegion
+      case "sstack"       => new internal.SynchronizedAddrStackRegion
     }
 
   @TearDown(Level.Iteration)
