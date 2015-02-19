@@ -22,6 +22,9 @@ trait Common {
   val internal = staticPackage("offheap.internal")
   val unsafe   = q"$internal.Unsafe.unsafe"
 
+  val tag     = TermName("$tag$")
+  val tagSize = 4
+
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
   def debug[T](header: String)(f: => T): T = {
@@ -97,9 +100,9 @@ trait Common {
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
     case PtrOf(t) =>
       q"new $PtrClass[$t]($unsafe.getLong($address))"
-    case ClassOf(fields) =>
+    case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$companion.fromPackedAddr$$unsafe($unsafe.getLong($address))"
+      q"$companion.fromAddr$$unsafe($unsafe.getLong($address))"
     case StructOf(_) =>
       abort(s"can't read struct $tpe as a value")
   }
@@ -116,9 +119,9 @@ trait Common {
       """
     case PtrOf(_) =>
       q"$unsafe.putLong($address, $value.addr)"
-    case ClassOf(fields) =>
+    case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$unsafe.putLong($address, $companion.toPackedAddr$$unsafe($value))"
+      q"$unsafe.putLong($address, $companion.toAddr$$unsafe($value))"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -193,7 +196,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val tuples = args.map { case q"$_ val $name: $tpt = $_" =>
       q"(${name.toString}, $internal.annot.Tag[$tpt]())"
     }
-    q"$internal.annot.Layout(..$tuples)"
+    q"$internal.annot.Layout((${tag.toString}, $internal.annot.Tag[$IntClass]), ..$tuples)"
   }
 
   // TODO: handle default arguments
@@ -210,7 +213,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         abort("offheap classes require at least one parameter")
       val addrName = TermName("$addr$")
       val addr = q"this.$addrName"
-      val accessors = args.flatMap {
+      val accessors = (q"val $tag: $IntClass" +: args).flatMap {
         case q"$_ var $argName: $tpt = $_" =>
           val value = fresh("value")
           val assignerName = TermName(argName.toString + "_=")
@@ -264,20 +267,21 @@ class Annotations(val c: whitebox.Context) extends Common {
       q"""
         @$internal.annot.offheap(${layout(args)}) final class $name private(
           private val $addrName: $LongClass
-        ) extends $AnyValClass with $RefClass {
+        ) extends $AnyValClass {
           def $$initialize$$ = { ..$init }
           ..$accessors
           ..$methods
           ..$caseClassSupport
         }
         object ${name.toTermName} {
+          val $tag = $internal.Tag.next
           def apply(..$args)(implicit $r: $RegionClass): $name =
             $internal.Method.allocator[$name]($r, ..$argNames)
           def unapply($scrutinee: $name): $name = $scrutinee
           val empty: $name = null.asInstanceOf[$name]
-          def fromPackedAddr$$unsafe($address: $LongClass): $name =
+          def fromAddr$$unsafe($address: $LongClass): $name =
             new $name($address)
-          def toPackedAddr$$unsafe($instance: $name): $LongClass =
+          def toAddr$$unsafe($instance: $name): $LongClass =
             $instance.$addrName
         }
       """
@@ -342,10 +346,11 @@ class Method(val c: blackbox.Context) extends Common {
 
   def allocator[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
     val C = wt[C]
+    val companion = C.typeSymbol.companion
     val ClassOf(fields) = C.typeSymbol
     val size = fields.map(f => sizeof(f.tpe)).sum
     val addr = fresh("addr")
-    val writes = fields.zip(args).map { case (f, arg) =>
+    val writes = fields.zip(q"$companion.$tag" +: args).map { case (f, arg) =>
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
     q"""
