@@ -10,9 +10,8 @@ class CASLinkedPagePool {
     unsafe.compareAndSwapObject(this, CASLinkedPagePool.chunkFieldOffset, expected, value)
   private def compareAndSwapPage(expected: CASLinkedPage, value: CASLinkedPage) =
     unsafe.compareAndSwapObject(this, CASLinkedPagePool.pageFieldOffset, expected, value)
-  private def allocateChunk(): Unit = {
-    val start = unsafe.allocateMemory(CHUNK_SIZE)
-    chunk = new CASLinkedChunk(start, chunk)
+  private def sliceChunk(chunk: CASLinkedChunk): Unit = {
+    val start = chunk.start
     val tail = new CASLinkedPage(start, 0, null)
     var head = tail
     var i = 1
@@ -26,6 +25,16 @@ class CASLinkedPagePool {
       tail.next = page
       commit = this.compareAndSwapPage(page, head)
     } while (!commit)
+  }
+  private def allocateChunk(): Unit = {
+    val newChunk = new CASLinkedChunk(unsafe.allocateMemory(CHUNK_SIZE), null)
+    var commit = false
+    do {
+      val chunk = this.chunk
+      newChunk.next = chunk
+      commit = this.compareAndSwapChunk(chunk, newChunk)
+    } while(!commit)
+    sliceChunk(chunk)
   }
   def claim(): CASLinkedPage = {
     var res: CASLinkedPage = null
@@ -59,21 +68,14 @@ object CASLinkedPagePool extends CASLinkedPagePool {
 }
 
 final class CASLinkedChunk(val start: Long, var next: CASLinkedChunk)
-object CASLinkedChunk {
-  val nextFieldOffset = unsafe.fieldOffset(classOf[CASLinkedChunk].getDeclaredField("next"))
-}
 
 final class CASLinkedPage(val start: Long, var offset: Long, var next: CASLinkedPage) {
   def compareAndSwapOffset(expected: Long, value: Long) =
     unsafe.compareAndSwapLong(this, CASLinkedPage.offsetFieldOffset, expected, value)
-  def compareAndSwapNext(expected: CASLinkedPage, value: CASLinkedPage) =
-    unsafe.compareAndSwapObject(this, CASLinkedPage.nextFieldOffset, expected, value)
 }
 object CASLinkedPage {
   val offsetFieldOffset =
     unsafe.fieldOffset(classOf[CASLinkedPage].getDeclaredField("offset"))
-  val nextFieldOffset =
-    unsafe.fieldOffset(classOf[CASLinkedPage].getDeclaredField("next"))
 }
 
 final class CASLinkedRegion extends offheap.Region {
@@ -118,5 +120,5 @@ final class CASLinkedRegion extends offheap.Region {
   }
 }
 object CASLinkedRegion {
-  val pageFieldOffset = unsafe.fieldOffset(classOf[CASLinkedRegion].getDeclaredField("page"))
+  private val pageFieldOffset = unsafe.fieldOffset(classOf[CASLinkedRegion].getDeclaredField("page"))
 }

@@ -42,20 +42,18 @@ final class SynchronizedLinkedRegion extends offheap.Region {
     page = null
   }
   def allocate(size: Size): Addr = this.synchronized {
-    assert(isOpen)
-    assert(size <= PAGE_SIZE)
+    if (!isOpen) throw InaccessibleRegionException
+    if (size > PAGE_SIZE) throw new IllegalArgumentException
     val currentOffset = page.offset
-    val resOffset =
-      if (currentOffset + size <= PAGE_SIZE) {
-        page.offset = (currentOffset + size).toShort
-        currentOffset
-      } else {
-        val newpage = SynchronizedLinkedPagePool.claim
-        newpage.next = page
-        newpage.offset = size.toShort
-        page = newpage
-        0
-      }
-    page.start + resOffset
+    if (currentOffset + size <= PAGE_SIZE) {
+      page.offset = currentOffset + size
+      page.start + currentOffset
+    } else {
+      val newpage = SynchronizedLinkedPagePool.claim
+      newpage.next = page
+      newpage.offset = size
+      page = newpage
+      page.start
+    }
   }
 }

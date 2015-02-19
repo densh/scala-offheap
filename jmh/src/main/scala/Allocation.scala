@@ -6,7 +6,7 @@ import offheap._
 
 @State(Scope.Thread)
 class OffheapAllocation {
-  @Param(Array("linked", "slinked", "caslinked", "hybridlinked", "stack", "sstack"))
+  @Param(Array(/*"linked",*/ "slinked", "caslinked"/*, "hybridlinked", "stack", "sstack"*/))
   var allocator: String = _
 
   var r: Region = _
