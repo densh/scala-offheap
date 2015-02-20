@@ -4,8 +4,8 @@ package internal
 import Unsafe.unsafe
 
 class CASLinkedPagePool {
-  private var chunk: CASLinkedChunk = null
-  private var page: CASLinkedPage = null
+  @volatile private var chunk: CASLinkedChunk = null
+  @volatile private var page: CASLinkedPage = null
   private def compareAndSwapChunk(expected: CASLinkedChunk, value: CASLinkedChunk) =
     unsafe.compareAndSwapObject(this, CASLinkedPagePool.chunkFieldOffset, expected, value)
   private def compareAndSwapPage(expected: CASLinkedPage, value: CASLinkedPage) =
@@ -69,7 +69,7 @@ object CASLinkedPagePool extends CASLinkedPagePool {
 
 final class CASLinkedChunk(val start: Long, var next: CASLinkedChunk)
 
-final class CASLinkedPage(val start: Long, var offset: Long, var next: CASLinkedPage) {
+final class CASLinkedPage(val start: Long, @volatile var offset: Long, var next: CASLinkedPage) {
   def compareAndSwapOffset(expected: Long, value: Long) =
     unsafe.compareAndSwapLong(this, CASLinkedPage.offsetFieldOffset, expected, value)
 }
@@ -79,7 +79,7 @@ object CASLinkedPage {
 }
 
 final class CASLinkedRegion extends offheap.Region {
-  private var page = CASLinkedPagePool.claim
+  @volatile private var page = CASLinkedPagePool.claim
   private def compareAndSwapPage(expected: CASLinkedPage, value: CASLinkedPage) =
     unsafe.compareAndSwapObject(this, CASLinkedRegion.pageFieldOffset, expected, value)
   def isOpen: Boolean = page != null
