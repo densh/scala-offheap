@@ -71,22 +71,25 @@ final class AddrStackPagePool {
     }
   }
 
-  def claim: Addr = {
+  def claim: Addr = this.synchronized {
     if (AddrStack.isEmpty(pages)) claimChunks
     AddrStack.pop(pages)
   }
 
-  def reclaim(page: Addr): Unit = {
+  def reclaim(page: Addr): Unit = this.synchronized {
     AddrStack.push(pages, page)
   }
 
-  def reclaimStack(otherPages: Ptr[AddrStack]) = {
+  def reclaimStack(otherPages: Ptr[AddrStack]) = this.synchronized {
     AddrStack.merge(pages, otherPages)
   }
 }
 object AddrStackPagePool {
-  val currentPool = new ThreadLocal[AddrStackPagePool] {
+  /*val currentPool = new ThreadLocal[AddrStackPagePool] {
     override protected def initialValue(): AddrStackPagePool = new AddrStackPagePool
+  }*/
+  val currentPool = new {
+    val get = new AddrStackPagePool
   }
 }
 
@@ -94,11 +97,11 @@ final class AddrStackRegion extends offheap.Region {
   private var pool   = AddrStackPagePool.currentPool.get
   private var dirty  = AddrStack.alloc(8)
   private var page   = pool.claim
-  private var offset = 0
+  private var offset = 0L
 
   def isOpen = pool != null
 
-  def close(): Unit = {
+  def close(): Unit = this.synchronized {
     assert(isOpen)
     pool.reclaim(page)
     pool.reclaimStack(dirty)
@@ -106,18 +109,18 @@ final class AddrStackRegion extends offheap.Region {
     pool = null
   }
 
-  def allocate(size: Size): Addr = {
+  def allocate(size: Size): Addr = this.synchronized {
     assert(isOpen)
     assert(size <= PAGE_SIZE)
     val currentOffset = offset
     val resOffset =
       if (currentOffset + size <= PAGE_SIZE) {
-        offset = (currentOffset + size).toShort
+        offset = (currentOffset + size)
         currentOffset
       } else {
         AddrStack.push(dirty, page)
         page   = pool.claim
-        offset = size.toShort
+        offset = size
         0
       }
     page + resOffset

@@ -1,7 +1,8 @@
 package test
 
-object Offheap extends App {
-  import offheap._
+import offheap._
+
+/*object Offheap extends App {
   def run(n: Int) = Region { outer =>
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
@@ -35,4 +36,11 @@ object Offheap extends App {
   }
 
   while(true) run(20)
+}*/
+
+object OpenClose extends App {
+  while(true) {
+    val r = new internal.AddrStackRegion
+    r.close()
+  }
 }

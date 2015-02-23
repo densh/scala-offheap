@@ -17,17 +17,15 @@ class OffheapBinaryTree {
   @Param(Array("16", "18", "20"))
   var n: Int = _
 
-  @Param(Array("linked", "slinked", "caslinked", "stack", "sstack"))
+  @Param(Array("linked", "caslinked", "stack"))
   var allocator: String = _
 
   @Setup
   def setup(): Unit = {
     Offheap.region = allocator match {
       case "linked"    => () => new internal.LinkedRegion
-      case "slinked"   => () => new internal.SynchronizedLinkedRegion
       case "caslinked" => () => new internal.CASLinkedRegion
       case "stack"     => () => new internal.AddrStackRegion
-      case "sstack"    => () => new internal.SynchronizedAddrStackRegion
     }
   }
 
