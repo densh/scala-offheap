@@ -1,7 +1,7 @@
 package offheap
 
 package object internal {
-  import Unsafe.unsafe
+  import Unsafer.unsafe
 
   type Addr = Long
   type Size = Long

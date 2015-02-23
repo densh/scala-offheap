@@ -2,7 +2,7 @@ package offheap
 package internal
 
 import C._
-import Unsafe.unsafe
+import Unsafer.unsafe
 
 @struct class AddrStack(arrSize: Long, arr: Ptr[Long], size: Long)
 object AddrStack {

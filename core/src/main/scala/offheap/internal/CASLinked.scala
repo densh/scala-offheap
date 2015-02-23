@@ -1,7 +1,7 @@
 package offheap
 package internal
 
-import Unsafe.unsafe
+import Unsafer.unsafe
 
 class CASLinkedPagePool {
   @volatile private var chunk: CASLinkedChunk = null

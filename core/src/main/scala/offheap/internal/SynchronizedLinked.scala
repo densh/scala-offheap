@@ -1,7 +1,7 @@
 package offheap
 package internal
 
-import Unsafe.unsafe
+import Unsafer.unsafe
 
 object SynchronizedLinkedPagePool {
   private var chunk: SynchronizedLinkedChunk = null
