@@ -3,7 +3,7 @@ package internal
 
 import Unsafer.unsafe
 
-object LinkedPagePool {
+class LinkedPagePool {
   private var chunk: LinkedChunk = null
   private var page: LinkedPage = null
   private def allocateChunk(): Unit = {
@@ -29,6 +29,20 @@ object LinkedPagePool {
     page = head
   }
 }
+object LinkedPagePool extends LinkedPagePool
+/*{
+  private val pools = new Array[LinkedPagePool](PAGE_POOLS)
+  def apply(obj: Object): LinkedPagePool = LinkedPagePool.synchronized {
+    val idx = obj.hashCode % PAGE_POOLS
+    val candidate = pools(idx)
+    if (candidate != null) candidate
+    else {
+      val pool = new LinkedPagePool
+      pools(idx) = pool
+      pool
+    }
+  }
+}*/
 
 final class LinkedChunk(val start: Long, var next: LinkedChunk)
 
