@@ -20,7 +20,7 @@ trait Common {
 
   val regions  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
-  val unsafe   = q"$internal.Unsafe.unsafe"
+  val unsafe   = q"$internal.Unsafer.unsafe"
 
   val tag     = TermName("$tag$")
   val tagSize = 4

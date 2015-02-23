@@ -1,7 +1,7 @@
 package offheap
 package internal
 
-import Unsafe.unsafe
+import Unsafer.unsafe
 
 class HybridLinkedPagePool {
   private var chunk: HybridLinkedChunk = null

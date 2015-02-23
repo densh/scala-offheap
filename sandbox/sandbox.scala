@@ -34,5 +34,5 @@ object Offheap extends App {
     } else Tree(i, Tree.empty, Tree.empty)
   }
 
-  while(true) run(15)
+  while(true) run(20)
 }

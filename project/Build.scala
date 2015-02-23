@@ -48,13 +48,13 @@ object RegionsBuild extends Build {
     file("sandbox"),
     settings = defaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
-      scalacOptions += "-Xprint:typer",
+      //scalacOptions += "-Xprint:typer",
       //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
       fork in run := true,
-      javaOptions in run ++= Seq("-Xms64m", "-Xmx64m")
+      javaOptions in run ++= Seq("-Xms64m", "-Xmx64m"),
       //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
-      //javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
+      javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
     ),
     dependencies = Seq(core)
   )
@@ -63,11 +63,11 @@ object RegionsBuild extends Build {
     "tests",
     file("tests"),
     settings = defaults ++ Seq(
+      //scalacOptions += "-Xprint:typer",
       libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false,
-      fork in Test := true,
-      scalacOptions += "-Xprint:typer"
+      fork in Test := true
     ),
     dependencies = Seq(core)
   )

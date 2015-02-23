@@ -17,5 +17,5 @@ public class Unsafer {
             }
         }
     }
-    static Unsafe unsafe;
+    public static Unsafe unsafe;
 }
