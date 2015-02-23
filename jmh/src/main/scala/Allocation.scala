@@ -13,11 +13,7 @@ class OffheapAllocation {
 
   @Setup(Level.Iteration)
   def setup(): Unit =
-    r = allocator match {
-      case "linked"    => new internal.LinkedRegion
-      case "caslinked" => new internal.CASLinkedRegion
-      case "stack"     => new internal.AddrStackRegion
-    }
+    r = Region.open()
 
   @TearDown(Level.Iteration)
   def tearDown(): Unit =

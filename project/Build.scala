@@ -14,19 +14,12 @@ object RegionsBuild extends Build {
     "root",
     file("."),
     settings = defaults,
-    aggregate = Seq(core, macros, annotations)
+    aggregate = Seq(core, macros)
   )
 
   lazy val core = Project(
     "core",
     file("core"),
-    settings = defaults,
-    dependencies = Seq(macros, annotations)
-  )
-
-  lazy val annotations = Project(
-    "annotations",
-    file("annotations"),
     settings = defaults,
     dependencies = Seq(macros)
   )

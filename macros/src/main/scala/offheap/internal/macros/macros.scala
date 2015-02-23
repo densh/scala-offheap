@@ -12,13 +12,11 @@ trait Common {
   import rootMirror.{staticClass, staticPackage}
 
   val OffheapClass       = staticClass("offheap.internal.annot.offheap")
-  val StructClass        = staticClass("offheap.internal.annot.struct")
-  val PtrClass           = staticClass("offheap.internal.C.Ptr")
   val RefClass           = staticClass("offheap.Ref")
   val RegionClass        = staticClass("offheap.Region")
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
 
-  val regions  = staticPackage("offheap")
+  val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
   val unsafe   = q"$internal.Unsafer.unsafe"
 
@@ -82,29 +80,15 @@ trait Common {
 
   object ClassOf extends LayoutAnnotatedClass(OffheapClass)
 
-  object StructOf extends LayoutAnnotatedClass(StructClass)
-
-  object PtrOf {
-    def unapply(tpe: Type): Option[Type] =
-      if (tpe.typeSymbol == PtrClass)
-        Some(tpe.baseType(PtrClass).typeArgs.head)
-      else
-        None
-  }
-
   def read(tpe: Type, address: Tree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
       val method = TermName(s"get$tpe")
       q"$unsafe.$method($address)"
     case BooleanTpe =>
       q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
-    case PtrOf(t) =>
-      q"new $PtrClass[$t]($unsafe.getLong($address))"
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
       q"$companion.fromAddr$$unsafe($unsafe.getLong($address))"
-    case StructOf(_) =>
-      abort(s"can't read struct $tpe as a value")
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -117,8 +101,6 @@ trait Common {
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
-    case PtrOf(_) =>
-      q"$unsafe.putLong($address, $value.addr)"
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
       q"$unsafe.putLong($address, $companion.toAddr$$unsafe($value))"
@@ -128,9 +110,8 @@ trait Common {
     case ByteTpe  | BooleanTpe             => 1
     case ShortTpe | CharTpe                => 2
     case IntTpe   | FloatTpe               => 4
-    case LongTpe  | DoubleTpe | PtrOf(_)   => 8
+    case LongTpe  | DoubleTpe              => 8
     case tpe if ClassOf.is(tpe.typeSymbol) => 8
-    case StructOf(fields)                  => fields.map(f => sizeof(f.tpe)).sum
   }
 
   // TODO: handle non-function literal cases
@@ -207,7 +188,7 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: handle existing companions
   // TODO: modifiers propagation
   // TODO: hygienic reference to class type from companion?
-  def offheap(annottees: Tree*): Tree = annottees match {
+  def offheapAnnotation(annottees: Tree*): Tree = annottees match {
     case q"$cmods class $name(..$args) extends ..$parents { ..$stats }" :: Nil =>
       if (args.isEmpty)
         abort("offheap classes require at least one parameter")
@@ -286,19 +267,6 @@ class Annotations(val c: whitebox.Context) extends Common {
         }
       """
   }
-
-  def struct(annottees: Tree*): Tree = {
-    def handle(name: TypeName, args: List[Tree]) = {
-      val newArgs = args.map { case q"$_ val $name: $tpt" => q"val $name: $tpt" }
-      q"@$internal.annot.struct(${layout(args)}) class $name private(..$newArgs)"
-    }
-    annottees match {
-      case q"class $name(..$args)" :: Nil =>
-        handle(name, args)
-      case q"class $name(..$args)" :: companion :: Nil =>
-        q"${handle(name, args)}; $companion"
-    }
-  }
 }
 
 class Region(val c: blackbox.Context) extends Common {
@@ -307,7 +275,7 @@ class Region(val c: blackbox.Context) extends Common {
 
   def apply[T: WeakTypeTag](f: Tree) = {
     val r = freshVal("r", tpe = RegionClass.toType,
-                     value = q"$internal.Region.open()")
+                     value = q"$offheap.Region.open()")
     val res = fresh("res")
     q"""
       $r
@@ -323,7 +291,7 @@ class Method(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  def throwNullRef = q"throw $regions.NullRefException"
+  def throwNullRef = q"throw $offheap.NullRefException"
 
   def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
     val C = wt[C]
@@ -365,67 +333,4 @@ class Method(val c: blackbox.Context) extends Common {
   def copy[C](r: Tree, args: Tree*): Tree = q"???"
 
   def toString[C]: Tree = q"???"
-}
-
-class Ptr(val c: whitebox.Context) extends Common {
-  import c.universe.{ weakTypeOf => wt, _ }
-
-  lazy val T =
-    c.prefix.tree.tpe.baseType(PtrClass).typeArgs.head
-
-  def apply() = read(T, q"${c.prefix}.addr")
-
-  def applyN(n: Tree) = read(T, q"${c.prefix}.addr + $n * ${sizeof(T)}")
-
-  def update(v: Tree) = write(T, q"${c.prefix}.addr", v)
-
-  def updateN(n: Tree, v: Tree) = write(T, q"${c.prefix}.addr + $n * ${sizeof(T)}", v)
-
-  def free = q"$unsafe.freeMemory(${c.prefix}.addr)"
-
-  def resize(n: Tree) =
-    q"new $PtrClass[$T]($unsafe.reallocateMemory(${c.prefix}.addr, $n * ${sizeof(T)}))"
-
-  def alloc[T: WeakTypeTag](n: Tree) = {
-    val T = wt[T]
-    q"new $PtrClass[$T]($unsafe.allocateMemory($n * ${sizeof(T)}))"
-  }
-
-  def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree,
-                           to: Tree, toIndex: Tree, length: Tree) = {
-    val T = wt[T]
-    val size = sizeof(T)
-    val fromAddr: Tree = q"$from.addr + $fromIndex * $size"
-    val toAddr: Tree = q"$to.addr + $toIndex * $size"
-    q"$unsafe.copyMemory($fromAddr, $toAddr, $length * $size)"
-  }
-
-  def atN(n: Tree) = q"new $PtrClass[$T](${c.prefix}.addr + $n * ${sizeof(T)})"
-
-  def atName(name: Tree) = {
-    val q"scala.Symbol.apply(${nameStr: String})" = name
-    project(nameStr)
-  }
-
-  def project(name: Tree): Tree = {
-    val q"${nameStr: String}" = name
-    project(nameStr)
-  }
-
-  def project(name: String): Tree = {
-    val StructOf(fields) = T
-    fields.collectFirst {
-      case f if f.name.toString == name =>
-        q"(new $PtrClass[${f.tpe}](${c.prefix}.addr + ${f.offset}))"
-    }.get
-  }
-
-  def selectDynamic(name: Tree) =
-    q"${project(name)}()"
-
-  def updateDynamic(name: Tree)(v: Tree) =
-    q"${project(name)}.update($v)"
-
-  def applyDynamic(name: Tree)(args: Tree*) =
-    q"${selectDynamic(name)}(..$args)"
 }
