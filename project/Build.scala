@@ -20,7 +20,9 @@ object RegionsBuild extends Build {
   lazy val core = Project(
     "core",
     file("core"),
-    settings = defaults,
+    settings = defaults ++ Seq(
+      scalacOptions += "-Xprint:typer"
+    ),
     dependencies = Seq(macros)
   )
 
