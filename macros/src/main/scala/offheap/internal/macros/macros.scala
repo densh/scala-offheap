@@ -239,14 +239,14 @@ class Annotations(val c: whitebox.Context) extends Common {
           def ${f.name}: ${f.tpt} =
             $method.accessor[$name, ${f.tpt}]($addr, ${f.name.toString})
         """
-        val assignerName = TermName(f.name.toString + "_=")
+        val assignerName = TermName(f.name.toString + "_$eq")
         val value = fresh("value")
         val assigner = q"""
           def $assignerName($value: ${f.tpt}): Unit =
             $method.assigner[$name, ${f.tpt}]($addr, ${f.name.toString}, $value)
         """
         if (!f.isMutable) accessor :: Nil
-        else assigner :: accessor :: Nil
+        else accessor :: assigner :: Nil
       }
       val argNames = fields.collect { case f if f.isCtorField => f.name }
       val r = fresh("r")
@@ -338,14 +338,29 @@ class Method(val c: blackbox.Context) extends Common {
         val r = read(f.tpe, q"$addr + ${f.offset}")
         q"""
           if ($addr == 0) $throwNullRef
-          $r
+          else $r
         """
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
   }
 
-  def assigner[C, T](addr: Tree,  name: Tree, value: Tree) = q"???"
+  def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
+    val C = wt[C]
+    val ClassOf(fields) = C
+    ensureAllocatable(wt[C])
+    val q"${nameStr: String}" = name
+    fields.collectFirst {
+      case f if f.name.toString == nameStr =>
+        val r = write(f.tpe, q"$addr + ${f.offset}", value)
+        q"""
+          if ($addr == 0) $throwNullRef
+          else $r
+        """
+    }.getOrElse {
+      abort(s"$C ($fields) doesn't have field `$nameStr`")
+    }
+  }
 
   def allocator[C: WeakTypeTag](r: Tree, args: Tree*): Tree = {
     val C = wt[C]
