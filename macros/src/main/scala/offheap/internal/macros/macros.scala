@@ -222,13 +222,7 @@ class Annotations(val c: whitebox.Context) extends Common {
             abort("offheap classes can only inherit from offheap traits")
           ref
       }
-      val methods: List[Tree] = rawStats.collect {
-        case q"$_ def $methodName[..$targs](...$argss): $tpt = $body" =>
-          q"""
-            def $methodName[..$targs](...$argss): $tpt =
-              $internal.Method.method($body)
-          """
-      }
+      val methods = rawStats.collect { case t: DefDef => t }
       val types = rawStats.collect { case t: TypeDef => t }
       // Generate additional members
       val tagField = OField(tagName, tq"$IntClass", EmptyTree, false, false)
@@ -377,8 +371,6 @@ class Method(val c: blackbox.Context) extends Common {
       new $C($addr)
     """
   }
-
-  def method[T](body: Tree): Tree = body
 
   def copy[C](r: Tree, args: Tree*): Tree = q"???"
 

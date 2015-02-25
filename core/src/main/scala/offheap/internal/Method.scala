@@ -13,9 +13,6 @@ object Method {
   def allocator[C](r: offheap.Region, args: Any*): C =
     macro macros.Method.allocator[C]
 
-  def method[T](body: T): T =
-    macro macros.Method.method[T]
-
   def copy[C](r: Region, args: Any*): C =
     macro macros.Method.copy[C]
 

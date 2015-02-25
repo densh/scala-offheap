@@ -1,3 +1,5 @@
+package test
+
 import org.scalatest.FunSuite
 import offheap._
 
@@ -6,7 +8,7 @@ import offheap._
     math.sqrt(math.pow(other.x - x, 2) + math.pow(other.y - y, 2))
 }
 
-class OffheapClassSuite extends FunSuite {
+class PointSuite extends FunSuite {
   test("accessors") {
     Region { implicit r =>
       val p = Point(10, 20)

@@ -21,7 +21,7 @@ object RegionsBuild extends Build {
     "core",
     file("core"),
     settings = defaults ++ Seq(
-      scalacOptions += "-Xprint:typer"
+      scalacOptions += "-Xprint:posterasure"
     ),
     dependencies = Seq(macros)
   )
@@ -58,7 +58,7 @@ object RegionsBuild extends Build {
     "tests",
     file("tests"),
     settings = defaults ++ Seq(
-      //scalacOptions += "-Xprint:typer",
+      //scalacOptions += "-Ymacro-debug-lite",
       libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false,
