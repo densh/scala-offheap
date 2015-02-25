@@ -4,7 +4,7 @@ import org.scalatest.FunSuite
 import offheap._
 
 @offheap class C1(var x: Int)
-@offheap class C2 { var x = 2 }
+//@offheap class C2 { var x = 2 }
 
 class MutableSuite extends FunSuite {
   implicit val r = Region.open
@@ -17,10 +17,10 @@ class MutableSuite extends FunSuite {
     assert(c1.x == 20)
   }
 
-  test("mutable body val") {
+  /*test("mutable body val") {
     val c2 = new C2
     assert(c2.x == 2)
     c2.x = 3
     assert(c2.x == 3)
-  }
+  }*/
 }

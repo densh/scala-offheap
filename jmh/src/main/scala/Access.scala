@@ -15,7 +15,7 @@ class Access {
 
   @Setup(Level.Trial)
   def setup(): Unit = {
-    r = internal.Region.open()
+    r = Region.open
     op1 = OffheapPoint1(10)(r)
     op2 = OffheapPoint2(10, 20)(r)
     op4 = OffheapPoint4(10, 20, 30, 40)(r)
@@ -25,8 +25,7 @@ class Access {
   }
 
   @TearDown(Level.Trial)
-  def tearDown(): Unit =
-    internal.Region.close(r)
+  def tearDown(): Unit = r.close
 
   @Benchmark
   def offheapPoint1Field1()= op1._1

@@ -21,7 +21,7 @@ object RegionsBuild extends Build {
     "core",
     file("core"),
     settings = defaults ++ Seq(
-      scalacOptions += "-Xprint:posterasure"
+      //scalacOptions += "-Xprint:posterasure"
     ),
     dependencies = Seq(macros)
   )
@@ -32,8 +32,8 @@ object RegionsBuild extends Build {
     settings = defaults ++ Seq(
       libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" % _),
       libraryDependencies ++= (
-        if (scalaVersion.value.startsWith("2.10")) List("org.scalamacros" %% "quasiquotes" % paradiseVersion)
-        else Nil
+        if (!scalaVersion.value.startsWith("2.10")) Nil
+        else List("org.scalamacros" %% "quasiquotes" % paradiseVersion)
       )
     )
   )

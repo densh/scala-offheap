@@ -17,18 +17,6 @@ class OffheapBinaryTree {
   @Param(Array("16", "18", "20"))
   var n: Int = _
 
-  @Param(Array("linked", "caslinked", "stack"))
-  var allocator: String = _
-
-  @Setup
-  def setup(): Unit = {
-    Offheap.region = allocator match {
-      case "linked"    => () => new internal.LinkedRegion
-      case "caslinked" => () => new internal.CASLinkedRegion
-      case "stack"     => () => new internal.AddrStackRegion
-    }
-  }
-
   @Benchmark
   def run = Offheap.run(n)
 }
@@ -67,7 +55,7 @@ object GCHeap {
 object Offheap {
   var region: () => Region = _
   def run(n: Int) = {
-    val outer = region()
+    val outer = Region.open
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = tree(0,maxDepth)(outer)
@@ -76,7 +64,7 @@ object Offheap {
       val iterations = 1 << (maxDepth - depth + minDepth)
       var i,sum = 0
       def rsum(i: Int, depth: Int): Int = {
-        val r = region()
+        val r = Region.open
         val res = isum(tree(i, depth)(r))
         r.close()
         res

@@ -1,13 +1,13 @@
 package offheap
 package internal
 
-import Unsafer.unsafe
+import Memory.memory
 
 class LinkedPagePool {
   private var chunk: LinkedChunk = null
   private var page: LinkedPage = null
   private def allocateChunk(): Unit = {
-    val start = unsafe.allocateMemory(CHUNK_SIZE)
+    val start = memory.allocateMemory(CHUNK_SIZE)
     chunk = new LinkedChunk(start, chunk)
     var i = 0
     while (i < CHUNK_SIZE / PAGE_SIZE) {
