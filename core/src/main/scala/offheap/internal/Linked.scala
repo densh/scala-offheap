@@ -12,7 +12,9 @@ class LinkedPagePool {
     println(s"pool: allocated memory at $start")
     chunk = new LinkedChunk(start, chunk)
     var i = 0
-    while (i < CHUNK_SIZE / PAGE_SIZE) {
+    val pages = CHUNK_SIZE / PAGE_SIZE
+    assert(pages * PAGE_SIZE == CHUNK_SIZE)
+    while (i < pages) {
       page = new LinkedPage(start + i * PAGE_SIZE, chunk, page)
       println(s"pool: created page $i starting at ${page.start}")
       i += 1
@@ -37,9 +39,7 @@ object LinkedPagePool extends LinkedPagePool
 
 final class LinkedChunk(val start: Long, var next: LinkedChunk)
 
-final class LinkedPage(val start: Long, val chunk: LinkedChunk, var next: LinkedPage) {
-  assert(start + PAGE_SIZE - 1 <= chunk.start + CHUNK_SIZE - 1)
-}
+final class LinkedPage(val start: Long, val chunk: LinkedChunk, var next: LinkedPage)
 
 final class LinkedRegion extends offheap.Region {
   private var page = LinkedPagePool.claim
@@ -54,12 +54,9 @@ final class LinkedRegion extends offheap.Region {
     if (!isOpen) throw InaccessibleRegionException
     if (size > PAGE_SIZE) throw new IllegalArgumentException
     val currentOffset = this.offset
-    if (currentOffset + size <= PAGE_SIZE) {
+    val res = if (currentOffset + size <= PAGE_SIZE) {
       this.offset = currentOffset + size
-      val res = this.page.start + currentOffset
-      assert(res + size - 1 < this.page.chunk.start + CHUNK_SIZE - 1)
-      res
-
+      this.page.start + currentOffset
     } else {
       val newpage = LinkedPagePool.claim
       newpage.next = page
@@ -67,5 +64,7 @@ final class LinkedRegion extends offheap.Region {
       this.page = newpage
       newpage.start
     }
+    assert(res + size - 1 <= this.page.chunk.start + CHUNK_SIZE - 1)
+    res
   }
 }
