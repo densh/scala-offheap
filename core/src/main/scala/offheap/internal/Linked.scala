@@ -2,7 +2,7 @@ package offheap
 package internal
 
 import Unsafer.unsafe
-import internal.{UnsafeMemory => memory}
+import internal.{MultiByteBufferMemory => memory}
 
 object LinkedPagePool {
   private var chunk: LinkedChunk = null

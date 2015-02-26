@@ -17,7 +17,7 @@ trait Common {
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
-  val unsafe   = q"$internal.UnsafeMemory"
+  val unsafe   = q"$internal.MultiByteBufferMemory"
   val method   = q"$internal.Method"
 
   val tagName = TermName("$tag$")
