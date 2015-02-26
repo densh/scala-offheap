@@ -13,7 +13,7 @@ class LinkedPagePool {
     chunk = new LinkedChunk(start, chunk)
     var i = 0
     while (i < CHUNK_SIZE / PAGE_SIZE) {
-      page = new LinkedPage(start + i * PAGE_SIZE, page)
+      page = new LinkedPage(start + i * PAGE_SIZE, chunk, page)
       println(s"pool: created page $i starting at ${page.start}")
       i += 1
     }
@@ -37,11 +37,13 @@ object LinkedPagePool extends LinkedPagePool
 
 final class LinkedChunk(val start: Long, var next: LinkedChunk)
 
-final class LinkedPage(val start: Long, var next: LinkedPage)
+final class LinkedPage(val start: Long, val chunk: LinkedChunk, var next: LinkedPage) {
+  assert(start + PAGE_SIZE - 1 <= chunk.start + CHUNK_SIZE - 1)
+}
 
 final class LinkedRegion extends offheap.Region {
   private var page = LinkedPagePool.claim
-  private var offset = 0
+  private var offset = 0L
   println(s"region: got page starting at ${page.start}")
   def isOpen: Boolean = page != null
   def close(): Unit = this.synchronized {
@@ -54,7 +56,10 @@ final class LinkedRegion extends offheap.Region {
     val currentOffset = this.offset
     if (currentOffset + size <= PAGE_SIZE) {
       this.offset = currentOffset + size
-      this.page.start + currentOffset
+      val res = this.page.start + currentOffset
+      assert(res + size - 1 < this.page.chunk.start + CHUNK_SIZE - 1)
+      res
+
     } else {
       val newpage = LinkedPagePool.claim
       newpage.next = page
