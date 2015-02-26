@@ -8,7 +8,7 @@ object LinkedPagePool {
   private var chunk: LinkedChunk = null
   private var page: LinkedPage = null
   private def allocateChunk(): Unit = {
-    val start = memory.allocateMemory(CHUNK_SIZE)
+    val start = memory.allocate(CHUNK_SIZE)
     chunk = new LinkedChunk(start, chunk)
     var i = 0
     while (i < CHUNK_SIZE / PAGE_SIZE) {
