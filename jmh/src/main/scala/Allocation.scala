@@ -6,11 +6,20 @@ import offheap._
 
 @State(Scope.Thread)
 class OffheapAllocation {
+
+  @Param(Array("unsafe"))
+  var mem: String = _
+
   var r: Region = _
 
   @Setup(Level.Iteration)
-  def setup(): Unit =
+  def setup(): Unit = {
     r = Region.open()
+    mem match {
+      case "unsafe"     => internal.Memory.memory = internal.UnsafeMemory
+      case "bytebuffer" => internal.Memory.memory = internal.ByteBufferMemory
+    }
+  }
 
   @TearDown(Level.Iteration)
   def tearDown(): Unit =

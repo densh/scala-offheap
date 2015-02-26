@@ -19,5 +19,5 @@ trait Memory {
   def putDouble(addr: Addr, value: Double): Unit
 }
 object Memory {
-  val memory = ByteBufferMemory
+  var memory: Memory = ByteBufferMemory
 }

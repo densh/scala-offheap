@@ -7,11 +7,14 @@ class LinkedPagePool {
   private var chunk: LinkedChunk = null
   private var page: LinkedPage = null
   private def allocateChunk(): Unit = {
+    println(s"pool: trying to allocate ${CHUNK_SIZE} bytes of memory")
     val start = memory.allocateMemory(CHUNK_SIZE)
+    println(s"pool: allocated memory at $start")
     chunk = new LinkedChunk(start, chunk)
     var i = 0
     while (i < CHUNK_SIZE / PAGE_SIZE) {
-      page = new LinkedPage(start + i * PAGE_SIZE, 0, page)
+      page = new LinkedPage(start + i * PAGE_SIZE, page)
+      println(s"pool: created page $i starting at ${page.start}")
       i += 1
     }
   }
@@ -20,6 +23,7 @@ class LinkedPagePool {
     val res = page
     page = res.next
     res.next = null
+    println(s"pool: giving away page starting at ${res.start}")
     res
   }
   def reclaim(head: LinkedPage): Unit = this.synchronized {
@@ -30,26 +34,15 @@ class LinkedPagePool {
   }
 }
 object LinkedPagePool extends LinkedPagePool
-/*{
-  private val pools = new Array[LinkedPagePool](PAGE_POOLS)
-  def apply(obj: Object): LinkedPagePool = LinkedPagePool.synchronized {
-    val idx = obj.hashCode % PAGE_POOLS
-    val candidate = pools(idx)
-    if (candidate != null) candidate
-    else {
-      val pool = new LinkedPagePool
-      pools(idx) = pool
-      pool
-    }
-  }
-}*/
 
 final class LinkedChunk(val start: Long, var next: LinkedChunk)
 
-final class LinkedPage(val start: Long, var offset: Long, var next: LinkedPage)
+final class LinkedPage(val start: Long, var next: LinkedPage)
 
 final class LinkedRegion extends offheap.Region {
   private var page = LinkedPagePool.claim
+  private var offset = 0
+  println(s"region: got page starting at ${page.start}")
   def isOpen: Boolean = page != null
   def close(): Unit = this.synchronized {
     LinkedPagePool.reclaim(page)
@@ -58,16 +51,16 @@ final class LinkedRegion extends offheap.Region {
   def allocate(size: Size): Addr = this.synchronized {
     if (!isOpen) throw InaccessibleRegionException
     if (size > PAGE_SIZE) throw new IllegalArgumentException
-    val currentOffset = page.offset
+    val currentOffset = this.offset
     if (currentOffset + size <= PAGE_SIZE) {
-      page.offset = currentOffset + size
-      page.start + currentOffset
+      this.offset = currentOffset + size
+      this.page.start + currentOffset
     } else {
       val newpage = LinkedPagePool.claim
       newpage.next = page
-      newpage.offset = size
-      page = newpage
-      page.start
+      this.offset = size
+      this.page = newpage
+      newpage.start
     }
   }
 }
