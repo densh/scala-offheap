@@ -1,22 +1,18 @@
 package offheap
 package internal
 
-import Memory.memory
+import Unsafer.unsafe
+import internal.{UnsafeMemory => memory}
 
-class LinkedPagePool {
+object LinkedPagePool {
   private var chunk: LinkedChunk = null
   private var page: LinkedPage = null
   private def allocateChunk(): Unit = {
-    println(s"pool: trying to allocate ${CHUNK_SIZE} bytes of memory")
     val start = memory.allocateMemory(CHUNK_SIZE)
-    println(s"pool: allocated memory at $start")
     chunk = new LinkedChunk(start, chunk)
     var i = 0
-    val pages = CHUNK_SIZE / PAGE_SIZE
-    assert(pages * PAGE_SIZE == CHUNK_SIZE)
-    while (i < pages) {
-      page = new LinkedPage(start + i * PAGE_SIZE, chunk, page)
-      println(s"pool: created page $i starting at ${page.start}")
+    while (i < CHUNK_SIZE / PAGE_SIZE) {
+      page = new LinkedPage(start + i * PAGE_SIZE, 0, page)
       i += 1
     }
   }
@@ -25,7 +21,6 @@ class LinkedPagePool {
     val res = page
     page = res.next
     res.next = null
-    println(s"pool: giving away page starting at ${res.start}")
     res
   }
   def reclaim(head: LinkedPage): Unit = this.synchronized {
@@ -35,36 +30,33 @@ class LinkedPagePool {
     page = head
   }
 }
-object LinkedPagePool extends LinkedPagePool
 
 final class LinkedChunk(val start: Long, var next: LinkedChunk)
 
-final class LinkedPage(val start: Long, val chunk: LinkedChunk, var next: LinkedPage)
+final class LinkedPage(val start: Long, var offset: Long, var next: LinkedPage)
 
 final class LinkedRegion extends offheap.Region {
   private var page = LinkedPagePool.claim
-  private var offset = 0L
-  println(s"region: got page starting at ${page.start}")
   def isOpen: Boolean = page != null
   def close(): Unit = this.synchronized {
     LinkedPagePool.reclaim(page)
     page = null
   }
   def allocate(size: Size): Addr = this.synchronized {
-    if (!isOpen) throw InaccessibleRegionException
-    if (size > PAGE_SIZE) throw new IllegalArgumentException
-    val currentOffset = this.offset
-    val res = if (currentOffset + size <= PAGE_SIZE) {
-      this.offset = currentOffset + size
-      this.page.start + currentOffset
-    } else {
-      val newpage = LinkedPagePool.claim
-      newpage.next = page
-      this.offset = size
-      this.page = newpage
-      newpage.start
-    }
-    assert(res + size - 1 <= this.page.chunk.start + CHUNK_SIZE - 1)
-    res
+    assert(isOpen)
+    assert(size <= PAGE_SIZE)
+    val currentOffset = page.offset
+    val resOffset =
+      if (currentOffset + size <= PAGE_SIZE) {
+        page.offset = (currentOffset + size).toShort
+        currentOffset
+      } else {
+        val newpage = LinkedPagePool.claim
+        newpage.next = page
+        newpage.offset = size.toShort
+        page = newpage
+        0
+      }
+    page.start + resOffset
   }
 }

@@ -2,7 +2,7 @@ package offheap
 package internal
 
 trait Memory {
-  def allocateMemory(size: Size): Addr
+  def allocate(size: Size): Addr
   def getChar(addr: Addr): Char
   def getByte(addr: Addr): Byte
   def getShort(addr: Addr): Short
@@ -17,7 +17,4 @@ trait Memory {
   def putLong(addr: Addr, value: Long): Unit
   def putFloat(addr: Addr, value: Float): Unit
   def putDouble(addr: Addr, value: Double): Unit
-}
-object Memory {
-  var memory: Memory = ByteBufferMemory
 }

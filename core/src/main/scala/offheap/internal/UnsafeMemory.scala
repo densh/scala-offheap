@@ -1,23 +1,10 @@
 package offheap
 package internal
 
-import sun.misc.Unsafe
+import Unsafer.unsafe
 
 object UnsafeMemory extends Memory {
-  private val unsafe: Unsafe =
-    try Unsafe.getUnsafe()
-    catch {
-      case _: SecurityException =>
-        try {
-          val theUnsafe = classOf[Unsafe].getDeclaredField("theUnsafe")
-          theUnsafe.setAccessible(true)
-          theUnsafe.get(null).asInstanceOf[Unsafe]
-        } catch {
-          case _: Exception => null
-        }
-    }
-
-  def allocateMemory(size: Size): Addr           = unsafe.allocateMemory(size)
+  def allocate(size: Size): Addr                 = unsafe.allocateMemory(size)
   def getChar(addr: Addr): Char                  = unsafe.getChar(addr)
   def getByte(addr: Addr): Byte                  = unsafe.getByte(addr)
   def getShort(addr: Addr): Short                = unsafe.getShort(addr)

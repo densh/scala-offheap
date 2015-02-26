@@ -19,14 +19,6 @@ object ByteBufferMemory extends Memory {
     res
   }
 
-  def p[T](addr: Addr, res: => T): T =
-    try res
-    catch {
-      case e: Throwable=>
-        println(s"failed to access $addr (${addr >> 32}, ${addr & MASK})")
-        throw e
-    }
-
   def unpack(addr: Addr): (Int, Int)             = ((addr >> 32).toInt, (addr & MASK).toInt)
 
   def getByte(addr: Addr): Byte                  = p(addr, buffers((addr >> 32).toInt).get((addr & MASK).toInt))
