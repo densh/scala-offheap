@@ -29,22 +29,18 @@ object Memory64 {
 
 object MultiByteBufferMemory64 extends Memory64 {
   private final val MASK = 0xFFFFFFFFL
-  private val lock = new Object
   private var idx = 1
   // TODO: automatically resize this array
   private val buffers = new Array[ByteBuffer](1024)
 
-  def allocate(size: Size): Addr = lock.synchronized {
+  def allocate(size: Size): Addr = this.synchronized {
     assert(size > 0)
     assert(size <= Integer.MAX_VALUE)
-    val buffer = ByteBuffer.allocateDirect(size.toInt)
-    buffers(idx) = buffer
+    buffers(idx) = ByteBuffer.allocateDirect(size.toInt)
     val res = idx.toLong << 32
     idx += 1
     res
   }
-
-  def unpack(addr: Addr): (Int, Int)             = ((addr >> 32).toInt, (addr & MASK).toInt)
 
   def getByte(addr: Addr): Byte                  = buffers((addr >> 32).toInt).get((addr & MASK).toInt)
   def getChar(addr: Addr): Char                  = buffers((addr >> 32).toInt).getChar((addr & MASK).toInt)
@@ -65,6 +61,7 @@ object MultiByteBufferMemory64 extends Memory64 {
 object UnsafeMemory64 extends Memory64 {
   assert(unsafe.addressSize() == 8,
     "unsafe memory is only supported 64-bit systems")
+
   def allocate(size: Size): Addr                 = unsafe.allocateMemory(size)
   def getChar(addr: Addr): Char                  = unsafe.getChar(addr)
   def getByte(addr: Addr): Byte                  = unsafe.getByte(addr)

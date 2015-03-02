@@ -4,10 +4,13 @@ package internal
 import Unsafer.unsafe
 
 object Setting {
-  val pageSize: Long  =
-    System.getProperty("offheap.pageSize", unsafe.pageSize().toString).toLong
-  val chunkSize: Long =
-    System.getProperty("offheap.chunkSize", math.max(pageSize, 4194304).toString).toLong
+  val pageSize: Int  =
+    System.getProperty("offheap.pageSize", unsafe.pageSize().toString).toInt
+  val chunkSize: Int =
+    System.getProperty("offheap.chunkSize", math.max(pageSize, 4194304).toString).toInt
+
+  // val maxMemory: Int = ???
+  // val minMemory: Int = ???
 
   assert(chunkSize % pageSize == 0,
     "chunkSize must be divisible by pageSize")
