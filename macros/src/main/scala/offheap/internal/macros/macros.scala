@@ -19,8 +19,11 @@ trait Common {
   val internal = staticPackage("offheap.internal")
   val method   = q"$internal.Method"
 
-  val memory   = q"$internal.MultiByteBufferMemory64"
-  val Addr     = tq"$internal.Memory64.Addr"
+  val memory     = q"$internal.ByteBufferMemory32"
+  val pool       = q"$internal.PagePool32.byteBufferPool"
+  val PageRegion = q"$internal.PageRegion32"
+  val Addr       = tq"$internal.Memory32.Addr"
+  val allocate   = TermName("allocate32")
 
   val tagName = TermName("$tag$")
   val tagSize = 4
@@ -57,7 +60,7 @@ trait Common {
     }
   }
 
-  case class Field(name: String, tpe: Type, offset: Long)
+  case class Field(name: String, tpe: Type, offset: Int)
 
   class LayoutAnnotatedClass(val classSym: Symbol) {
     def is(sym: Symbol): Boolean =
@@ -277,7 +280,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       q"""
         @$internal.annot.offheap(${layout(fields)}) final class $name private(
-          private val $addrName: $LongClass
+          private val $addrName: $Addr
         ) extends $AnyValClass {
           def $$initialize$$ = { ..$init }
           ..$accessors
@@ -304,7 +307,7 @@ class Region(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def open() = q"new $internal.PageRegion64($internal.PagePool64($memory))"
+  def open() = q"new PageRegion($pool)"
 
   def apply[T: WeakTypeTag](f: Tree) = {
     val r = freshVal("r", tpe = RegionClass.toType, value = open())
@@ -370,7 +373,7 @@ class Method(val c: blackbox.Context) extends Common {
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
     q"""
-      val $addr = $r.allocate64($size)
+      val $addr = $r.$allocate($size)
       ..$writes
       new $C($addr)
     """

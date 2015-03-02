@@ -1,19 +1,17 @@
 package offheap
 package internal
 
-import Unsafer.unsafe
+import offheap.internal.Unsafer.unsafe
 
 object Setting {
-  val pageSize: Int  =
-    System.getProperty("offheap.pageSize", unsafe.pageSize().toString).toInt
-  val chunkSize: Int =
-    System.getProperty("offheap.chunkSize", math.max(pageSize, 4194304).toString).toInt
+  val pageSize: Int  = 4096
+    // System.getProperty("offheap.pageSize", unsafe.pageSize().toString).toInt
+  val chunkSize: Int = Integer.MAX_VALUE - 1
+    // System.getProperty("offheap.chunkSize", math.max(pageSize, 4194304).toString).toInt
 
   // val maxMemory: Int = ???
   // val minMemory: Int = ???
 
-  assert(chunkSize % pageSize == 0,
-    "chunkSize must be divisible by pageSize")
   assert(pageSize <= chunkSize,
     "pageSize must not be larger than chunkSize")
   assert(pageSize >= unsafe.pageSize(),

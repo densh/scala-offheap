@@ -13,7 +13,7 @@ class PagePool64(memory: Memory64) {
     chunk = new Chunk64(start, 0, chunk)
   }
   private def newPage(): Unit = {
-    if (chunk.offset == chunk.start + chunkSize) newChunk()
+    if (chunk.offset + pageSize >= chunkSize) newChunk()
     page = new Page64(chunk.start + chunk.offset, 0, page)
     chunk.offset += pageSize
   }
@@ -34,10 +34,6 @@ class PagePool64(memory: Memory64) {
 object PagePool64 {
   lazy val multiByteBufferPool: PagePool64 = new PagePool64(MultiByteBufferMemory64)
   lazy val unsafePool: PagePool64 = new PagePool64(UnsafeMemory64)
-  def apply(memory: Memory64): PagePool64 = memory match {
-    case MultiByteBufferMemory64 => multiByteBufferPool
-    case UnsafeMemory64          => unsafePool
-  }
 }
 
 final class Chunk64(val start: Long, var offset: Long, var next: Chunk64)

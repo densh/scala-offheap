@@ -8,12 +8,13 @@ class PagePool32(memory: Memory32) {
   private var page: Page32 = null
   newChunk()
   private def newChunk(): Unit = {
+    println(s"allocating new chunk for $this")
     val start = memory.allocate(chunkSize)
     if (start == 0) throw OutOfMemoryException
     chunk = new Chunk32(start, 0, chunk)
   }
   private def newPage(): Unit = {
-    if (chunk.offset == chunk.start + chunkSize) newChunk()
+    if (chunk.offset + pageSize >= chunkSize) newChunk()
     page = new Page32(chunk.start + chunk.offset, 0, page)
     chunk.offset += pageSize
   }
@@ -32,7 +33,7 @@ class PagePool32(memory: Memory32) {
   }
 }
 object PagePool32 {
-  def apply(memory: Memory32): PagePool32 = ???
+  lazy val byteBufferPool = new PagePool32(ByteBufferMemory32)
 }
 
 final class Chunk32(val start: Int, var offset: Int, var next: Chunk32)

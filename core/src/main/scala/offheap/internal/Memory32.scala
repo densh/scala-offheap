@@ -30,7 +30,7 @@ object ByteBufferMemory32 extends Memory32 {
   private var buffer: ByteBuffer = _
 
   def allocate(size: Size): Addr = this.synchronized {
-    if (buffer == null) throw OutOfMemoryException
+    if (buffer != null) throw OutOfMemoryException
     else {
       assert(size > 0 && size < Integer.MAX_VALUE)
       buffer = ByteBuffer.allocateDirect(size + 1)
