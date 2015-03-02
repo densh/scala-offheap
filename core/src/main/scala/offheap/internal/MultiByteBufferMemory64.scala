@@ -3,7 +3,7 @@ package internal
 
 import java.nio.ByteBuffer
 
-object MultiByteBufferMemory extends Memory {
+object MultiByteBufferMemory64 extends Memory64 {
   private final val MASK = 0xFFFFFFFFL
   private val lock = new Object
   private var idx = 1
@@ -35,5 +35,4 @@ object MultiByteBufferMemory extends Memory {
   def putLong(addr: Addr, value: Long): Unit     = buffers((addr >> 32).toInt).putLong((addr & MASK).toInt, value)
   def putFloat(addr: Addr, value: Float): Unit   = buffers((addr >> 32).toInt).putFloat((addr & MASK).toInt, value)
   def putDouble(addr: Addr, value: Double): Unit = buffers((addr >> 32).toInt).putDouble((addr & MASK).toInt, value)
-
 }

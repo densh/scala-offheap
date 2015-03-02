@@ -1,7 +1,9 @@
 package offheap
 package internal
 
-trait Memory {
+trait Memory64 {
+  type Addr = Long
+  type Size = Long
   def allocate(size: Size): Addr
   def getChar(addr: Addr): Char
   def getByte(addr: Addr): Byte

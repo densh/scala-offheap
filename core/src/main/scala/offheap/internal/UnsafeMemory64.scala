@@ -3,7 +3,7 @@ package internal
 
 import Unsafer.unsafe
 
-object UnsafeMemory extends Memory {
+object UnsafeMemory64 extends Memory64 {
   def allocate(size: Size): Addr                 = unsafe.allocateMemory(size)
   def getChar(addr: Addr): Char                  = unsafe.getChar(addr)
   def getByte(addr: Addr): Byte                  = unsafe.getByte(addr)
