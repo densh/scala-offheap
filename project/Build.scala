@@ -43,7 +43,7 @@ object RegionsBuild extends Build {
     file("sandbox"),
     settings = defaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
-      //scalacOptions += "-Xprint:typer",
+      scalacOptions += "-Xprint:typer",
       //scalacOptions += "-Xprint-types",
       //scalacOptions += "-uniqid",
       fork in run := true,

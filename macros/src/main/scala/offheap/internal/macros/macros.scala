@@ -11,14 +11,16 @@ trait Common {
   import c.universe.definitions._
   import rootMirror.{staticClass, staticPackage}
 
-  val OffheapClass       = staticClass("offheap.internal.annot.offheap")
   val RegionClass        = staticClass("offheap.Region")
+  val OffheapClass       = staticClass("offheap.internal.annot.offheap")
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
-  val unsafe   = q"$internal.MultiByteBufferMemory"
   val method   = q"$internal.Method"
+
+  val memory   = q"$internal.MultiByteBufferMemory64"
+  val Addr     = tq"$internal.Memory64.Addr"
 
   val tagName = TermName("$tag$")
   val tagSize = 4
@@ -82,27 +84,27 @@ trait Common {
   def read(tpe: Type, address: Tree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
       val method = TermName(s"get$tpe")
-      q"$unsafe.$method($address)"
+      q"$memory.$method($address)"
     case BooleanTpe =>
-      q"$unsafe.getByte($address) != ${Literal(Constant(0.toByte))}"
+      q"$memory.getByte($address) != ${Literal(Constant(0.toByte))}"
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$companion.fromAddr$$unsafe($unsafe.getLong($address))"
+      q"$companion.fromAddress($memory.getLong($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
       val method = TermName(s"put$tpe")
-      q"$unsafe.$method($address, $value)"
+      q"$memory.$method($address, $value)"
     case BooleanTpe =>
       q"""
-        $unsafe.putByte($address,
+        $memory.putByte($address,
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$unsafe.putLong($address, $companion.toAddr$$unsafe($value))"
+      q"$memory.putLong($address, $companion.toAddress($value))"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -289,27 +291,29 @@ class Annotations(val c: whitebox.Context) extends Common {
             $method.allocator[$name]($r, ..$argNames)
           def unapply($scrutinee: $name): $name = $scrutinee
           val empty: $name = null.asInstanceOf[$name]
-          def fromAddr$$unsafe($address: $LongClass): $name =
+          def fromAddress($address: $Addr): $name =
             new $name($address)
-          def toAddr$$unsafe($instance: $name): $LongClass =
+          def toAddress($instance: $name): $Addr =
             $instance.$addrName
         }
       """
   })
 }
 
-class Region(val c: blackbox.Context) extends Common {
+class Region(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
+  def open() = q"new $internal.PageRegion64($internal.PagePool64($memory))"
+
   def apply[T: WeakTypeTag](f: Tree) = {
-    val r = freshVal("r", tpe = RegionClass.toType,
-                     value = q"$offheap.Region.open()")
+    val r = freshVal("r", tpe = RegionClass.toType, value = open())
     val res = fresh("res")
+    val body = app(f, q"${r.symbol}")
     q"""
       $r
       val $res =
-        try ${app(f, q"${r.symbol}")}
+        try $body
         finally ${r.symbol}.close()
       $res
     """
@@ -366,7 +370,7 @@ class Method(val c: blackbox.Context) extends Common {
       write(f.tpe, q"$addr + ${f.offset}", arg)
     }
     q"""
-      val $addr = $r.allocate($size)
+      val $addr = $r.allocate64($size)
       ..$writes
       new $C($addr)
     """
@@ -376,3 +380,4 @@ class Method(val c: blackbox.Context) extends Common {
 
   def toString[C]: Tree = q"???"
 }
+

@@ -4,16 +4,16 @@ package internal
 import scala.language.experimental.{macros => CanMacro}
 
 object Method {
-  def accessor[C, T](addr: Addr, name: String): T =
+  def accessor[C, T](addr: Any, name: String): T =
     macro macros.Method.accessor[C, T]
 
-  def assigner[C, T](addr: Addr, name: String, value: T): Unit =
+  def assigner[C, T](addr: Any, name: String, value: T): Unit =
     macro macros.Method.assigner[C, T]
 
-  def allocator[C](r: offheap.Region, args: Any*): C =
+  def allocator[C](r: Any, args: Any*): C =
     macro macros.Method.allocator[C]
 
-  def copy[C](r: Region, args: Any*): C =
+  def copy[C](r: Any, args: Any*): C =
     macro macros.Method.copy[C]
 
   def toString[C]: String =
