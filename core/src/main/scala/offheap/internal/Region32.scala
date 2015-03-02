@@ -2,9 +2,9 @@ package offheap
 package internal
 
 import offheap.internal.Setting._
-import offheap.internal.Memory64._
+import offheap.internal.Memory32._
 
-final class PageRegion64(pool: PagePool64) extends Region {
+final class PageRegion32(pool: PagePool32) extends Region {
   private var page = pool.claim
   def isOpen: Boolean = page != null
   def close(): Unit = this.synchronized {
@@ -12,7 +12,7 @@ final class PageRegion64(pool: PagePool64) extends Region {
     pool.reclaim(page)
     page = null
   }
-  def allocate64(size: Size): Addr = this.synchronized {
+  def allocate32(size: Size): Addr = this.synchronized {
     assert(isOpen, "can't allocate in closed region")
     assert(size <= pageSize, "can't allocate object larger than the virtual page")
     val currentOffset = page.offset
@@ -29,6 +29,6 @@ final class PageRegion64(pool: PagePool64) extends Region {
       }
     page.start + resOffset
   }
-  def allocate32(size: Memory32.Size): Memory32.Addr =
+  def allocate64(size: Memory64.Size): Memory64.Addr =
     throw new UnsupportedOperationException
 }
