@@ -18,10 +18,10 @@ class PointSuite extends FunSuite {
   }
 
   test("acessors on empty throw null reference exception") {
-    intercept[NullRefException.type] {
+    intercept[NullPointerException] {
       Point.empty.x
     }
-    intercept[NullRefException.type] {
+    intercept[NullPointerException] {
       Point.empty.y
     }
   }
@@ -35,7 +35,7 @@ class PointSuite extends FunSuite {
   }
 
   test("distance to on empty throws null reference exception") {
-    intercept[NullRefException.type] {
+    intercept[NullPointerException] {
       Point.empty.distanceTo(Point.empty)
     }
   }
@@ -87,7 +87,7 @@ class PointSuite extends FunSuite {
   }
 
   test("copy on null") {
-    intercept[NullRefException.type] {
+    intercept[NullPointerException] {
       Region { implicit r =>
         Point.empty.copy(x = 10)
       }
@@ -101,7 +101,7 @@ class PointSuite extends FunSuite {
   }
 
   test("toString on null") {
-    intercept[NullRefException.type] {
+    intercept[NullPointerException] {
       Point.empty.toString
     }
   }

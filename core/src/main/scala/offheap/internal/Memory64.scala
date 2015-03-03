@@ -21,13 +21,6 @@ trait Memory64 {
   def putLong(addr: Addr, value: Long): Unit
   def putFloat(addr: Addr, value: Float): Unit
   def putDouble(addr: Addr, value: Double): Unit
-
-  def getRef(addr: Addr): Ref64 =
-    new Ref(getLong(addr), this)
-  def putRef(addr: Addr, ref: Ref64): Unit = {
-    assert(ref.memory eq this)
-    putLong(addr, ref)
-  }
 }
 object Memory64 {
   type Addr = Long

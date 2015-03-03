@@ -1,9 +1,16 @@
 package offheap
 package internal
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic._
 
-object Tag {
+class AtomicFreshInt {
   private val last = new AtomicInteger(0)
   def next = last.incrementAndGet()
 }
+
+class AtomicFreshLong {
+  private val last = new AtomicLong(0L)
+  def next = last.incrementAndGet()
+}
+
+object Tag extends AtomicFreshInt

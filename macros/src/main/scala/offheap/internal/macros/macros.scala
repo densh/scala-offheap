@@ -23,9 +23,9 @@ trait Common {
   val pool       = q"$internal.PagePool64.unsafePool"
   val PageRegion = tq"$internal.PageRegion64"
   val Addr       = tq"$internal.Ref64"
-  val allocate   = TermName("allocate64")
-  val putAddr    = TermName("putRef")
-  val getAddr    = TermName("getRef")
+  val allocate   = TermName("allocateRef64")
+  val putAddr    = TermName("putRef64")
+  val getAddr    = TermName("getRef64")
 
   val tagName = TermName("$tag$")
   val tagSize = 4
@@ -86,7 +86,7 @@ trait Common {
 
   object ClassOf extends LayoutAnnotatedClass(OffheapClass)
 
-  def read(tpe: Type, address: Tree): Tree = tpe match {
+  def read(tpe: Type, address: Tree, memory: Tree = memory, region: Tree = EmptyTree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
       val method = TermName(s"get$tpe")
       q"$memory.$method($address)"
@@ -94,10 +94,11 @@ trait Common {
       q"$memory.getByte($address) != ${Literal(Constant(0.toByte))}"
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$companion.fromAddress($memory.$getAddr($address))"
+      assert(region.nonEmpty)
+      q"$companion.fromAddress($region.$getAddr($address))"
   }
 
-  def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
+  def write(tpe: Type, address: Tree, value: Tree, memory: Tree = memory, region: Tree = EmptyTree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
       val method = TermName(s"put$tpe")
       q"$memory.$method($address, $value)"
@@ -109,7 +110,8 @@ trait Common {
       """
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$memory.$putAddr($address, $companion.toAddress($value))"
+      assert(region.nonEmpty)
+      q"$region.$putAddr($address, $companion.toAddress($value))"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -117,7 +119,7 @@ trait Common {
     case ShortTpe | CharTpe                => 2
     case IntTpe   | FloatTpe               => 4
     case LongTpe  | DoubleTpe              => 8
-    case tpe if ClassOf.is(tpe.typeSymbol) => 8
+    case tpe if ClassOf.is(tpe.typeSymbol) => 16
   }
 
   // TODO: handle non-function literal cases
@@ -266,8 +268,8 @@ class Annotations(val c: whitebox.Context) extends Common {
             q"val ${f.name}: ${f.tpt} = this.${f.name}"
           }
           q"""
-            def isEmpty  = $addr == 0
-            def nonEmpty = $addr != 0
+            def isEmpty  = $addr == null
+            def nonEmpty = $addr != null
             def get      = this
             ..${_ns}
             def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
@@ -329,7 +331,7 @@ class Method(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  def throwNullRef = q"throw $offheap.NullRefException"
+  def throwNullRef = q"throw new _root_.java.lang.NullPointerException"
 
   def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
     val C = wt[C]
@@ -338,11 +340,8 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val r = read(f.tpe, q"$addr + ${f.offset}")
-        q"""
-          if ($addr == 0) $throwNullRef
-          else $r
-        """
+        val r = read(f.tpe, q"$addr.addr + ${f.offset}", memory = q"$addr.region.memory", region = q"$addr.region")
+        q"if (!$addr.region.isOpen) throw new Exception else $r"
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -355,11 +354,8 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val r = write(f.tpe, q"$addr + ${f.offset}", value)
-        q"""
-          if ($addr == 0) $throwNullRef
-          else $r
-        """
+        val w = write(f.tpe, q"$addr.addr + ${f.offset}", value, memory = q"$addr.region.memory", region = q"$addr.region")
+        q"if (!$addr.region.isOpen) throw new Exception else $w"
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -370,14 +366,20 @@ class Method(val c: blackbox.Context) extends Common {
     val companion = C.typeSymbol.companion
     val ClassOf(fields) = C.typeSymbol
     val size = fields.map(f => sizeof(f.tpe)).sum
+    val ref = fresh("ref")
     val addr = fresh("addr")
+    val memory = fresh("memory")
+    val region = fresh("region")
     val writes = fields.zip(q"$companion.$tagName" +: args).map { case (f, arg) =>
-      write(f.tpe, q"$addr + ${f.offset}", arg)
+      write(f.tpe, q"$addr + ${f.offset}", arg, memory = q"$memory", region = q"$region")
     }
     q"""
-      val $addr = $r.$allocate($size)
+      val $ref = $r.$allocate($size)
+      val $region = $ref.region
+      val $memory = $region.memory
+      val $addr = $ref.addr
       ..$writes
-      new $C($addr)
+      new $C($ref)
     """
   }
 

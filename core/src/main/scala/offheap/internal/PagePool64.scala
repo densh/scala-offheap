@@ -3,7 +3,7 @@ package internal
 
 import offheap.internal.Setting._
 
-class PagePool64(memory: Memory64) {
+class PagePool64(val memory: Memory64) {
   private var chunk: Chunk64 = null
   private var page: Page64 = null
   newChunk()

@@ -3,12 +3,11 @@ package internal
 
 import offheap.internal.Setting._
 
-class PagePool32(memory: Memory32) {
+class PagePool32(val memory: Memory32) {
   private var chunk: Chunk32 = null
   private var page: Page32 = null
   newChunk()
   private def newChunk(): Unit = {
-    println(s"allocating new chunk for $this")
     val start = memory.allocate(chunkSize)
     if (start == 0) throw OutOfMemoryException
     chunk = new Chunk32(start, 0, chunk)
