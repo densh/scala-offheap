@@ -21,6 +21,8 @@ trait Memory64 {
   def putLong(addr: Addr, value: Long): Unit
   def putFloat(addr: Addr, value: Float): Unit
   def putDouble(addr: Addr, value: Double): Unit
+
+  lazy val pool = new PagePool64(this)
 }
 object Memory64 {
   type Addr = Long

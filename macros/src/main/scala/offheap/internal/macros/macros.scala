@@ -5,30 +5,75 @@ package macros
 import scala.collection.mutable
 import scala.reflect.macros.{whitebox, blackbox}
 
-trait Common {
+trait Definitions {
   val c: blackbox.Context
-  import c.universe.{ weakTypeOf => wt, _ }
-  import c.universe.definitions._
-  import rootMirror.{staticClass, staticPackage}
+  import c.universe.rootMirror._
 
+  val MethodModule                  = staticModule("offheap.internal.Method")
+  val ByteBufferMemory32Module      = staticModule("offheap.internal.ByteBufferMemory32")
+  val MultiByteBufferMemory64Module = staticModule("offheap.internal.MultiByteBufferMemory64")
+  val UnsafeMemory64Module          = staticModule("offheap.internal.UnsafeMemory64")
+  val TypeTagModule                 = staticModule("offheap.internal.TypeTag")
+
+  val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
   val RegionClass        = staticClass("offheap.Region")
   val OffheapClass       = staticClass("offheap.internal.annot.offheap")
-  val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
+  val TagClass           = staticClass("offheap.internal.annot.Tag")
+  val LayoutClass        = staticClass("offheap.internal.annot.Layout")
+  val Ref32Class         = staticClass("offheap.internal.Ref32")
+  val Ref64Class         = staticClass("offheap.internal.Ref64")
+  val PageRegion32Class  = staticClass("offheap.internal.PageRegion32")
+  val PageRegion64Class  = staticClass("offheap.internal.PageRegion64")
+}
 
-  val offheap  = staticPackage("offheap")
-  val internal = staticPackage("offheap.internal")
-  val method   = q"$internal.Method"
+trait Configuration extends Definitions { self: Common =>
+  import c.universe._
+  import c.universe.definitions._
 
-  val memory     = q"$internal.UnsafeMemory64"
-  val pool       = q"$internal.PagePool64.unsafePool"
-  val PageRegion = tq"$internal.PageRegion64"
-  val Addr       = tq"$internal.Ref64"
-  val allocate   = TermName("allocateRef64")
-  val putAddr    = TermName("putRef64")
-  val getAddr    = TermName("getRef64")
+  val unchecked  = System.getProperty("offheap.unchecked", "false").toBoolean
+  val memoryMode = System.getProperty("offheap.memory", "unsafe")
 
-  val tagName = TermName("$tag$")
-  val tagSize = 4
+  val bitDepth   = memoryMode match {
+                     case "bytebuffer"      => 32
+                     case "multibytebuffer" => 64
+                     case "unsafe"          => 64
+                   }
+  val Memory     = memoryMode match {
+                     case "bytebuffer"      => ByteBufferMemory32Module
+                     case "multibytebuffer" => MultiByteBufferMemory64Module
+                     case "unsafe"          => UnsafeMemory64Module
+                   }
+  val Pool       = q"$Memory.pool"
+  val PageRegion = bitDepth match {
+                     case 32 => PageRegion32Class
+                     case 64 => PageRegion64Class
+                   }
+
+  val Ref        = (bitDepth, unchecked) match {
+                     case (32, true)  => IntClass
+                     case (64, true)  => LongClass
+                     case (32, false) => Ref32Class
+                     case (64, false) => Ref64Class
+                     case _           => abort("unreachable")
+                   }
+  val putRef     = TermName(s"put${Ref.name}")
+  val getRef     = TermName(s"get${Ref.name}")
+  val allocate   = TermName(if (unchecked) s"allocate$bitDepth" else s"allocate${Ref.name}")
+
+  def refIsNull(ref: Tree) = (unchecked, bitDepth) match {
+    case (true, 32) => q"$ref == 0"
+    case (true, 64) => q"$ref == 0L"
+    case (false, _) => q"$ref == null"
+    case _          => abort("unreachable")
+  }
+
+  val tagName    = TermName("$tag$")
+  val tagSize    = 4
+}
+
+trait Common extends Configuration {
+  import c.universe.{ weakTypeOf => wt, _ }
+  import c.universe.definitions._
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
@@ -70,12 +115,12 @@ trait Common {
     def unapply(tpe: Type): Option[List[Field]] = unapply(tpe.widen.typeSymbol)
     def unapply(sym: Symbol): Option[List[Field]] = sym match {
       case sym: ClassSymbol if this.is(sym) =>
-        val q"new $_($_(..$descriptors))" = sym.annotations.collectFirst {
+        val q"new $_(new $_(..$descriptors))" = sym.annotations.collectFirst {
           case ann if ann.tpe.typeSymbol == classSym => ann
         }.get.tree
         val buf = mutable.ListBuffer[Field]()
         var offset = 0
-        descriptors.foreach { case q"(${name: String}, $_[$tpt]())" =>
+        descriptors.foreach { case q"(${name: String}, new $_[$tpt]())" =>
           buf.append(Field(name, tpt.tpe, offset))
           offset += sizeof(tpt.tpe)
         }
@@ -86,32 +131,33 @@ trait Common {
 
   object ClassOf extends LayoutAnnotatedClass(OffheapClass)
 
-  def read(tpe: Type, address: Tree, memory: Tree = memory, region: Tree = EmptyTree): Tree = tpe match {
+  def read(tpe: Type, addr: Tree, region: Tree = EmptyTree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-      val method = TermName(s"get$tpe")
-      q"$memory.$method($address)"
+      val getT = TermName(s"get$tpe")
+      q"$Memory.$getT($addr)"
     case BooleanTpe =>
-      q"$memory.getByte($address) != ${Literal(Constant(0.toByte))}"
-    case ClassOf(_) =>
+      q"$Memory.getByte($addr) != ${Literal(Constant(0.toByte))}"
+    case ClassOf(_) if !unchecked =>
       val companion = tpe.typeSymbol.companion
-      assert(region.nonEmpty)
-      q"$companion.fromAddress($region.$getAddr($address))"
+      val target    = if (unchecked) q"$Memory" else region
+      q"$companion.fromRef($target.$getRef($addr))"
   }
 
-  def write(tpe: Type, address: Tree, value: Tree, memory: Tree = memory, region: Tree = EmptyTree): Tree = tpe match {
+  def write(tpe: Type, addr: Tree, value: Tree, region: Tree = EmptyTree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-      val method = TermName(s"put$tpe")
-      q"$memory.$method($address, $value)"
+      val putT = TermName(s"put$tpe")
+      q"$Memory.$putT($addr, $value)"
     case BooleanTpe =>
       q"""
-        $memory.putByte($address,
+        $Memory.putByte($addr,
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
+      val target    = if (unchecked) q"$Memory" else region
       assert(region.nonEmpty)
-      q"$region.$putAddr($address, $companion.toAddress($value))"
+      q"$target.$putRef($addr, $companion.toRef($value))"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -184,9 +230,9 @@ class Annotations(val c: whitebox.Context) extends Common {
 
   def layout(fields: List[OField]): Tree = {
     val tuples = fields.map { f =>
-      q"(${f.name.toString}, $internal.annot.Tag[${f.tpt}]())"
+      q"(${f.name.toString}, new $TagClass[${f.tpt}]())"
     }
-    q"$internal.annot.Layout((${tagName.toString}, $internal.annot.Tag[$IntClass]), ..$tuples)"
+    q"new $LayoutClass((${tagName.toString}, new $TagClass[$IntClass]()), ..$tuples)"
   }
 
   case class OField(name: TermName, tpt: Tree, default: Tree,
@@ -235,18 +281,17 @@ class Annotations(val c: whitebox.Context) extends Common {
       val types = rawStats.collect { case t: TypeDef => t }
       // Generate additional members
       val tagField = OField(tagName, tq"$IntClass", EmptyTree, false, false)
-      val addrName = TermName("$addr$")
-      val addr = q"this.$addrName"
+      val ref = TermName("$ref")
       val accessors = (tagField +: fields).flatMap { f =>
         val accessor = q"""
           def ${f.name}: ${f.tpt} =
-            $method.accessor[$name, ${f.tpt}]($addr, ${f.name.toString})
+            $MethodModule.accessor[$name, ${f.tpt}]($ref, ${f.name.toString})
         """
         val assignerName = TermName(f.name.toString + "_$eq")
         val value = fresh("value")
         val assigner = q"""
           def $assignerName($value: ${f.tpt}): Unit =
-            $method.assigner[$name, ${f.tpt}]($addr, ${f.name.toString}, $value)
+            $MethodModule.assigner[$name, ${f.tpt}]($ref, ${f.name.toString}, $value)
         """
         if (!f.isMutable) accessor :: Nil
         else accessor :: assigner :: Nil
@@ -254,7 +299,6 @@ class Annotations(val c: whitebox.Context) extends Common {
       val argNames = fields.collect { case f if f.isCtorField => f.name }
       val r = fresh("r")
       val instance = fresh("instance")
-      val address = fresh("address")
       val scrutinee = fresh("scrutinee")
       val caseClassSupport =
         if (!rawMods.hasFlag(Flag.CASE)) q""
@@ -268,14 +312,14 @@ class Annotations(val c: whitebox.Context) extends Common {
             q"val ${f.name}: ${f.tpt} = this.${f.name}"
           }
           q"""
-            def isEmpty  = $addr == null
-            def nonEmpty = $addr != null
+            def isEmpty  = ${refIsNull(q"$ref")}
+            def nonEmpty = !${refIsNull(q"$ref")}
             def get      = this
             ..${_ns}
             def copy(..$copyArgs)(implicit $r: $RegionClass): $name =
-              $method.copy[$name]($r, ..$argNames)
+              $MethodModule.copy[$name]($r, ..$argNames)
             override def toString(): $StringClass =
-              $method.toString[$name]
+              $MethodModule.toString[$name]
           """
         }
       // Wrap everything into a nice shiny package
@@ -283,8 +327,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         q"val ${f.name}: ${f.tpt} = ${f.default}"
       }
       q"""
-        @$internal.annot.offheap(${layout(fields)}) final class $name private(
-          private val $addrName: $Addr
+        @$OffheapClass(${layout(fields)}) final class $name private(
+          private val $ref: $Ref
         ) extends $AnyValClass {
           def $$initialize$$ = { ..$init }
           ..$accessors
@@ -293,15 +337,15 @@ class Annotations(val c: whitebox.Context) extends Common {
           ..$caseClassSupport
         }
         object ${name.toTermName} {
-          val $tagName = $internal.Tag.next
+          val $tagName = $TypeTagModule.next
           def apply(..$args)(implicit $r: $RegionClass): $name =
-            $method.allocator[$name]($r, ..$argNames)
+            $MethodModule.allocator[$name]($r, ..$argNames)
           def unapply($scrutinee: $name): $name = $scrutinee
           val empty: $name = null.asInstanceOf[$name]
-          def fromAddress($address: $Addr): $name =
-            new $name($address)
-          def toAddress($instance: $name): $Addr =
-            $instance.$addrName
+          def fromRef($ref: $Ref): $name =
+            new $name($ref)
+          def toRef($instance: $name): $Ref =
+            $instance.$ref
         }
       """
   }
@@ -311,7 +355,7 @@ class Region(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def open() = q"new $PageRegion($pool)"
+  def open() = q"new $PageRegion($Pool)"
 
   def apply[T: WeakTypeTag](f: Tree) = {
     val r = freshVal("r", tpe = RegionClass.toType, value = open())
@@ -333,29 +377,29 @@ class Method(val c: blackbox.Context) extends Common {
 
   def throwNullRef = q"throw new _root_.java.lang.NullPointerException"
 
-  def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
+  def accessor[C: WeakTypeTag, T: WeakTypeTag](ref: Tree, name: Tree): Tree = {
     val C = wt[C]
     val ClassOf(fields) = C
     ensureAllocatable(wt[C])
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val r = read(f.tpe, q"$addr.addr + ${f.offset}", memory = q"$addr.region.memory", region = q"$addr.region")
-        q"if (!$addr.region.isOpen) throw new Exception else $r"
+        val r = read(f.tpe, q"$ref.addr + ${f.offset}", region = q"$ref.region")
+        q"if (!$ref.region.isOpen) throw new Exception else $r"
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
   }
 
-  def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
+  def assigner[C: WeakTypeTag, T: WeakTypeTag](ref: Tree, name: Tree, value: Tree) = {
     val C = wt[C]
     val ClassOf(fields) = C
     ensureAllocatable(wt[C])
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val w = write(f.tpe, q"$addr.addr + ${f.offset}", value, memory = q"$addr.region.memory", region = q"$addr.region")
-        q"if (!$addr.region.isOpen) throw new Exception else $w"
+        val w = write(f.tpe, q"$ref.addr + ${f.offset}", value, region = q"$ref.region")
+        q"if (!$ref.region.isOpen) throw new Exception else $w"
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -368,15 +412,13 @@ class Method(val c: blackbox.Context) extends Common {
     val size = fields.map(f => sizeof(f.tpe)).sum
     val ref = fresh("ref")
     val addr = fresh("addr")
-    val memory = fresh("memory")
     val region = fresh("region")
     val writes = fields.zip(q"$companion.$tagName" +: args).map { case (f, arg) =>
-      write(f.tpe, q"$addr + ${f.offset}", arg, memory = q"$memory", region = q"$region")
+      write(f.tpe, q"$addr + ${f.offset}", arg, region = q"$region")
     }
     q"""
       val $ref = $r.$allocate($size)
       val $region = $ref.region
-      val $memory = $region.memory
       val $addr = $ref.addr
       ..$writes
       new $C($ref)

@@ -12,5 +12,3 @@ class AtomicFreshLong {
   private val last = new AtomicLong(0L)
   def next = last.incrementAndGet()
 }
-
-object Tag extends AtomicFreshInt

@@ -20,6 +20,8 @@ trait Memory32 {
   def putLong(addr: Addr, value: Long): Unit
   def putFloat(addr: Addr, value: Float): Unit
   def putDouble(addr: Addr, value: Double): Unit
+
+  lazy val pool = new PagePool32(this)
 }
 object Memory32 {
   type Addr = Int
