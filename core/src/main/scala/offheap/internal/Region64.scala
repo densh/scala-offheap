@@ -12,7 +12,7 @@ final class PageRegion64(pool: PagePool64) extends Region {
     pool.reclaim(page)
     page = null
   }
-  def allocate64(size: Size): Addr = this.synchronized {
+  def allocate64(size: Size): Ref64 = this.synchronized {
     assert(isOpen, "can't allocate in closed region")
     assert(size <= pageSize, "can't allocate object larger than the virtual page")
     val currentOffset = page.offset
@@ -27,8 +27,6 @@ final class PageRegion64(pool: PagePool64) extends Region {
         page = newpage
         0
       }
-    page.start + resOffset
+    Ref64(page.start + resOffset, pool.memory)
   }
-  def allocate32(size: Memory32.Size): Memory32.Addr =
-    throw new UnsupportedOperationException
 }

@@ -15,7 +15,7 @@ class RegionClose {
   def setup(): Unit = {
     r = Region.open
     for (_ <- 1 to allocatedPages)
-      r.allocate(internal.PAGE_SIZE)
+      r.allocate64(internal.Setting.pageSize)
   }
 
   @Benchmark
@@ -48,7 +48,7 @@ class RegionAllocateCurrent {
   def tearDown(): Unit = r.close()
 
   @Benchmark
-  def allocate = r.allocate(16)
+  def allocate = r.allocate64(16L)
 }
 
 @State(Scope.Thread)
@@ -58,14 +58,14 @@ class RegionAllocateNext {
   @Setup(Level.Invocation)
   def setup(): Unit = {
     r = Region.open
-    r.allocate(internal.PAGE_SIZE)
+    r.allocate64(internal.Setting.pageSize)
   }
 
   @TearDown(Level.Invocation)
   def tearDown(): Unit = r.close()
 
   @Benchmark
-  def allocate = r.allocate(16)
+  def allocate = r.allocate64(16L)
 }
 
 

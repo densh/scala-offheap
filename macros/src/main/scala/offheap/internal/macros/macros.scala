@@ -19,11 +19,13 @@ trait Common {
   val internal = staticPackage("offheap.internal")
   val method   = q"$internal.Method"
 
-  val memory     = q"$internal.ByteBufferMemory32"
-  val pool       = q"$internal.PagePool32.byteBufferPool"
-  val PageRegion = q"$internal.PageRegion32"
-  val Addr       = tq"$internal.Memory32.Addr"
-  val allocate   = TermName("allocate32")
+  val memory     = q"$internal.UnsafeMemory64"
+  val pool       = q"$internal.PagePool64.unsafePool"
+  val PageRegion = tq"$internal.PageRegion64"
+  val Addr       = tq"$internal.Ref64"
+  val allocate   = TermName("allocate64")
+  val putAddr    = TermName("putRef")
+  val getAddr    = TermName("getRef")
 
   val tagName = TermName("$tag$")
   val tagSize = 4
@@ -92,7 +94,7 @@ trait Common {
       q"$memory.getByte($address) != ${Literal(Constant(0.toByte))}"
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$companion.fromAddress($memory.getLong($address))"
+      q"$companion.fromAddress($memory.$getAddr($address))"
   }
 
   def write(tpe: Type, address: Tree, value: Tree): Tree = tpe match {
@@ -107,7 +109,7 @@ trait Common {
       """
     case ClassOf(_) =>
       val companion = tpe.typeSymbol.companion
-      q"$memory.putLong($address, $companion.toAddress($value))"
+      q"$memory.$putAddr($address, $companion.toAddress($value))"
   }
 
   def sizeof(tpe: Type): Int = tpe match {
@@ -193,7 +195,7 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: handle existing companions
   // TODO: modifiers propagation
   // TODO: hygienic reference to class type from companion?
-  def offheapAnnotation(annottees: Tree*): Tree = debug("offheap")(annottees match {
+  def offheapAnnotation(annottees: Tree*): Tree = annottees match {
     case q"""
         $rawMods class $name[..$rawTargs](..$rawArgs) extends ..$rawParents { ..$rawStats }
       """ :: Nil =>
@@ -300,14 +302,14 @@ class Annotations(val c: whitebox.Context) extends Common {
             $instance.$addrName
         }
       """
-  })
+  }
 }
 
 class Region(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def open() = q"new PageRegion($pool)"
+  def open() = q"new $PageRegion($pool)"
 
   def apply[T: WeakTypeTag](f: Tree) = {
     val r = freshVal("r", tpe = RegionClass.toType, value = open())
