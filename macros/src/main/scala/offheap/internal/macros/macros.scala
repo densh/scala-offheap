@@ -105,13 +105,6 @@ trait Common extends Definitions {
       q"$memory.putRef($addr, $companion.toRef($value))"
   }
 
-  /*def sizeof(tpe: Type): Int = tpe match {
-    case ByteTpe  | BooleanTpe             => 1
-    case ShortTpe | CharTpe                => 2
-    case IntTpe   | FloatTpe               => 4
-    case LongTpe  | DoubleTpe              => 8
-    case tpe if ClassOf.is(tpe.typeSymbol) => 16
-  }*/
 
   // TODO: handle non-function literal cases
   def appSubs(f: Tree, argValue: Tree, subs: Tree => Tree) = f match {
@@ -377,6 +370,17 @@ class Method(val c: blackbox.Context) extends Common {
 class Memory(val c: blackbox.Context) extends Common {
   import c.universe._
 
-  def sizeOf32[T: WeakTypeTag] = q"???"
-  def sizeOf64[T: WeakTypeTag] = q"???"
+  def sizeOfSplit(tpe: Type): (Int, Int) = tpe match {
+    case ByteTpe  | BooleanTpe             => (1, 0)
+    case ShortTpe | CharTpe                => (2, 0)
+    case IntTpe   | FloatTpe               => (4, 0)
+    case LongTpe  | DoubleTpe              => (8, 0)
+    case tpe if ClassOf.is(tpe.typeSymbol) => (0, 1)
+  }
+
+  def sizeOf[T: WeakTypeTag] = {
+    val (bytes, refs) = sizeOfSplit(weakTypeOf[T])
+    if (refs = 0) q"$bytes"
+    else q"$bytes + $refs * ${c.prefix}.sizeOfRef"
+  }
 }

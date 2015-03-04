@@ -8,7 +8,7 @@ final case class Ref64(addr: Long, memory: Memory64)
 trait Memory64 extends Memory {
   type Addr = Long
   def sizeOfRef: Int                         = 8
-  def sizeOf[T]: Int                         = macro internal.macros.Memory.sizeOf64[T]
+  def sizeOf[T]: Int                         = macro internal.macros.Memory.sizeOf[T]
   def offset(addr: Addr, size: Int): Addr    = addr + size
   def getRef(addr: Addr): Ref64              = Ref64(getLong(addr), this)
   def putRef(addr: Addr, value: Ref64): Unit = putLong(addr, value.addr)
