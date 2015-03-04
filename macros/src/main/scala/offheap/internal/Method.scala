@@ -10,10 +10,10 @@ object Method {
   def assigner[C, T](ref: Any, name: String, value: T): Unit =
     macro macros.Method.assigner[C, T]
 
-  def allocator[C](r: Any, args: Any*): C =
+  def allocator[C](memory: Any, args: Any*): C =
     macro macros.Method.allocator[C]
 
-  def copy[C](r: Any, args: Any*): C =
+  def copy[C](memory: Any, args: Any*): C =
     macro macros.Method.copy[C]
 
   def toString[C]: String =

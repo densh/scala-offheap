@@ -7,7 +7,7 @@ import offheap._
 //@offheap class C2 { var x = 2 }
 
 class MutableSuite extends FunSuite {
-  implicit val r = Region.open
+  implicit val r = Region.open(internal.Pool64(internal.UnsafeMemory64))
   protected override def finalize = r.close
 
   test("mutable constructor argument") {

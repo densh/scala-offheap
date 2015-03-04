@@ -9,9 +9,11 @@ import offheap._
 }
 
 class PointSuite extends FunSuite {
+  implicit val pool = internal.Pool64(internal.UnsafeMemory64)
+
   test("accessors") {
-    Region { implicit r =>
-      val p = Point(10, 20)
+    Region { r =>
+      val p = Point(10, 20)(r)
       assert(p.x == 10)
       assert(p.y == 20)
     }
@@ -27,9 +29,9 @@ class PointSuite extends FunSuite {
   }
 
   test("distance to") {
-    Region { implicit r =>
-      val p1 = Point(0, 3)
-      val p2 = Point(4, 0)
+    Region { r =>
+      val p1 = Point(0, 3)(r)
+      val p2 = Point(4, 0)(r)
       assert(p1.distanceTo(p2) == 5.0d)
     }
   }
@@ -41,8 +43,8 @@ class PointSuite extends FunSuite {
   }
 
   test("allocated value is not empty") {
-    Region { implicit r =>
-      val p = Point(0, 0)
+    Region { r =>
+      val p = Point(0, 0)(r)
       assert(p.nonEmpty)
       assert(!p.isEmpty)
     }
@@ -54,8 +56,8 @@ class PointSuite extends FunSuite {
   }
 
   test("unapply") {
-    Region { implicit r =>
-      val Point(x, y) = Point(10, 20)
+    Region { r =>
+      val Point(x, y) = Point(10, 20)(r)
       assert(x == 10)
       assert(y == 20)
     }
@@ -72,15 +74,15 @@ class PointSuite extends FunSuite {
   }
 
   test("copy") {
-    Region { implicit r =>
-      val p = Point(10, 20)
-      val p2 = p.copy(x = 1)
+    Region { r =>
+      val p = Point(10, 20)(r)
+      val p2 = p.copy(x = 1)(r)
       assert(p2.x == 1)
       assert(p2.y == 20)
-      val p3 = p.copy(y = 2)
+      val p3 = p.copy(y = 2)(r)
       assert(p3.x == 10)
       assert(p3.y == 2)
-      val p4 = p.copy(x = 0, y = 0)
+      val p4 = p.copy(x = 0, y = 0)(r)
       assert(p4.x == 0)
       assert(p4.x == 0)
     }
@@ -88,15 +90,15 @@ class PointSuite extends FunSuite {
 
   test("copy on null") {
     intercept[NullPointerException] {
-      Region { implicit r =>
-        Point.empty.copy(x = 10)
+      Region { r =>
+        Point.empty.copy(x = 10)(r)
       }
     }
   }
 
   test("toString") {
-    Region { implicit r =>
-      assert(Point(10, 20).toString == "Point(10.0, 20.0)")
+    Region { r =>
+      assert(Point(10, 20)(r).toString == "Point(10.0, 20.0)")
     }
   }
 
@@ -107,9 +109,9 @@ class PointSuite extends FunSuite {
   }
 
   test("equality") {
-    Region { implicit r =>
-      val p1 = Point(10, 10)
-      val p2 = Point(10, 10)
+    Region { r =>
+      val p1 = Point(10, 10)(r)
+      val p2 = Point(10, 10)(r)
       assert(p1 != p2)
       assert(p1 == p1 && p2 == p2)
       assert(p1 != Point.empty)

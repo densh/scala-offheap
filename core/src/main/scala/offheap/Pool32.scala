@@ -1,6 +1,5 @@
 package offheap
-package internal
-
+/*
 import offheap.internal.Setting._
 
 class PagePool32(val memory: Memory32) {
@@ -39,4 +38,4 @@ final class Chunk32(val start: Int, var offset: Int, var next: Chunk32)
 
 final class Page32(val start: Int, var offset: Int, var next: Page32)
 
-
+*/

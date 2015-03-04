@@ -1,9 +1,9 @@
 package offheap
 package internal
 
+/*
 import offheap.internal.Setting._
 import offheap.internal.Memory32._
-
 trait Region32 extends Region {
   def memory: Memory32
 
@@ -73,3 +73,4 @@ final class PageRegion32(pool: PagePool32) extends Region32 {
 object PageRegion32 {
   private val freshId = new AtomicFreshInt
 }
+*/

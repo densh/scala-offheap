@@ -1,15 +1,15 @@
 package offheap
-package internal
 
-import offheap.internal.Setting._
-
-class PagePool64(val memory: Memory64) {
+final class Pool64(
+  val memory: Memory64,
+  val pageSize: Int = 4096,
+  val chunkSize: Int = 1024 * 4096
+) extends Pool {
   private var chunk: Chunk64 = null
   private var page: Page64 = null
   newChunk()
   private def newChunk(): Unit = {
     val start = memory.allocate(chunkSize)
-    if (start == 0) throw OutOfMemoryException
     chunk = new Chunk64(start, 0, chunk)
   }
   private def newPage(): Unit = {
@@ -31,9 +31,8 @@ class PagePool64(val memory: Memory64) {
     page = head
   }
 }
-object PagePool64 {
-  lazy val multiByteBufferPool: PagePool64 = new PagePool64(MultiByteBufferMemory64)
-  lazy val unsafePool: PagePool64 = new PagePool64(UnsafeMemory64)
+object Pool64 {
+  def apply(memory: Memory64): Pool64 = new Pool64(memory)
 }
 
 final class Chunk64(val start: Long, var offset: Long, var next: Chunk64)
