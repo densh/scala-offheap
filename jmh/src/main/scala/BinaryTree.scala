@@ -66,7 +66,7 @@ object Offheap {
       def rsum(i: Int, depth: Int): Int = {
         val r = Region.open
         val res = isum(tree(i, depth)(r))
-        r.close()
+        r.close
         res
       }
       while (i < iterations) {
@@ -75,7 +75,7 @@ object Offheap {
       }
       depth += 2
     }
-    outer.close()
+    outer.close
   }
   @offheap case class Tree(i: Int, left: Tree, right: Tree)
   def isum(tree: Tree): Int = {
@@ -84,10 +84,7 @@ object Offheap {
     else tree.i + isum(left) - isum(tree.right)
   }
   def tree(i: Int, depth: Int)(implicit region: Region): Tree = {
-    if (depth > 0) {
-      val left = tree(i*2-1, depth-1)
-      val right = tree(i*2, depth-1)
-      Tree(i, left, right)
-    } else Tree(i, Tree.empty, Tree.empty)
+    if (depth > 0) Tree(i, tree(i*2-1, depth-1), tree(i*2, depth-1))
+    else Tree(i, Tree.empty, Tree.empty)
   }
 }

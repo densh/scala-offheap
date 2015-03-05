@@ -6,10 +6,11 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class OffheapAllocation {
+  implicit val poo: Pool = Pool(UnsafeMemory)
   var r: Region = _
 
   @Setup(Level.Iteration)
-  def setup(): Unit = r = Region.open()
+  def setup(): Unit = r = Region.open
 
   @TearDown(Level.Iteration)
   def tearDown(): Unit =

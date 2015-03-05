@@ -3,20 +3,24 @@ package x64
 
 final class Region(pool: Pool) extends Memory {
   private var page = pool.claim
-  val id = Region.fresh.next
+  val id = Region.atomicFresh.next
   val memory = pool.memory
 
   def isOpen = page != null
 
+  private def checkOpen: Unit =
+    if (page == null) throw new InaccessibleRegionException
+
   def close(): Unit = this.synchronized {
-    assert(isOpen, "can't close region which is already closed")
+    checkOpen
     pool.reclaim(page)
     page = null
   }
 
   def allocate(size: Size): Addr = this.synchronized {
-    assert(isOpen, "can't allocate in closed region")
-    assert(size <= pool.pageSize, "can't allocate object larger than the virtual page")
+    checkOpen
+    if (size > pool.pageSize)
+      throw new IllegalArgumentException("can't allocate object larger than the virtual page")
     val currentOffset = page.offset
     val resOffset =
       if (currentOffset + size <= pool.pageSize) {
@@ -32,47 +36,48 @@ final class Region(pool: Pool) extends Memory {
     page.start + resOffset
   }
 
-  override def sizeOfRef: Size = 16
+  override def sizeOfRef: Size = 8 + 4
 
   override def getRef(addr: Addr): Ref = {
-    assert(isOpen)
+    checkOpen
     val refAddr = memory.getLong(addr)
     if (refAddr == 0L) null
     else {
-      val refRegionId = memory.getLong(addr + 8L)
-      assert(refRegionId == this.id, s"refRegionId = $refRegionId, this.id = ${this.id}")
+      val refRegionId = memory.getInt(addr + 8L)
+      if (refRegionId != this.id)
+        throw new InaccessibleRegionException
       Ref(refAddr, this)
     }
   }
 
   override def putRef(addr: Addr, value: Ref): Unit = {
-    assert(isOpen)
-    if (value != null) {
-      memory.putLong(addr, value.addr)
-      memory.putLong(addr + 8L, this.id)
-    } else {
+    checkOpen
+    if (value == null)
       memory.putLong(addr, 0L)
+    else {
+      memory.putLong(addr, value.addr)
+      memory.putInt(addr + 8L, this.id)
     }
   }
 
-  def getChar(addr: Addr): Char                  = { assert(isOpen); memory.getChar(addr)          }
-  def getByte(addr: Addr): Byte                  = { assert(isOpen); memory.getByte(addr)          }
-  def getShort(addr: Addr): Short                = { assert(isOpen); memory.getShort(addr)         }
-  def getInt(addr: Addr): Int                    = { assert(isOpen); memory.getInt(addr)           }
-  def getLong(addr: Addr): Long                  = { assert(isOpen); memory.getLong(addr)          }
-  def getFloat(addr: Addr): Float                = { assert(isOpen); memory.getFloat(addr)         }
-  def getDouble(addr: Addr): Double              = { assert(isOpen); memory.getDouble(addr)        }
+  def getChar(addr: Addr): Char                  = { checkOpen; memory.getChar(addr)          }
+  def getByte(addr: Addr): Byte                  = { checkOpen; memory.getByte(addr)          }
+  def getShort(addr: Addr): Short                = { checkOpen; memory.getShort(addr)         }
+  def getInt(addr: Addr): Int                    = { checkOpen; memory.getInt(addr)           }
+  def getLong(addr: Addr): Long                  = { checkOpen; memory.getLong(addr)          }
+  def getFloat(addr: Addr): Float                = { checkOpen; memory.getFloat(addr)         }
+  def getDouble(addr: Addr): Double              = { checkOpen; memory.getDouble(addr)        }
 
-  def putChar(addr: Addr, value: Char): Unit     = { assert(isOpen); memory.putChar(addr, value)   }
-  def putByte(addr: Addr, value: Byte): Unit     = { assert(isOpen); memory.putByte(addr, value)   }
-  def putShort(addr: Addr, value: Short): Unit   = { assert(isOpen); memory.putShort(addr, value)  }
-  def putInt(addr: Addr, value: Int): Unit       = { assert(isOpen); memory.putInt(addr, value)    }
-  def putLong(addr: Addr, value: Long): Unit     = { assert(isOpen); memory.putLong(addr, value)   }
-  def putFloat(addr: Addr, value: Float): Unit   = { assert(isOpen); memory.putFloat(addr, value)  }
-  def putDouble(addr: Addr, value: Double): Unit = { assert(isOpen); memory.putDouble(addr, value) }
+  def putChar(addr: Addr, value: Char): Unit     = { checkOpen; memory.putChar(addr, value)   }
+  def putByte(addr: Addr, value: Byte): Unit     = { checkOpen; memory.putByte(addr, value)   }
+  def putShort(addr: Addr, value: Short): Unit   = { checkOpen; memory.putShort(addr, value)  }
+  def putInt(addr: Addr, value: Int): Unit       = { checkOpen; memory.putInt(addr, value)    }
+  def putLong(addr: Addr, value: Long): Unit     = { checkOpen; memory.putLong(addr, value)   }
+  def putFloat(addr: Addr, value: Float): Unit   = { checkOpen; memory.putFloat(addr, value)  }
+  def putDouble(addr: Addr, value: Double): Unit = { checkOpen; memory.putDouble(addr, value) }
 }
 object Region {
-  private val fresh = new AtomicFresh
+  private val atomicFresh = new offheap.internal.AtomicFresh
   def open(implicit pool: Pool): Region = new Region(pool)
   def apply[T](f: Region => T)(implicit pool: Pool): T = {
     val region = Region.open(pool)

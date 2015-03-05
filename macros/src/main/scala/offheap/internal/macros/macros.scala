@@ -358,8 +358,9 @@ class Method(val c: blackbox.Context) extends Common {
       val offset = q"$memory.sizeOf[(..$tpes)]"
       write(q"$addr + $offset", f.tpe, arg, memory)
     }
+    val fieldTpes = fields.map(_.tpe)
     q"""
-      val $addr = $memory.allocate($memory.sizeOf[$C])
+      val $addr = $memory.allocate($memory.sizeOf[(..$fieldTpes)])
       ..$writes
       new $C(new $RefClass($addr, $memory))
     """
@@ -392,6 +393,8 @@ class Memory(val c: blackbox.Context) extends Common {
         case ((bytes1, refs1), (bytes2, refs2)) =>
           (bytes1 + bytes2, refs1 + refs2)
       }
+    case _ =>
+      abort(s"can't compute size of $tpe")
   }
 
   def sizeOf[T: WeakTypeTag] = {

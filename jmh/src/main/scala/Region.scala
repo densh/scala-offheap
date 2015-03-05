@@ -5,6 +5,7 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class RegionClose {
+  implicit val pool: Pool = Pool(UnsafeMemory)
   var r: Region = _
 
   //@Param(Array("1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1024"))
@@ -15,7 +16,7 @@ class RegionClose {
   def setup(): Unit = {
     r = Region.open
     for (_ <- 1 to allocatedPages)
-      r.allocate64(internal.Setting.pageSize)
+      r.allocate(pool.pageSize)
   }
 
   @Benchmark
@@ -24,6 +25,7 @@ class RegionClose {
 
 @State(Scope.Thread)
 class RegionOpen {
+  implicit val pool: Pool = Pool(UnsafeMemory)
   var r: Region = _
 
   @TearDown(Level.Invocation)
@@ -38,6 +40,7 @@ class RegionOpen {
 
 @State(Scope.Thread)
 class RegionAllocateCurrent {
+  implicit val pool: Pool = Pool(UnsafeMemory)
   var r: Region = _
 
   @Setup(Level.Invocation)
@@ -48,24 +51,25 @@ class RegionAllocateCurrent {
   def tearDown(): Unit = r.close()
 
   @Benchmark
-  def allocate = r.allocate64(16L)
+  def allocate = r.allocate(16L)
 }
 
 @State(Scope.Thread)
 class RegionAllocateNext {
+  implicit val pool: Pool = Pool(UnsafeMemory)
   var r: Region = _
 
   @Setup(Level.Invocation)
   def setup(): Unit = {
     r = Region.open
-    r.allocate64(internal.Setting.pageSize)
+    r.allocate(pool.pageSize)
   }
 
   @TearDown(Level.Invocation)
   def tearDown(): Unit = r.close()
 
   @Benchmark
-  def allocate = r.allocate64(16L)
+  def allocate = r.allocate(16L)
 }
 
 

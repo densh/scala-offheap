@@ -21,7 +21,7 @@ object RegionsBuild extends Build {
     "core",
     file("core"),
     settings = defaults ++ Seq(
-      //scalacOptions += "-Xprint:posterasure"
+      //scalacOptions += "-Xprint:cleanup"
     ),
     dependencies = Seq(macros)
   )
@@ -48,8 +48,8 @@ object RegionsBuild extends Build {
       //scalacOptions += "-uniqid",
       fork in run := true,
       javaOptions in run ++= Seq("-Xms64m", "-Xmx64m"),
-      //javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
-      javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
+      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
+      //javaOptions in run += "-agentpath:/home/denys/.bin/yjp.d/bin/linux-x86-64/libyjpagent.so=delay=10000"
     ),
     dependencies = Seq(core)
   )

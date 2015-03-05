@@ -5,5 +5,4 @@ package object x32 {
   type Size = Int
   type OutOfMemoryException = offheap.OutOfMemoryException
   type InaccessibleRegionException = offheap.InaccessibleRegionException
-  protected[offheap] type AtomicFresh = offheap.internal.AtomicFreshInt
 }
