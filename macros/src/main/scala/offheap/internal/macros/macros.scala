@@ -256,13 +256,14 @@ class Annotations(val c: whitebox.Context) extends Common {
             def nonEmpty = $ref != null
             def get      = this
             ..${_ns}
-            def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
-              $MethodModule.copy[$name]($memory, ..$argNames)
-         """
-//            override def toString(): $StringClass =
-//              $MethodModule.toString[$name]
 
-        }
+            def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
+              ${name.toTermName}.apply(..$argNames)($memory)
+
+            override def toString(): $StringClass =
+              $MethodModule.toString[$name](this)
+         """
+       }
       // Wrap everything into a nice shiny package
       val args = fields.collect { case f if f.isCtorField =>
         q"val ${f.name}: ${f.tpt} = ${f.default}"
@@ -351,7 +352,7 @@ class Method(val c: blackbox.Context) extends Common {
 
   def allocator[C: WeakTypeTag](memory: Tree, args: Tree*): Tree = {
     val C = wt[C]
-    val ClassOf(fields) = C.typeSymbol
+    val ClassOf(fields) = C
     val addr = fresh("addr")
     val writes = fields.zip(args).map { case (f, arg) =>
       val tpes = fields.takeWhile(_ ne f).map(_.tpe)
@@ -366,9 +367,22 @@ class Method(val c: blackbox.Context) extends Common {
     """
   }
 
-  def copy[C](memory: Tree, args: Tree*): Tree = q"???"
-
-  def toString[C]: Tree = q"???"
+  def toString[C: WeakTypeTag](self: Tree): Tree = {
+    val C = wt[C]
+    val ClassOf(fields) = C
+    val sb = fresh("sb")
+    val appends = fields.flatMap { f =>
+      List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
+    }.init
+    q"""
+      val $sb = new $StringBuilderClass
+      $sb.append(${C.typeSymbol.name.toString})
+      $sb.append("(")
+      ..$appends
+      $sb.append(")")
+      $sb.toString
+    """
+  }
 }
 
 

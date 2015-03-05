@@ -13,9 +13,6 @@ object Method {
   def allocator[C](memory: Any, args: Any*): C =
     macro macros.Method.allocator[C]
 
-  def copy[C](memory: Any, args: Any*): C =
-    macro macros.Method.copy[C]
-
-  def toString[C]: String =
+  def toString[C](self: C): String =
     macro macros.Method.toString[C]
 }
