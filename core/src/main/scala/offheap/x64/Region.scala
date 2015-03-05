@@ -1,9 +1,9 @@
 package offheap
-package internal
+package x64
 
-final class Region64(pool: Pool64) extends Region with Memory64 {
+final class Region(pool: Pool) extends Memory {
   private var page = pool.claim
-  val id: Long = Region64.freshId.next
+  val id = Region.fresh.next
   val memory = pool.memory
 
   def isOpen = page != null
@@ -14,7 +14,7 @@ final class Region64(pool: Pool64) extends Region with Memory64 {
     page = null
   }
 
-  def allocate(size: Int): Addr = this.synchronized {
+  def allocate(size: Size): Addr = this.synchronized {
     assert(isOpen, "can't allocate in closed region")
     assert(size <= pool.pageSize, "can't allocate object larger than the virtual page")
     val currentOffset = page.offset
@@ -32,20 +32,20 @@ final class Region64(pool: Pool64) extends Region with Memory64 {
     page.start + resOffset
   }
 
-  override def sizeOfRef: Int = 16
+  override def sizeOfRef: Size = 16
 
-  override def getRef(addr: Addr): Ref64 = {
+  override def getRef(addr: Addr): Ref = {
     assert(isOpen)
     val refAddr = memory.getLong(addr)
     if (refAddr == 0L) null
     else {
       val refRegionId = memory.getLong(addr + 8L)
-      assert(refRegionId == this.id)
-      Ref64(refAddr, this)
+      assert(refRegionId == this.id, s"refRegionId = $refRegionId, this.id = ${this.id}")
+      Ref(refAddr, this)
     }
   }
 
-  override def putRef(addr: Addr, value: Ref64): Unit = {
+  override def putRef(addr: Addr, value: Ref): Unit = {
     assert(isOpen)
     if (value != null) {
       memory.putLong(addr, value.addr)
@@ -71,11 +71,11 @@ final class Region64(pool: Pool64) extends Region with Memory64 {
   def putFloat(addr: Addr, value: Float): Unit   = { assert(isOpen); memory.putFloat(addr, value)  }
   def putDouble(addr: Addr, value: Double): Unit = { assert(isOpen); memory.putDouble(addr, value) }
 }
-object Region64 {
-  private val freshId = new AtomicFreshLong
-  def open(implicit pool: Pool64): Region64 = new Region64(pool)
-  def apply[T](f: Region64 => T)(implicit pool: Pool64): T = {
-    val region = Region64.open(pool)
+object Region {
+  private val fresh = new AtomicFresh
+  def open(implicit pool: Pool): Region = new Region(pool)
+  def apply[T](f: Region => T)(implicit pool: Pool): T = {
+    val region = Region.open(pool)
     try f(region)
     finally if (region.isOpen) region.close
   }

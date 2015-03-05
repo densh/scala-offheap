@@ -1,24 +1,13 @@
 package offheap
+package x64
 
-import scala.language.experimental.{macros => CanMacro}
 import offheap.internal.Unsafer.unsafe
 
-final case class Ref64(addr: Long, memory: Memory64)
-
-trait Memory64 extends Memory {
-  type Addr = Long
-  def sizeOfRef: Int                         = 8
-  def sizeOf[T]: Int                         = macro internal.macros.Memory.sizeOf[T]
-  def offset(addr: Addr, size: Int): Addr    = addr + size
-  def getRef(addr: Addr): Ref64              = Ref64(getLong(addr), this)
-  def putRef(addr: Addr, value: Ref64): Unit = putLong(addr, value.addr)
-}
-
-object UnsafeMemory extends Memory64 {
+object UnsafeMemory extends Memory {
   assert(unsafe.addressSize() == 8,
     "unsafe memory is only supported 64-bit systems")
 
-  def allocate(size: Int): Addr                  = unsafe.allocateMemory(size)
+  def allocate(size: Size): Addr                 = unsafe.allocateMemory(size)
   def getChar(addr: Addr): Char                  = unsafe.getChar(addr)
   def getByte(addr: Addr): Byte                  = unsafe.getByte(addr)
   def getShort(addr: Addr): Short                = unsafe.getShort(addr)

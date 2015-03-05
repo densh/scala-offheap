@@ -1,7 +1,7 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
-import offheap._
+import offheap.x64._
 
 @State(Scope.Thread)
 class PoolContention {

@@ -1,20 +1,9 @@
 package offheap
+package x32
 
-import scala.language.experimental.{macros => CanMacro}
 import java.nio.ByteBuffer
 
-final case class Ref32(addr: Int, memory: Memory32)
-
-trait Memory32 extends Memory {
-  type Addr = Int
-  def sizeOfRef: Int                         = 4
-  def sizeOf[T]: Int                         = macro internal.macros.Memory.sizeOf[T]
-  def offset(addr: Addr, size: Int): Addr    = addr + size
-  def getRef(addr: Addr): Ref32              = Ref32(getInt(addr), this)
-  def putRef(addr: Addr, value: Ref32): Unit = putLong(addr, value.addr)
-}
-
-class ByteBufferMemory(buffer: ByteBuffer) extends Memory32 {
+class ByteBufferMemory(buffer: ByteBuffer) extends Memory {
   def allocate(size: Int): Addr                  = ???
   def getByte(addr: Addr): Byte                  = buffer.get(addr)
   def getChar(addr: Addr): Char                  = buffer.getChar(addr)

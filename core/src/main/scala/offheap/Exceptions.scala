@@ -1,5 +1,5 @@
 package offheap
 
-case object OutOfMemoryException extends Exception
+class OutOfMemoryException extends Exception
 
-case object InaccessibleRegionException extends Exception
+class InaccessibleRegionException extends Exception

@@ -2,7 +2,7 @@ package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
 import java.util.concurrent.TimeUnit
-import offheap._
+import offheap.x64._
 
 @State(Scope.Thread)
 class OffheapAllocation {

@@ -1,7 +1,7 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
-import offheap._
+import offheap.x64._
 
 @State(Scope.Thread)
 class GCBinaryTree {
@@ -53,7 +53,7 @@ object GCHeap {
 }
 
 object Offheap {
-  var region: () => Region = _
+  implicit val pool = Pool(UnsafeMemory)
   def run(n: Int) = {
     val outer = Region.open
     val minDepth = 4

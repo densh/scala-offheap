@@ -1,13 +1,13 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._
+import offheap._, x64._
 
 @offheap class C1(var x: Int)
 //@offheap class C2 { var x = 2 }
 
 class MutableSuite extends FunSuite {
-  implicit val r = Region.open(internal.Pool64(internal.UnsafeMemory64))
+  implicit val r = Region.open(Pool(UnsafeMemory))
   protected override def finalize = r.close
 
   test("mutable constructor argument") {

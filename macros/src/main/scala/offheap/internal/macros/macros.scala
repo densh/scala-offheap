@@ -7,17 +7,20 @@ import scala.reflect.macros.{whitebox, blackbox}
 
 trait Definitions {
   val c: blackbox.Context
+  val bitDepth: Int = 64
+
   import c.universe._
   import c.universe.rootMirror._
 
+  private val prefix = s"offheap.x$bitDepth"
+
   val MethodModule  = staticModule("offheap.internal.Method")
-  val TypeTagModule = staticModule("offheap.internal.TypeTag")
-  val PoolModule    = staticModule("offheap.Pool")
+  val PoolModule    = staticModule(s"$prefix.Pool")
 
   val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
-  val RegionClass        = staticClass("offheap.Region")
-  val RefClass           = staticClass("offheap.Ref")
-  val MemoryClass        = staticClass("offheap.Memory")
+  val RegionClass        = staticClass(s"$prefix.Region")
+  val RefClass           = staticClass(s"$prefix.Ref")
+  val MemoryClass        = staticClass(s"$prefix.Memory")
   val OffheapClass       = staticClass("offheap.internal.annot.offheap")
   val TagClass           = staticClass("offheap.internal.annot.Tag")
   val LayoutClass        = staticClass("offheap.internal.annot.Layout")
@@ -249,15 +252,16 @@ class Annotations(val c: whitebox.Context) extends Common {
             q"val ${f.name}: ${f.tpt} = this.${f.name}"
           }
           q"""
-            def isEmpty  = ???
-            def nonEmpty = ???
+            def isEmpty  = $ref == null
+            def nonEmpty = $ref != null
             def get      = this
             ..${_ns}
             def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
               $MethodModule.copy[$name]($memory, ..$argNames)
-            override def toString(): $StringClass =
-              $MethodModule.toString[$name]
-          """
+         """
+//            override def toString(): $StringClass =
+//              $MethodModule.toString[$name]
+
         }
       // Wrap everything into a nice shiny package
       val args = fields.collect { case f if f.isCtorField =>
@@ -322,8 +326,8 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         val mem = q"$ref.memory"
         val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-        val offset = q"$mem.sizeof[(..$tpes)]"
-        read(q"$mem.offset($ref, $offset)", f.tpe, mem)
+        val offset = q"$mem.sizeOf[(..$tpes)]"
+        read(q"$ref.addr + $offset", f.tpe, mem)
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -338,8 +342,8 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         val mem = q"$ref.memory"
         val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-        val offset = q"$mem.sizeof[(..$tpes)]"
-        write(q"$mem.offset($ref, $offset)", f.tpe, value, mem)
+        val offset = q"$mem.sizeOf[(..$tpes)]"
+        write(q"$ref.addr + $offset", f.tpe, value, mem)
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -351,13 +355,13 @@ class Method(val c: blackbox.Context) extends Common {
     val addr = fresh("addr")
     val writes = fields.zip(args).map { case (f, arg) =>
       val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-      val offset = q"$memory.sizeof[(..$tpes)]"
-      write(q"$memory.offset($addr, $offset)", f.tpe, arg, memory)
+      val offset = q"$memory.sizeOf[(..$tpes)]"
+      write(q"$addr + $offset", f.tpe, arg, memory)
     }
     q"""
-      val $addr: $memory.Addr = $memory.allocate($memory.sizeof[$C])
+      val $addr = $memory.allocate($memory.sizeOf[$C])
       ..$writes
-      new $C($memory.ref($addr))
+      new $C(new $RefClass($addr, $memory))
     """
   }
 
@@ -369,6 +373,13 @@ class Method(val c: blackbox.Context) extends Common {
 
 class Memory(val c: blackbox.Context) extends Common {
   import c.universe._
+  import c.universe.definitions._
+
+  object TupleOf {
+    def unapply(tpe: Type): Option[List[Type]] =
+      if (tpe.typeSymbol == UnitClass) Some(Nil)
+      else TupleClass.seq.find(_ == tpe.typeSymbol).map(sym => tpe.baseType(sym).typeArgs)
+  }
 
   def sizeOfSplit(tpe: Type): (Int, Int) = tpe match {
     case ByteTpe  | BooleanTpe             => (1, 0)
@@ -376,11 +387,16 @@ class Memory(val c: blackbox.Context) extends Common {
     case IntTpe   | FloatTpe               => (4, 0)
     case LongTpe  | DoubleTpe              => (8, 0)
     case tpe if ClassOf.is(tpe.typeSymbol) => (0, 1)
+    case TupleOf(tpes)                     =>
+      tpes.map(sizeOfSplit).foldLeft((0, 0)) {
+        case ((bytes1, refs1), (bytes2, refs2)) =>
+          (bytes1 + bytes2, refs1 + refs2)
+      }
   }
 
   def sizeOf[T: WeakTypeTag] = {
     val (bytes, refs) = sizeOfSplit(weakTypeOf[T])
-    if (refs = 0) q"$bytes"
+    if (refs == 0) q"$bytes"
     else q"$bytes + $refs * ${c.prefix}.sizeOfRef"
   }
 }

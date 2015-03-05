@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._
+import offheap._, x64._
 
 @offheap case class Point(x: Double, y: Double) {
   def distanceTo(other: Point): Double =
@@ -9,7 +9,7 @@ import offheap._
 }
 
 class PointSuite extends FunSuite {
-  implicit val pool = internal.Pool64(internal.UnsafeMemory64)
+  implicit val pool = Pool(UnsafeMemory)
 
   test("accessors") {
     Region { r =>
