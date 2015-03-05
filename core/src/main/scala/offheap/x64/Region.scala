@@ -2,7 +2,8 @@ package offheap
 package x64
 
 final class Region(pool: Pool) extends Memory {
-  private var page = pool.claim
+  private val tail = pool.claim
+  private var page = tail
   val id = Region.atomicFresh.next
   val memory = pool.memory
 
@@ -13,7 +14,7 @@ final class Region(pool: Pool) extends Memory {
 
   def close(): Unit = this.synchronized {
     checkOpen
-    pool.reclaim(page)
+    pool.reclaim(page, tail)
     page = null
   }
 

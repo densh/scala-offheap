@@ -25,9 +25,12 @@ final class Pool(
     res.next = null
     res
   }
-  def reclaim(head: Page): Unit = this.synchronized {
+  def reclaim(head: Page): Unit = {
     var tail = head
     while (tail.next != null)  tail = tail.next
+    reclaim(head, tail)
+  }
+  def reclaim(head: Page, tail: Page): Unit = this.synchronized {
     tail.next = page
     page = head
   }
