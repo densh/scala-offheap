@@ -24,6 +24,8 @@ trait Definitions {
   val OffheapClass       = staticClass("offheap.internal.annot.offheap")
   val TagClass           = staticClass("offheap.internal.annot.Tag")
   val LayoutClass        = staticClass("offheap.internal.annot.Layout")
+
+  val initialize = TermName("$initialize")
 }
 
 trait Common extends Definitions {
@@ -169,15 +171,16 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe.definitions._
   import Flag._
 
-  def layout(fields: List[OField]): Tree = {
+  def layout(fields: List[SyntacticField]): Tree = {
     val tuples = fields.map { f =>
       q"(${f.name.toString}, new $TagClass[${f.tpt}]())"
     }
     q"new $LayoutClass(..$tuples)"
   }
 
-  case class OField(name: TermName, tpt: Tree, default: Tree,
-                    isMutable: Boolean, isCtorField: Boolean)
+  case class SyntacticField(name: TermName, tpt: Tree, default: Tree,
+                            isMutable: Boolean, isCtorField: Boolean)
+
 
   // TODO: handle generics
   // TODO: handle implicit parameters
@@ -188,6 +191,11 @@ class Annotations(val c: whitebox.Context) extends Common {
     case q"""
         $rawMods class $name[..$rawTargs](..$rawArgs) extends ..$rawParents { ..$rawStats }
       """ :: Nil =>
+      // Generate fresh names used in desugaring
+      val ref = fresh("ref")
+      val memory = fresh("memory")
+      val instance = fresh("instance")
+      val scrutinee = fresh("scrutinee")
       // Process and validate existing members
       val fields = {
         def checkMods(mods: Modifiers) =
@@ -195,22 +203,25 @@ class Annotations(val c: whitebox.Context) extends Common {
         val argFields = rawArgs.collect {
           case ValDef(mods, name, tpt, default) =>
             checkMods(mods)
-            OField(name, tpt, default,
-                   isMutable = mods.hasFlag(MUTABLE),
-                   isCtorField = true)
+            SyntacticField(name, tpt, default,
+                           isMutable = mods.hasFlag(MUTABLE),
+                           isCtorField = true)
         }
         val bodyFields = rawStats.collect {
-          case ValDef(mods, name, tpt, _) =>
+          case vd @ ValDef(mods, name, tpt, _) =>
+            if (tpt.isEmpty)
+              abort("Fields of offheap classes must have explicitly annotated types.", at = vd.pos)
             checkMods(mods)
-            OField(name, tpt, EmptyTree,
-                   isMutable = mods.hasFlag(MUTABLE),
-                   isCtorField = false)
+            SyntacticField(name, tpt, EmptyTree,
+                           isMutable = mods.hasFlag(MUTABLE),
+                           isCtorField = false)
         }
         argFields ++ bodyFields
       }
       val init = rawStats.collect {
-        case t if t.isTerm             => t
-        case ValDef(_, name, _, value) => ???
+        case t if t.isTerm               => t
+        case ValDef(_, vname, tpt, value) =>
+          q"$MethodModule.assigner[$name, $tpt]($ref, ${vname.toString}, $value)"
       }
       val traits = rawParents.map {
         case q"${tq"$ref[..$targs]"}(...$args)" =>
@@ -221,7 +232,6 @@ class Annotations(val c: whitebox.Context) extends Common {
       val methods = rawStats.collect { case t: DefDef => t }
       val types = rawStats.collect { case t: TypeDef => t }
       // Generate additional members
-      val ref = TermName("$ref")
       val accessors = fields.flatMap { f =>
         val accessor = q"""
           def ${f.name}: ${f.tpt} =
@@ -237,9 +247,6 @@ class Annotations(val c: whitebox.Context) extends Common {
         else accessor :: assigner :: Nil
       }
       val argNames = fields.collect { case f if f.isCtorField => f.name }
-      val memory = fresh("memory")
-      val instance = fresh("instance")
-      val scrutinee = fresh("scrutinee")
       val caseClassSupport =
         if (!rawMods.hasFlag(Flag.CASE)) q""
         else {
@@ -264,6 +271,7 @@ class Annotations(val c: whitebox.Context) extends Common {
               $MethodModule.toString[$name](this)
          """
        }
+      val initializer = if (init.isEmpty) q"" else q"def $initialize = { ..$init }"
       // Wrap everything into a nice shiny package
       val args = fields.collect { case f if f.isCtorField =>
         q"val ${f.name}: ${f.tpt} = ${f.default}"
@@ -272,7 +280,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         @$OffheapClass(${layout(fields)}) final class $name private(
           private val $ref: $RefClass
         ) extends $AnyValClass {
-          def $$initialize$$ = { ..$init }
+          ..$initializer
           ..$accessors
           ..$methods
           ..$types
@@ -360,10 +368,19 @@ class Method(val c: blackbox.Context) extends Common {
       write(q"$addr + $offset", f.tpe, arg, memory)
     }
     val fieldTpes = fields.map(_.tpe)
+    val newC = q"new $C(new $RefClass($addr, $memory))"
+    val instantiate = C.members.find(_.name == initialize).map { _ =>
+      val instance = fresh("instance")
+      q"""
+        val $instance = $newC
+        $instance.$initialize
+        $instance
+      """
+    }.getOrElse(newC)
     q"""
       val $addr = $memory.allocate($memory.sizeOf[(..$fieldTpes)])
       ..$writes
-      new $C(new $RefClass($addr, $memory))
+      ..$instantiate
     """
   }
 
