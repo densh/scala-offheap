@@ -29,7 +29,8 @@ class MutableSuite extends FunSuite {
   }
 
   test("side-effecting body") {
-    val c3 = C3()
     assert(C3.x == 0)
+    val c3 = C3()
+    assert(C3.x == 10)
   }
 }

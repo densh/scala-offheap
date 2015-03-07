@@ -34,6 +34,8 @@ trait Common extends Definitions {
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
+  def panic(msg: String): Nothing = abort(s"panic: $msg")
+
   def debug[T](header: String)(f: => T): T = {
     val res = f
     println(s"$header = $res")
@@ -73,14 +75,16 @@ trait Common extends Definitions {
     def unapply(sym: Symbol): Option[List[Field]] = sym match {
       case sym: ClassSymbol if this.is(sym) =>
         sym.annotations.collectFirst {
-          case ann if ann.tpe.typeSymbol == classSym => ann
+          case ann if ann.tpe.typeSymbol == classSym => ann.tree
         }.map {
           case q"new $_(new $_(..$descriptors))" =>
             descriptors.map { case q"(${name: String}, new $_[$tpt]())" =>
               Field(name, tpt.tpe)
             }
-          case _ =>
+          case q"new $_(new $_)" =>
             Nil
+          case other =>
+            panic(s"can't parse annotation $other")
         }
       case _ => None
     }
@@ -197,7 +201,6 @@ class Annotations(val c: whitebox.Context) extends Common {
     val q"""
       object $_ extends ..$companionParents { ..$companionStats }
     """ = companion
-    debug("companion")(companion)
     // Generate fresh names used in desugaring
     val ref = fresh("ref")
     val memory = fresh("memory")
@@ -283,8 +286,9 @@ class Annotations(val c: whitebox.Context) extends Common {
     val args = fields.collect { case f if f.isCtorField =>
       q"val ${f.name}: ${f.tpt} = ${f.default}"
     }
+    val annot = q"new $OffheapClass(${layout(fields)})"
     q"""
-      @$OffheapClass(${layout(fields)}) final class $name private(
+      @$annot final class $name private(
         private val $ref: $RefClass
       ) extends $AnyValClass {
         ..$initializer

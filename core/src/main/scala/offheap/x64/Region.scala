@@ -9,7 +9,7 @@ final class Region(pool: Pool) extends Memory {
 
   def isOpen = page != null
 
-  private def checkOpen: Unit =
+  private def checkOpen(): Unit =
     if (page == null) throw new InaccessibleRegionException
 
   def close(): Unit = this.synchronized {
