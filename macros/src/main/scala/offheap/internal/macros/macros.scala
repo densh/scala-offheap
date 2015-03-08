@@ -10,6 +10,7 @@ trait Definitions {
   val bitDepth: Int = 64
 
   import c.universe._
+  import c.universe.definitions._
   import c.universe.rootMirror._
 
   private val prefix = s"offheap.x$bitDepth"
@@ -26,6 +27,9 @@ trait Definitions {
   val LayoutClass        = staticClass("offheap.internal.annot.Layout")
 
   val initialize = TermName("$initialize")
+
+  val tag = TermName("$tag")
+  val Tag = ShortClass
 }
 
 trait Common extends Definitions {
@@ -194,7 +198,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     def isCtorField = vd.mods.hasFlag(PARAMACCESSOR)
   }
 
-  // TODO: modifiers propagation
+  // TODO: modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
   // TODO: gracefully fail on inner classes and objects
   def offheapTransform(clazz: Tree, companion: Tree) = {
@@ -210,118 +214,175 @@ class Annotations(val c: whitebox.Context) extends Common {
                      extends { ..$companionEarly }
                      with ..$companionParents { $companionSelf => ..$companionStats }
     """ = companion
+
+    // Checks that are shared between abstract and concrete transforms
+    if (rawTargs.nonEmpty)
+      abort("offheap classes don't support generics", at = rawTargs.head.pos)
+    if (rawEarly.nonEmpty)
+      abort("offheap classes don't suport early initializer", at = rawEarly.head.pos)
+
     // Generate fresh names used in desugaring
     val ref       = fresh("ref")
     val memory    = fresh("memory")
     val instance  = fresh("instance")
     val scrutinee = fresh("scrutinee")
     val value     = fresh("value")
-    // Process and validate existing members
-    if (rawTargs.nonEmpty)
-      abort("offheap classes don't support generics", at = rawTargs.head.pos)
-    if (rawEarly.nonEmpty)
-      abort("offheap classes don't suport early initializer", at = rawEarly.head.pos)
-    if (rawRestArgs.nonEmpty)
-      abort("offheap classes may not have more than one argument list",
-            at = rawRestArgs.head.head.pos)
-    rawArgs.headOption.foreach { arg =>
-      if (arg.mods.hasFlag(IMPLICIT))
-        abort("offheap classes may not have implicit arguments", at = arg.pos)
-    }
-    val fields = {
-      def checkMods(mods: Modifiers) =
-        if (mods.hasFlag(LAZY))
-          abort("offheap classes may not have lazy fields")
-      val argFields = rawArgs.collect {
-        case vd @ ValDef(mods, _, _, _) =>
-          checkMods(mods)
-          new SyntacticField(vd)
-      }
-      val bodyFields = rawStats.collect {
-        case vd @ ValDef(mods, _, tpt, _) =>
-          if (tpt.isEmpty)
-            abort("Fields of offheap classes must have explicitly annotated types.",
-                  at = vd.pos)
-          checkMods(mods)
-          new SyntacticField(vd)
-      }
-      argFields ++ bodyFields
-    }
-    val init = rawStats.collect {
-      case t if t.isTerm               => t
-      case ValDef(_, vname, tpt, value) =>
-        q"$MethodModule.assigner[$name, $tpt]($ref, ${vname.toString}, $value)"
-    }
-    val traits = rawParents.map {
-      case q"${tq"$ref[..$targs]"}(...$args)" =>
-        if (args.nonEmpty || targs.nonEmpty)
-          abort("offheap classes can only inherit from offheap traits")
-        ref
-    }
-    val methods = rawStats.collect { case t: DefDef => t }
-    val types = rawStats.collect { case t: TypeDef => t }
-    // Generate additional members
-    val accessors = fields.flatMap { f =>
-      val accessor = q"""
-        def ${f.name}: ${f.tpt} =
-          $MethodModule.accessor[$name, ${f.tpt}]($ref, ${f.name.toString})
-      """
-      val assignerName = TermName(f.name.toString + "_$eq")
-      val assigner = q"""
-        def $assignerName($value: ${f.tpt}): Unit =
-          $MethodModule.assigner[$name, ${f.tpt}]($ref, ${f.name.toString}, $value)
-      """
-      if (!f.isMutable) accessor :: Nil
-      else accessor :: assigner :: Nil
-    }
-    val argNames = fields.collect { case f if f.isCtorField => f.name }
-    val caseClassSupport =
-      if (!rawMods.hasFlag(Flag.CASE)) q""
-      else {
-        val _ns = argNames.zipWithIndex.map {
-          case (argName, i) =>
-            val _n = TermName("_" + (i + 1))
-            q"def ${_n} = this.$argName"
-        }
-        val copyArgs = fields.collect { case f if f.isCtorField =>
-          q"val ${f.name}: ${f.tpt} = this.${f.name}"
-        }
-        q"""
-          def isEmpty  = $ref == null
-          def nonEmpty = $ref != null
-          def get      = this
-          ..${_ns}
 
-          def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
-            ${name.toTermName}.apply(..$argNames)($memory)
+    def transformConcrete = {
+      // Process and validate existing members
+      if (rawRestArgs.nonEmpty)
+        abort("offheap classes may not have more than one argument list",
+              at = rawRestArgs.head.head.pos)
+      rawArgs.headOption.foreach { arg =>
+        if (arg.mods.hasFlag(IMPLICIT))
+          abort("offheap classes may not have implicit arguments", at = arg.pos)
+      }
+      val fields = {
+        def checkMods(mods: Modifiers) =
+          if (mods.hasFlag(LAZY))
+            abort("offheap classes may not have lazy fields")
+        val argFields = rawArgs.collect {
+          case vd @ ValDef(mods, _, _, _) =>
+            checkMods(mods)
+            new SyntacticField(vd)
+        }
+        val bodyFields = rawStats.collect {
+          case vd @ ValDef(mods, _, tpt, _) =>
+            if (tpt.isEmpty)
+              abort("Fields of offheap classes must have explicitly annotated types.",
+                    at = vd.pos)
+            checkMods(mods)
+            new SyntacticField(vd)
+        }
+        argFields ++ bodyFields
+      }
+      val init = rawStats.collect {
+        case t if t.isTerm               => t
+        case ValDef(_, vname, tpt, value) =>
+          q"$MethodModule.assigner[$name, $tpt]($ref, ${vname.toString}, $value)"
+      }
+      val parents = rawParents.map {
+        case q"${tq"$ref[..$targs]"}(...$args)" =>
+          if (args.nonEmpty || targs.nonEmpty)
+            abort("offheap classes can only inherit from " +
+                  "abstract offheap classes and universal traits")
+          ref
+      }
+      val methods = rawStats.collect { case t: DefDef => t }
+      val types = rawStats.collect { case t: TypeDef => t }
+      // Generate additional members
+      val accessors = fields.flatMap { f =>
+        val accessor = q"""
+          def ${f.name}: ${f.tpt} =
+            $MethodModule.accessor[$name, ${f.tpt}]($ref, ${f.name.toString})
+        """
+        val assignerName = TermName(f.name.toString + "_$eq")
+        val assigner = q"""
+          def $assignerName($value: ${f.tpt}): Unit =
+            $MethodModule.assigner[$name, ${f.tpt}]($ref, ${f.name.toString}, $value)
+        """
+        if (!f.isMutable) accessor :: Nil
+        else accessor :: assigner :: Nil
+      }
+      val argNames = fields.collect { case f if f.isCtorField => f.name }
+      val (caseClassSupport, companionUnapply) =
+        if (!rawMods.hasFlag(Flag.CASE))
+          (q"", q"")
+        else {
+          val _ns = argNames.zipWithIndex.map {
+            case (argName, i) =>
+              val _n = TermName("_" + (i + 1))
+              q"def ${_n} = this.$argName"
+          }
+          val copyArgs = fields.collect { case f if f.isCtorField =>
+            q"val ${f.name}: ${f.tpt} = this.${f.name}"
+          }
+          (q"""
+            def isEmpty  = $ref == null
+            def nonEmpty = $ref != null
+            def get      = this
+            ..${_ns}
 
-          override def toString(): $StringClass =
-            $MethodModule.toString[$name](this)
-       """
-     }
-    val initializer = if (init.isEmpty) q"" else q"def $initialize = { ..$init }"
-    // Wrap everything into a nice shiny package
-    val args = fields.collect { case f if f.isCtorField =>
-      q"val ${f.name}: ${f.tpt} = ${f.default}"
-    }
-    val annot = q"new $OffheapClass(${layout(fields)})"
-    q"""
-      @$annot final class $name private(
-        private val $ref: $RefClass
-      ) extends $AnyValClass { $rawSelf =>
+            def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
+              ${name.toTermName}.apply(..$argNames)($memory)
+
+            override def toString(): $StringClass =
+              $MethodModule.toString[$name](this)
+          """, q"""
+            def unapply($scrutinee: $name): $name = $scrutinee
+          """)
+
+       }
+      val initializer = if (init.isEmpty) q"" else q"def $initialize = { ..$init }"
+      val args = fields.collect { case f if f.isCtorField =>
+        q"val ${f.name}: ${f.tpt} = ${f.default}"
+      }
+      val companionApply =
+        if (rawMods.hasFlag(ABSTRACT)) q""
+        else q"""
+        """
+
+      val body = q"""
         ..$initializer
         ..$accessors
         ..$methods
         ..$types
         ..$caseClassSupport
+      """
+      val companionBody = q"""
+        def apply(..$args)(implicit $memory: $MemoryClass): $name =
+          $MethodModule.allocator[$name]($memory, ..$argNames)
+        ..$companionUnapply
+      """
+      (body, companionBody, fields)
+    }
+
+    def transformAbstract = {
+      if (rawMods.hasFlag(CASE))
+        abort("abstract offheap case classes are not supported")
+      if (rawArgs.nonEmpty || rawRestArgs.nonEmpty)
+        abort("abstract offheap classes may not have constructor arguments")
+      val methods = rawStats.map {
+        case dd: DefDef =>
+          if (dd.rhs.isEmpty)
+            abort("offheap abstract classes may not contain abstract methods",
+                  at = dd.pos)
+        case other =>
+          abort("offheap abstract classes can only contain concrete methods",
+                at = other.pos)
+      }
+      val body: Tree = q"""
+        ..$methods
+        def $tag: $Tag =
+          $MethodModule.accessor[$name, $Tag]($ref, ${tag.toString})
+        def is[T]: $BooleanClass =
+          $MethodModule.is[$name, T]($ref)
+        def as[T]: T =
+          $MethodModule.as[$name, T]($ref)
+      """
+      val fields = List(new SyntacticField(q"val $tag: $Tag"))
+      (body, q"", fields)
+    }
+
+    val (body, companionBody, fields) =
+      if (rawMods.hasFlag(ABSTRACT))
+        transformAbstract
+      else
+        transformConcrete
+
+    val annot = q"new $OffheapClass(${layout(fields)})"
+
+    q"""
+      @$annot final class $name private(
+        private val $ref: $RefClass
+      ) extends $AnyValClass { $rawSelf =>
+        ..$body
       }
       object ${name.toTermName}
           extends { ..$companionEarly }
           with ..$companionParents { $companionSelf =>
         ..$companionStats
-        def apply(..$args)(implicit $memory: $MemoryClass): $name =
-          $MethodModule.allocator[$name]($memory, ..$argNames)
-        def unapply($scrutinee: $name): $name = $scrutinee
+        ..$companionBody
         val empty: $name = null.asInstanceOf[$name]
         def fromRef($ref: $RefClass): $name =
           new $name($ref)
@@ -336,6 +397,8 @@ class Annotations(val c: whitebox.Context) extends Common {
       offheapTransform(clazz, q"object ${clazz.name.toTermName}")
     case (clazz: ClassDef) :: (companion: ModuleDef) :: Nil =>
       offheapTransform(clazz, companion)
+    case _ =>
+      abort("@offheap anottation only works on classes")
   }
 }
 
@@ -445,6 +508,10 @@ class Method(val c: blackbox.Context) extends Common {
       $sb.toString
     """
   }
+
+  def is[C: WeakTypeTag, T: WeakTypeTag](ref: Tree): Tree = q"???"
+
+  def as[C: WeakTypeTag, T: WeakTypeTag](ref: Tree): Tree = q"???"
 }
 
 
