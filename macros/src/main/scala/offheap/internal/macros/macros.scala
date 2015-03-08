@@ -186,45 +186,64 @@ class Annotations(val c: whitebox.Context) extends Common {
     q"new $LayoutClass(..$tuples)"
   }
 
-  case class SyntacticField(name: TermName, tpt: Tree, default: Tree,
-                            isMutable: Boolean, isCtorField: Boolean)
+  implicit class SyntacticField(vd: ValDef) {
+    def name        = vd.name
+    def tpt         = vd.tpt
+    def default     = vd.rhs
+    def isMutable   = vd.mods.hasFlag(MUTABLE)
+    def isCtorField = vd.mods.hasFlag(PARAMACCESSOR)
+  }
 
-  // TODO: handle generics
-  // TODO: handle implicit parameters
   // TODO: modifiers propagation
   // TODO: hygienic reference to class type from companion?
+  // TODO: gracefully fail on inner classes and objects
   def offheapTransform(clazz: Tree, companion: Tree) = {
-    // parse the arguments
+    // Parse the input trees
     val q"""
-      $rawMods class $name[..$rawTargs](..$rawArgs) extends ..$rawParents { ..$rawStats }
+      $rawMods class $name[..$rawTargs] $rawCtorMods(..$rawArgs)
+                                                    (...$rawRestArgs)
+               extends { ..$rawEarly }
+               with ..$rawParents { $rawSelf => ..$rawStats }
     """ = clazz
     val q"""
-      object $_ extends ..$companionParents { ..$companionStats }
+      $companionMods object $_
+                     extends { ..$companionEarly }
+                     with ..$companionParents { $companionSelf => ..$companionStats }
     """ = companion
     // Generate fresh names used in desugaring
-    val ref = fresh("ref")
-    val memory = fresh("memory")
-    val instance = fresh("instance")
+    val ref       = fresh("ref")
+    val memory    = fresh("memory")
+    val instance  = fresh("instance")
     val scrutinee = fresh("scrutinee")
+    val value     = fresh("value")
     // Process and validate existing members
+    if (rawTargs.nonEmpty)
+      abort("offheap classes don't support generics", at = rawTargs.head.pos)
+    if (rawEarly.nonEmpty)
+      abort("offheap classes don't suport early initializer", at = rawEarly.head.pos)
+    if (rawRestArgs.nonEmpty)
+      abort("offheap classes may not have more than one argument list",
+            at = rawRestArgs.head.head.pos)
+    rawArgs.headOption.foreach { arg =>
+      if (arg.mods.hasFlag(IMPLICIT))
+        abort("offheap classes may not have implicit arguments", at = arg.pos)
+    }
     val fields = {
       def checkMods(mods: Modifiers) =
-        if (mods.hasFlag(LAZY)) abort("lazy vals are not supported")
+        if (mods.hasFlag(LAZY))
+          abort("offheap classes may not have lazy fields")
       val argFields = rawArgs.collect {
-        case ValDef(mods, name, tpt, default) =>
+        case vd @ ValDef(mods, _, _, _) =>
           checkMods(mods)
-          SyntacticField(name, tpt, default,
-                         isMutable = mods.hasFlag(MUTABLE),
-                         isCtorField = true)
+          new SyntacticField(vd)
       }
       val bodyFields = rawStats.collect {
-        case vd @ ValDef(mods, name, tpt, _) =>
+        case vd @ ValDef(mods, _, tpt, _) =>
           if (tpt.isEmpty)
-            abort("Fields of offheap classes must have explicitly annotated types.", at = vd.pos)
+            abort("Fields of offheap classes must have explicitly annotated types.",
+                  at = vd.pos)
           checkMods(mods)
-          SyntacticField(name, tpt, EmptyTree,
-                         isMutable = mods.hasFlag(MUTABLE),
-                         isCtorField = false)
+          new SyntacticField(vd)
       }
       argFields ++ bodyFields
     }
@@ -248,7 +267,6 @@ class Annotations(val c: whitebox.Context) extends Common {
           $MethodModule.accessor[$name, ${f.tpt}]($ref, ${f.name.toString})
       """
       val assignerName = TermName(f.name.toString + "_$eq")
-      val value = fresh("value")
       val assigner = q"""
         def $assignerName($value: ${f.tpt}): Unit =
           $MethodModule.assigner[$name, ${f.tpt}]($ref, ${f.name.toString}, $value)
@@ -290,14 +308,16 @@ class Annotations(val c: whitebox.Context) extends Common {
     q"""
       @$annot final class $name private(
         private val $ref: $RefClass
-      ) extends $AnyValClass {
+      ) extends $AnyValClass { $rawSelf =>
         ..$initializer
         ..$accessors
         ..$methods
         ..$types
         ..$caseClassSupport
       }
-      object ${name.toTermName} extends ..$companionParents {
+      object ${name.toTermName}
+          extends { ..$companionEarly }
+          with ..$companionParents { $companionSelf =>
         ..$companionStats
         def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
@@ -377,16 +397,22 @@ class Method(val c: blackbox.Context) extends Common {
     }
   }
 
+  // TODO: setMemory(addr, size, 0) ?
   def allocator[C: WeakTypeTag](memory: Tree, args: Tree*): Tree = {
     val C = wt[C]
     val ClassOf(fields) = C
     val addr = fresh("addr")
+    val size =
+      if (fields.isEmpty) q"1"
+      else {
+        val fieldTpes = fields.map(_.tpe)
+        q"$memory.sizeOf[(..$fieldTpes)]"
+      }
     val writes = fields.zip(args).map { case (f, arg) =>
       val tpes = fields.takeWhile(_ ne f).map(_.tpe)
       val offset = q"$memory.sizeOf[(..$tpes)]"
       write(q"$addr + $offset", f.tpe, arg, memory)
     }
-    val fieldTpes = fields.map(_.tpe)
     val newC = q"new $C(new $RefClass($addr, $memory))"
     val instantiate = C.members.find(_.name == initialize).map { _ =>
       val instance = fresh("instance")
@@ -397,7 +423,7 @@ class Method(val c: blackbox.Context) extends Common {
       """
     }.getOrElse(newC)
     q"""
-      val $addr = $memory.allocate($memory.sizeOf[(..$fieldTpes)].max(1))
+      val $addr = $memory.allocate($size)
       ..$writes
       ..$instantiate
     """

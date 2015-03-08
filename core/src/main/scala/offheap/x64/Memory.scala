@@ -4,12 +4,10 @@ package x64
 import scala.language.experimental.{macros => CanMacro}
 
 final case class Ref(addr: Addr, memory: Memory) {
-  assert(addr != 0)
+  if (addr == 0) throw new IllegalArgumentException("Ref's addr can not be 0L")
 }
 
 trait Memory {
-  def sizeOf[T]: Size = macro internal.macros.Memory.sizeOf[T]
-  def sizeOfRef: Size = 8
   def allocate(size: Size): Addr
   def getChar(addr: Addr): Char
   def getByte(addr: Addr): Byte
@@ -32,5 +30,7 @@ trait Memory {
   def putRef(addr: Addr, value: Ref): Unit =
     if (value != null) putLong(addr, value.addr)
     else putLong(addr, 0L)
+  def sizeOf[T]: Size = macro internal.macros.Memory.sizeOf[T]
+  def sizeOfRef: Size = 8
 }
 
