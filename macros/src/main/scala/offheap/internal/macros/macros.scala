@@ -26,6 +26,8 @@ trait Definitions {
   val TagClass           = staticClass("offheap.internal.annot.Tag")
   val LayoutClass        = staticClass("offheap.internal.annot.Layout")
 
+  val internal = staticPackage("offheap.internal")
+
   val initialize = TermName("$initialize")
 
   val tag = TermName("$tag")
@@ -220,13 +222,18 @@ class Annotations(val c: whitebox.Context) extends Common {
       abort("offheap classes don't support generics", at = rawTargs.head.pos)
     if (rawEarly.nonEmpty)
       abort("offheap classes don't suport early initializer", at = rawEarly.head.pos)
+    if (rawMods.hasFlag(IMPLICIT))
+      abort("implicit offheap classes are not supported")
+    if (rawMods.hasFlag(CASE))
+      abort("offheap classes are case-like by default")
 
     // Generate fresh names used in desugaring
-    val ref       = fresh("ref")
-    val memory    = fresh("memory")
-    val instance  = fresh("instance")
-    val scrutinee = fresh("scrutinee")
-    val value     = fresh("value")
+    val ref          = fresh("ref")
+    val memory       = fresh("memory")
+    val instance     = fresh("instance")
+    val scrutinee    = fresh("scrutinee")
+    val value        = fresh("value")
+    val canUseMacros = fresh("canUseMacros")
 
     def transformConcrete = {
       // Process and validate existing members
@@ -285,61 +292,50 @@ class Annotations(val c: whitebox.Context) extends Common {
         else accessor :: assigner :: Nil
       }
       val argNames = fields.collect { case f if f.isCtorField => f.name }
-      val (caseClassSupport, companionUnapply) =
-        if (!rawMods.hasFlag(Flag.CASE))
-          (q"", q"")
-        else {
-          val _ns = argNames.zipWithIndex.map {
-            case (argName, i) =>
-              val _n = TermName("_" + (i + 1))
-              q"def ${_n} = this.$argName"
-          }
-          val copyArgs = fields.collect { case f if f.isCtorField =>
-            q"val ${f.name}: ${f.tpt} = this.${f.name}"
-          }
-          (q"""
-            def isEmpty  = $ref == null
-            def nonEmpty = $ref != null
-            def get      = this
-            ..${_ns}
-
-            def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
-              ${name.toTermName}.apply(..$argNames)($memory)
-
-            override def toString(): $StringClass =
-              $MethodModule.toString[$name](this)
-          """, q"""
-            def unapply($scrutinee: $name): $name = $scrutinee
-          """)
-
-       }
+      val _ns = argNames.zipWithIndex.map {
+        case (argName, i) =>
+          val _n = TermName("_" + (i + 1))
+          q"def ${_n} = this.$argName"
+      }
+      val copyArgs = fields.collect { case f if f.isCtorField =>
+        q"val ${f.name}: ${f.tpt} = this.${f.name}"
+      }
       val initializer = if (init.isEmpty) q"" else q"def $initialize = { ..$init }"
       val args = fields.collect { case f if f.isCtorField =>
         q"val ${f.name}: ${f.tpt} = ${f.default}"
       }
-      val companionApply =
-        if (rawMods.hasFlag(ABSTRACT)) q""
-        else q"""
-        """
-
       val body = q"""
+        ..$types
         ..$initializer
         ..$accessors
         ..$methods
-        ..$types
-        ..$caseClassSupport
+
+        def isEmpty  = $ref == null
+        def nonEmpty = $ref != null
+        def get      = this
+        ..${_ns}
+
+        def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
+          ${name.toTermName}.apply(..$argNames)($memory)
+        override def toString(): $StringClass =
+          $MethodModule.toString[$name](this)
+
+        import scala.language.experimental.{macros => $canUseMacros}
+        def is[T]: $BooleanClass =
+          macro $internal.macros.Method.is[$name, T]
+        def as[T]: T =
+          macro $internal.macros.Method.as[$name, T]
       """
       val companionBody = q"""
         def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
-        ..$companionUnapply
+
+        def unapply($scrutinee: $name): $name = $scrutinee
       """
       (body, companionBody, fields)
     }
 
     def transformAbstract = {
-      if (rawMods.hasFlag(CASE))
-        abort("abstract offheap case classes are not supported")
       if (rawArgs.nonEmpty || rawRestArgs.nonEmpty)
         abort("abstract offheap classes may not have constructor arguments")
       val methods = rawStats.map {
@@ -353,12 +349,15 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       val body: Tree = q"""
         ..$methods
+
         def $tag: $Tag =
           $MethodModule.accessor[$name, $Tag]($ref, ${tag.toString})
+
         def is[T]: $BooleanClass =
-          $MethodModule.is[$name, T]($ref)
+          macro $internal.macros.Method.is[$name, T]
+
         def as[T]: T =
-          $MethodModule.as[$name, T]($ref)
+          macro $internal.macros.Method.as[$name, T]
       """
       val fields = List(new SyntacticField(q"val $tag: $Tag"))
       (body, q"", fields)
@@ -496,9 +495,11 @@ class Method(val c: blackbox.Context) extends Common {
     val C = wt[C]
     val ClassOf(fields) = C
     val sb = fresh("sb")
-    val appends = fields.flatMap { f =>
-      List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
-    }.init
+    val appends =
+      if (fields.isEmpty) Nil
+      else fields.flatMap { f =>
+        List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
+      }.init
     q"""
       val $sb = new $StringBuilderClass
       $sb.append(${C.typeSymbol.name.toString})
@@ -509,9 +510,9 @@ class Method(val c: blackbox.Context) extends Common {
     """
   }
 
-  def is[C: WeakTypeTag, T: WeakTypeTag](ref: Tree): Tree = q"???"
+  def is[C: WeakTypeTag, T: WeakTypeTag]: Tree = q"???"
 
-  def as[C: WeakTypeTag, T: WeakTypeTag](ref: Tree): Tree = q"???"
+  def as[C: WeakTypeTag, T: WeakTypeTag]: Tree = q"???"
 }
 
 

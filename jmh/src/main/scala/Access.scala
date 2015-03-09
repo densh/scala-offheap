@@ -29,44 +29,44 @@ class Access {
   def tearDown(): Unit = r.close
 
   @Benchmark
-  def offheapPoint1Field1()= op1._1
+  def offheapPoint1Field1()= op1.a
 
   @Benchmark
-  def offheapPoint2Field1()= op2._1
+  def offheapPoint2Field1()= op2.a
 
   @Benchmark
-  def offheapPoint2Field2()= op2._2
+  def offheapPoint2Field2()= op2.b
 
   @Benchmark
-  def offheapPoint4Field1()= op4._1
+  def offheapPoint4Field1()= op4.a
 
   @Benchmark
-  def offheapPoint4Field2()= op4._2
+  def offheapPoint4Field2()= op4.b
 
   @Benchmark
-  def offheapPoint4Field3()= op4._3
+  def offheapPoint4Field3()= op4.c
 
   @Benchmark
-  def offheapPoint4Field4()= op4._4
+  def offheapPoint4Field4()= op4.d
 
   @Benchmark
-  def point1Field1() = p1._1
+  def point1Field1() = p1.a
 
   @Benchmark
-  def point2Field1() = p2._1
+  def point2Field1() = p2.a
 
   @Benchmark
-  def point2Field2() = p2._2
+  def point2Field2() = p2.b
 
   @Benchmark
-  def point4Field1() = p4._1
+  def point4Field1() = p4.a
 
   @Benchmark
-  def point4Field2() = p4._2
+  def point4Field2() = p4.b
 
   @Benchmark
-  def point4Field3() = p4._3
+  def point4Field3() = p4.c
 
   @Benchmark
-  def point4Field4() = p4._4
+  def point4Field4() = p4.d
 }

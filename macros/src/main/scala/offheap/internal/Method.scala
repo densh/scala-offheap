@@ -15,10 +15,4 @@ object Method {
 
   def toString[C](self: C): String =
     macro macros.Method.toString[C]
-
-  def is[C, T](ref: Any): Boolean =
-    macro macros.Method.is[C, T]
-
-  def as[C, T](ref: Any): T =
-    macro macros.Method.as[C, T]
 }
