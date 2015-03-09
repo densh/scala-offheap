@@ -226,6 +226,14 @@ class Annotations(val c: whitebox.Context) extends Common {
       abort("implicit offheap classes are not supported")
     if (rawMods.hasFlag(CASE))
       abort("offheap classes are case-like by default")
+    val (parent, traits) = rawParents match {
+      case tq"scala.AnyRef" :: traits =>
+        (None, traits)
+      case tq"__" :: traits =>
+        (None, traits)
+      case parent :: traits =>
+        (Some(parent), traits)
+    }
 
     // Generate fresh names used in desugaring
     val ref          = fresh("ref")
@@ -250,14 +258,6 @@ class Annotations(val c: whitebox.Context) extends Common {
             abort("offheap classes can only inherit from " +
                   "abstract offheap classes and universal traits")
           ref
-      }
-      val (parent, traits) = rawParents match {
-        case tq"scala.AnyRef" :: traits =>
-          (None, traits)
-        case tq"__" :: traits =>
-          (None, traits)
-        case parent :: traits =>
-          (Some(parent), traits)
       }
       val fields = {
         def checkMods(mods: Modifiers) =
@@ -333,51 +333,34 @@ class Annotations(val c: whitebox.Context) extends Common {
           ${name.toTermName}.apply(..$argNames)($memory)
         override def toString(): $StringClass =
           $MethodModule.toString[$name](this)
-
-        import scala.language.experimental.{macros => $canUseMacros}
-        def is[T]: $BooleanClass =
-          macro $internal.macros.Method.is[$name, T]
-        def as[T]: T =
-          macro $internal.macros.Method.as[$name, T]
       """
       val companionBody = q"""
         def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
-
         def unapply($scrutinee: $name) = $unapplyBody
       """
-      (body, companionBody, fields, traits)
+      (body, companionBody, fields)
     }
 
     def transformAbstract = {
       if (rawArgs.nonEmpty || rawRestArgs.nonEmpty)
-        abort("abstract offheap classes may not have constructor arguments")
-      val methods = rawStats.map {
-        case dd: DefDef =>
-          if (dd.rhs.isEmpty)
-            abort("offheap abstract classes may not contain abstract methods",
-                  at = dd.pos)
-        case other =>
-          abort("offheap abstract classes can only contain concrete methods",
-                at = other.pos)
+        abort("union classes may not have constructor arguments")
+      if (traits.nonEmpty)
+        abort("union classes may only inherit from other abstract offheap classes")
+      rawStats.match {
+        case Nil =>
+        case head :: _ =>
+          abort("union classes may not have any body statements", at = head.pos)
       }
       val body: Tree = q"""
-        ..$methods
-
         def $tag: $Tag =
           $MethodModule.accessor[$name, $Tag]($ref, ${tag.toString})
-
-        def is[T]: $BooleanClass =
-          macro $internal.macros.Method.is[$name, T]
-
-        def as[T]: T =
-          macro $internal.macros.Method.as[$name, T]
       """
       val fields = List(new SyntacticField(q"val $tag: $Tag"))
-      (body, q"", fields, Nil)
+      (body, q"", fields)
     }
 
-    val (body, companionBody, fields, traits) =
+    val (body, companionBody, fields) =
       if (rawMods.hasFlag(ABSTRACT))
         transformAbstract
       else
@@ -385,22 +368,33 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     val annot = q"new $OffheapClass(${layout(fields)})"
 
+    val unapplyParent = parent.map { p =>
+      val isC = q"$scrutinee.is[$name]"
+      val asC = q"$scrutinee.as[$name]"
+      val body =
+        if (fields.filter(_.isCtorField).isEmpty) isC
+        else q"if ($isC) unapply($asC) else empty"
+      q"def unapply($scrutinee: $p) = $body"
+    }
+
     debug("@ofheap")(q"""
       @$annot final class $name private(
         private val $ref: $RefClass
       ) extends $AnyValClass with ..$traits { $rawSelf =>
         ..$body
+        import scala.language.experimental.{macros => $canUseMacros}
+        def is[T]: $BooleanClass = macro $internal.macros.Method.is[$name, T]
+        def as[T]: T             = macro $internal.macros.Method.as[$name, T]
       }
       object ${name.toTermName}
           extends { ..$companionEarly }
           with ..$companionParents { $companionSelf =>
         ..$companionStats
         ..$companionBody
-        val empty: $name = null.asInstanceOf[$name]
-        def fromRef($ref: $RefClass): $name =
-          new $name($ref)
-        def toRef($instance: $name): $RefClass =
-          $instance.$ref
+        ..$unapplyParent
+        val empty: $name                       = null.asInstanceOf[$name]
+        def fromRef($ref: $RefClass): $name    = new $name($ref)
+        def toRef($instance: $name): $RefClass = $instance.$ref
       }
     """)
   }
