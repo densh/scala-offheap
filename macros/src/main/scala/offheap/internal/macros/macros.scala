@@ -244,6 +244,21 @@ class Annotations(val c: whitebox.Context) extends Common {
         if (arg.mods.hasFlag(IMPLICIT))
           abort("offheap classes may not have implicit arguments", at = arg.pos)
       }
+      rawParents.foreach {
+        case q"${tq"$ref[..$targs]"}(...$args)" =>
+          if (args.nonEmpty || targs.nonEmpty)
+            abort("offheap classes can only inherit from " +
+                  "abstract offheap classes and universal traits")
+          ref
+      }
+      val (parent, traits) = rawParents match {
+        case tq"scala.AnyRef" :: traits =>
+          (None, traits)
+        case tq"__" :: traits =>
+          (None, traits)
+        case parent :: traits =>
+          (Some(parent), traits)
+      }
       val fields = {
         def checkMods(mods: Modifiers) =
           if (mods.hasFlag(LAZY))
@@ -268,13 +283,6 @@ class Annotations(val c: whitebox.Context) extends Common {
         case ValDef(_, vname, tpt, value) =>
           q"$MethodModule.assigner[$name, $tpt]($ref, ${vname.toString}, $value)"
       }
-      val parents = rawParents.map {
-        case q"${tq"$ref[..$targs]"}(...$args)" =>
-          if (args.nonEmpty || targs.nonEmpty)
-            abort("offheap classes can only inherit from " +
-                  "abstract offheap classes and universal traits")
-          ref
-      }
       val methods = rawStats.collect { case t: DefDef => t }
       val types = rawStats.collect { case t: TypeDef => t }
       // Generate additional members
@@ -297,6 +305,11 @@ class Annotations(val c: whitebox.Context) extends Common {
           val _n = TermName("_" + (i + 1))
           q"def ${_n} = this.$argName"
       }
+      val getBody = argNames match {
+        case Nil          => q"this"
+        case head :: Nil  => q"this.$head"
+        case head :: tail => q"this"
+      }
       val copyArgs = fields.collect { case f if f.isCtorField =>
         q"val ${f.name}: ${f.tpt} = this.${f.name}"
       }
@@ -304,6 +317,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       val args = fields.collect { case f if f.isCtorField =>
         q"val ${f.name}: ${f.tpt} = ${f.default}"
       }
+      val unapplyBody = if (argNames.isEmpty) q"true" else q"$scrutinee"
       val body = q"""
         ..$types
         ..$initializer
@@ -312,7 +326,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
         def isEmpty  = $ref == null
         def nonEmpty = $ref != null
-        def get      = this
+        def get      = $getBody
         ..${_ns}
 
         def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
@@ -330,9 +344,9 @@ class Annotations(val c: whitebox.Context) extends Common {
         def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
 
-        def unapply($scrutinee: $name): $name = $scrutinee
+        def unapply($scrutinee: $name) = $unapplyBody
       """
-      (body, companionBody, fields)
+      (body, companionBody, fields, traits)
     }
 
     def transformAbstract = {
@@ -360,10 +374,10 @@ class Annotations(val c: whitebox.Context) extends Common {
           macro $internal.macros.Method.as[$name, T]
       """
       val fields = List(new SyntacticField(q"val $tag: $Tag"))
-      (body, q"", fields)
+      (body, q"", fields, Nil)
     }
 
-    val (body, companionBody, fields) =
+    val (body, companionBody, fields, traits) =
       if (rawMods.hasFlag(ABSTRACT))
         transformAbstract
       else
@@ -371,10 +385,10 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     val annot = q"new $OffheapClass(${layout(fields)})"
 
-    q"""
+    debug("@ofheap")(q"""
       @$annot final class $name private(
         private val $ref: $RefClass
-      ) extends $AnyValClass { $rawSelf =>
+      ) extends $AnyValClass with ..$traits { $rawSelf =>
         ..$body
       }
       object ${name.toTermName}
@@ -388,7 +402,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         def toRef($instance: $name): $RefClass =
           $instance.$ref
       }
-    """
+    """)
   }
 
   def offheapAnnotation(annottees: Tree*): Tree = annottees match {
