@@ -3,7 +3,7 @@ package test
 import org.scalatest.FunSuite
 import offheap._, x64._
 
-@offheap class Point(x: Double, y: Double) {
+@data class Point(x: Double, y: Double) {
   def distanceTo(other: Point): Double =
     math.sqrt(math.pow(other.x - x, 2) + math.pow(other.y - y, 2))
 }

@@ -3,11 +3,11 @@ package test
 import org.scalatest.FunSuite
 import offheap._, x64._
 
-@offheap class C1(var x: Int)
+@data class C1(var x: Int)
 
-@offheap class C2 { var x: Int = 2 }
+@data class C2 { var x: Int = 2 }
 
-@offheap class C3 { C3.x = 10 }
+@data class C3 { C3.x = 10 }
 object C3 { var x = 0 }
 
 class MutableSuite extends FunSuite {
