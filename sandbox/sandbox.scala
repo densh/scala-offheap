@@ -25,7 +25,7 @@ object Offheap extends App{
     }
     outer.close
   }
-  @offheap case class Tree(i: Int, left: Tree, right: Tree)
+  @data class Tree(i: Int, left: Tree, right: Tree)
   def isum(tree: Tree): Int = {
     val left = tree.left
     if (left.isEmpty) tree.i

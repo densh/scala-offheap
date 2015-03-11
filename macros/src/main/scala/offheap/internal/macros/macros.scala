@@ -22,18 +22,20 @@ trait Definitions {
   val RegionClass        = staticClass(s"$prefix.Region")
   val RefClass           = staticClass(s"$prefix.Ref")
   val MemoryClass        = staticClass(s"$prefix.Memory")
-  val TagClass           = staticClass("offheap.internal.Tag")
+  val DataClass          = staticClass("offheap.internal.Data")
+  val EnumClass          = staticClass("offheap.internal.Enum")
   val LayoutClass        = staticClass("offheap.internal.Layout")
+  val TagClass           = staticClass("offheap.internal.Tag")
   val ClassTagClass      = staticClass("offheap.internal.ClassTag")
   val ClassTagRangeClass = staticClass("offheap.internal.ClassTagRange")
   val ParentClass        = staticClass("offheap.internal.Parent")
 
+  val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
 
-  val initialize = TermName("$initialize")
-
-  val tag = TermName("$tag")
-  val Tag = ShortClass
+  val initialize   = TermName("$initialize")
+  val tag          = TermName("$tag")
+  val canUseMacros = TermName("$canUseMacros")
 }
 
 trait Common extends Definitions {
@@ -43,6 +45,8 @@ trait Common extends Definitions {
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
   def panic(msg: String = ""): Nothing = abort(s"panic: $msg")
+
+  def unreachable = panic("unreachable")
 
   def debug[T](header: String)(f: => T): T = {
     val res = f
@@ -70,14 +74,17 @@ trait Common extends Definitions {
       if (trees.isEmpty) None else Some(trees)
     }
   }
-  object ExtractLayout extends ExtractAnnotation(LayoutClass)
-  object ExtractParent extends ExtractAnnotation(ParentClass)
-  object ExtractClassTag extends ExtractAnnotation(ClassTagClass)
+  object ExtractEnum          extends ExtractAnnotation(EnumClass)
+  object ExtractData          extends ExtractAnnotation(DataClass)
+  object ExtractLayout        extends ExtractAnnotation(LayoutClass)
+  object ExtractParent        extends ExtractAnnotation(ParentClass)
+  object ExtractClassTag      extends ExtractAnnotation(ClassTagClass)
+  object ExtractClassTagRange extends ExtractAnnotation(ClassTagRangeClass)
 
   object ClassOf {
-    def unapply(tpe: Type): Option[(List[Field], List[Tree], Option[Tree])] =
+    def unapply(tpe: Type): Option[(List[Field], List[Tree], Option[(Tree, Tree)])] =
       unapply(tpe.widen.typeSymbol)
-    def unapply(sym: Symbol): Option[(List[Field], List[Tree], Option[Tree])] = {
+    def unapply(sym: Symbol): Option[(List[Field], List[Tree], Option[(Tree, Tree)])] = {
       val fieldsOpt: Option[List[Field]] =
         ExtractLayout.unapply(sym).map { layouts =>
           layouts.head match {
@@ -96,11 +103,10 @@ trait Common extends Definitions {
           case q"new $_(new $_[$tpt]())" => tpt
           case other => println(showRaw(other)); panic()
         }
-        val tag = ExtractClassTag.unapply(sym).map(_.head).map {
-          case q"new $_($tag)" => tag
+        val tagOpt = ExtractClassTag.unapply(sym).map(_.head).map {
+          case q"new $_($value: $tpt)" => (value, tpt)
         }
-
-        (fields, parents, tag)
+        (fields, parents, tagOpt)
       }
     }
   }
@@ -199,6 +205,35 @@ trait Common extends Definitions {
     case Allocatable() => ()
     case _             => abort(s"$T is not fixed sized allocatable object")
   }
+
+  def isEnum(T: Type): Boolean = ExtractEnum.unapply(T.typeSymbol).nonEmpty
+
+  def isData(T: Type): Boolean = ExtractData.unapply(T.typeSymbol).nonEmpty
+
+  def isRelated(T: Type, C: Type): Boolean = {
+    def topmostParent(sym: Symbol): Symbol =
+      ExtractParent.unapply(sym).map {
+        case _ :+ q"new $_(new $_[$tpt]())" => tpt.tpe.typeSymbol
+      }.getOrElse(sym)
+    topmostParent(T.typeSymbol) == topmostParent(C.typeSymbol)
+  }
+
+  def isParent(T: Type, C: Type): Boolean =
+    debug(s"isParent($T, $C)")(
+    ExtractParent.unapply(C.typeSymbol).getOrElse(Nil).exists {
+      case q"new $_(new $_[$tpt]())" =>
+        val left = tpt.tpe.typeSymbol
+        val right = T.typeSymbol
+        debug(s"$left == $right")(left == right)
+      case _                         => false
+    }
+    )
+
+  def cast(v: Tree, from: Type, to: Type) = {
+    val fromCompanion = from.typeSymbol.companion
+    val toCompanion = to.typeSymbol.companion
+    q"$toCompanion.fromRef($fromCompanion.toRef($v))"
+  }
 }
 
 class Annotations(val c: whitebox.Context) extends Common {
@@ -267,10 +302,24 @@ class Annotations(val c: whitebox.Context) extends Common {
     val instance     = fresh("instance")
     val scrutinee    = fresh("scrutinee")
     val value        = fresh("value")
-    val canUseMacros = fresh("canUseMacros")
 
     // Process and existing members
+    val traits = rawTraits match {
+      case tq"$pkg.AnyRef" :: Nil if pkg.symbol == ScalaPackage => Nil
+      case other                                                => other
+    }
+    val parents = rawMods.annotations.collect {
+      case q"new $annot(new $_[$tpt]())" if annot.symbol == ParentClass =>
+        tpt
+    }
+    val tagOpt = rawMods.annotations.collectFirst {
+      case q"new $annot($value: $tpt)" if annot.symbol == ClassTagClass =>
+        (value, tpt)
+    }
     val fields = {
+      val tagField = tagOpt.map {
+        case (value, tpt) => new SyntacticField(q"val $tag: $tpt")
+      }.toList
       def checkMods(mods: Modifiers) =
         if (mods.hasFlag(LAZY))
           abort("data classes may not have lazy fields")
@@ -287,7 +336,7 @@ class Annotations(val c: whitebox.Context) extends Common {
           checkMods(mods)
           new SyntacticField(vd)
       }
-      argFields ++ bodyFields
+      tagField ++ argFields ++ bodyFields
     }
     val init = rawStats.collect {
       case t if t.isTerm               => t
@@ -296,14 +345,6 @@ class Annotations(val c: whitebox.Context) extends Common {
     }
     val methods = rawStats.collect { case t: DefDef => t }
     val types = rawStats.collect { case t: TypeDef => t }
-    val traits = rawTraits match {
-      case tq"$pkg.AnyRef" :: Nil if pkg.symbol == ScalaPackage => Nil
-      case other                                                => other
-    }
-    val parents = rawMods.annotations.collect {
-      case q"new $annot(new $_[$tpt]())" if annot.symbol == ParentClass =>
-        tpt
-    }
 
     // Generate additional members
     val accessors = fields.flatMap { f =>
@@ -342,7 +383,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
-      layout(fields) :: rawMods.annotations
+      q"new $DataClass" :: layout(fields) :: rawMods.annotations
     )
 
     q"""
@@ -408,7 +449,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     val ref          = fresh("ref")
     val instance     = fresh("instance")
-    val canUseMacros = fresh("canUseMacros")
+    val coerce       = fresh("coerce")
 
     val groupedAnns = rawMods.annotations.groupBy {
       case q"new $ann[..$_](...$_)" =>
@@ -462,24 +503,27 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     val range =
       if (parents.nonEmpty) rangeOpt.get
-      else q"new $ClassTagRangeClass(${0.toShort}, $count)"
-    val layt = layout(List(new SyntacticField(q"val $tag: $Tag")))
-    val annots = layt :: range :: parents
+      else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
+    val q"$_: $tagTpt" = const(0)
+    val layt = layout(List(new SyntacticField(q"val $tag: $tagTpt")))
+    val annots = q"new $EnumClass" :: layt :: range :: parents
 
     q"""
       @..$annots final class $name private(
         private val $ref: $RefClass
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
-        def $tag: $Tag           = $MethodModule.accessor[$name, $Tag]($ref, ${tag.toString})
+        def $tag: $tagTpt        = $MethodModule.accessor[$name, $tagTpt]($ref, ${tag.toString})
         def is[T]: $BooleanClass = macro $internal.macros.Method.is[$name, T]
         def as[T]: T             = macro $internal.macros.Method.as[$name, T]
       }
       $moduleMods object $termName extends { ..$rawEarly } with ..$rawParents { $rawSelf =>
+        import scala.language.experimental.{macros => $canUseMacros}
         val empty: $name                       = null.asInstanceOf[$name]
         def fromRef($ref: $RefClass): $name    = new $name($ref)
         def toRef($instance: $name): $RefClass = $instance.$ref
-
+        implicit def $coerce[T](t: T): $name   =
+          macro $internal.macros.WhiteboxMethod.coerce[$name, T]
         ..$stats
       }
     """
@@ -554,7 +598,8 @@ class Method(val c: blackbox.Context) extends Common {
   // TODO: zero fields by default
   def allocator[C: WeakTypeTag](memory: Tree, args: Tree*): Tree = {
     val C = wt[C]
-    val ClassOf(fields, _, _) = C
+    val ClassOf(fields, _, tagOpt) = C
+    val tagValueOpt = tagOpt.map { case (v, tpt) => v }
     val addr = fresh("addr")
     val size =
       if (fields.isEmpty) q"1"
@@ -562,7 +607,7 @@ class Method(val c: blackbox.Context) extends Common {
         val fieldTpes = fields.map(_.tpe)
         q"$memory.sizeOf[(..$fieldTpes)]"
       }
-    val writes = fields.zip(args).map { case (f, arg) =>
+    val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
       val tpes = fields.takeWhile(_ ne f).map(_.tpe)
       val offset = q"$memory.sizeOf[(..$tpes)]"
       write(q"$addr + $offset", f.tpe, arg, memory)
@@ -585,16 +630,22 @@ class Method(val c: blackbox.Context) extends Common {
 
   def toString[C: WeakTypeTag](self: Tree): Tree = {
     val C = wt[C]
-    val ClassOf(fields, _, _) = C
+    val ClassOf(fields, parents, tagOpt) = C
+    val actualFields = if (tagOpt.isEmpty) fields else fields.tail
     val sb = fresh("sb")
     val appends =
-      if (fields.isEmpty) Nil
-      else fields.flatMap { f =>
+      if (actualFields.isEmpty) Nil
+      else actualFields.flatMap { f =>
         List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
       }.init
+    val path =
+      (C :: parents.map(_.tpe))
+        .reverse
+        .map(_.typeSymbol.name.toString)
+        .mkString("", ".", "")
     q"""
       val $sb = new $StringBuilderClass
-      $sb.append(${C.typeSymbol.name.toString})
+      $sb.append($path)
       $sb.append("(")
       ..$appends
       $sb.append(")")
@@ -602,11 +653,49 @@ class Method(val c: blackbox.Context) extends Common {
     """
   }
 
-  def is[C: WeakTypeTag, T: WeakTypeTag]: Tree = q"???"
+  def is[C: WeakTypeTag, T: WeakTypeTag]: Tree = {
+    val C = wt[C]
+    val T = wt[T]
+    if (!isRelated(C, T)) q"false"
+    else if (C =:= T) q"true"
+    else {
+      val tg = fresh("tag")
+      val check =
+        if (isEnum(T)) {
+          val ExtractClassTagRange(q"new $_($from: $_, $to: $_)" :: Nil) = T.typeSymbol
+          q"$tg > $from && $tg <= $to"
+        } else if (isData(T)) {
+          val ExtractClassTag(q"new $_($value: $_)" :: Nil) = T.typeSymbol
+          q"$tg == $value"
+        } else unreachable
+      q"""
+        val $tg = ${c.prefix}.$tag
+        $check
+      """
+    }
+  }
 
-  def as[C: WeakTypeTag, T: WeakTypeTag]: Tree = q"???"
+  def as[C: WeakTypeTag, T: WeakTypeTag]: Tree = {
+    def fail = q"throw new $offheap.CastException"
+    def ok   = cast(c.prefix.tree, wt[C], wt[T])
+    is[C, T] match {
+      case q"${cond: Boolean}" => if (cond) ok else fail
+      case cond                => q"if ($cond) $ok else $fail"
+    }
+  }
 }
 
+class WhiteboxMethod(val c: whitebox.Context) extends Common {
+  import c.universe.{ weakTypeOf => wt, _ }
+
+  def coerce[C: WeakTypeTag, T: WeakTypeTag](t: Tree): Tree = debug("coerce $C to $T") {
+    val T = wt[T]
+    val C = wt[C]
+    debug("t")(t)
+    if (isParent(C, T)) cast(t, T, C)
+    else abort(s"can't coerce $T to $C")
+  }
+}
 
 class Memory(val c: blackbox.Context) extends Common {
   import c.universe._

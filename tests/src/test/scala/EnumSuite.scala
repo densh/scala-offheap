@@ -1,0 +1,74 @@
+package test
+
+import org.scalatest.FunSuite
+import offheap._, x64._
+
+object Workaround {
+  @enum object E1 {
+    @data class D1
+    @enum object E2 {
+      @data class D2
+    }
+    @data class D3
+  }
+  @data class D4
+  class C
+}
+import Workaround._, E1._, E2._
+
+class EnumSuite extends FunSuite {
+  implicit val r = Region.open(Pool(UnsafeMemory))
+  protected override def finalize = r.close
+
+  test("D1 is D1") { assert(D1().is[D1]) }
+  test("D2 is D2") { assert(D2().is[D2]) }
+  test("D3 is D3") { assert(D3().is[D3]) }
+  test("D4 is D4") { assert(D4().is[D4]) }
+
+  test("D1 is E1")     { assert( D1().is[E1]) }
+  test("D2 is E1")     { assert( D2().is[E1]) }
+  test("D3 is E1")     { assert( D3().is[E1]) }
+  test("D4 is not E1") { assert(!D4().is[E1]) }
+
+  test("D1 is not E2") { assert(!D1().is[E2]) }
+  test("D2 is E2")     { assert( D2().is[E2]) }
+  test("D3 is not E2") { assert(!D3().is[E2]) }
+  test("D4 is not E2") { assert(!D4().is[E2]) }
+
+  test("D1 as E1 is D1") { assert(D1().as[E1].is[D1]) }
+  test("D2 as E1 is D2") { assert(D2().as[E1].is[D2]) }
+  test("D3 as E1 is D3") { assert(D3().as[E1].is[D3]) }
+
+  test("D2 as E2 is E1") { assert(D2().as[E2].is[E1]) }
+  test("D2 as E2 is D2") { assert(D2().as[E2].is[D2]) }
+
+  test("D1 as E1 as D1 == D1") { val d = D1(); assert(d.as[E1].as[D1] == d) }
+  test("D2 as E1 as D1 == D2") { val d = D2(); assert(d.as[E1].as[D2] == d) }
+  test("D3 as E1 as D1 == D3") { val d = D3(); assert(d.as[E1].as[D3] == d) }
+
+  test("D1 as E2 throws") { intercept[CastException] { D1().as[E2] } }
+  test("D3 as E2 throws") { intercept[CastException] { D3().as[E2] } }
+  test("D4 as E1 throws") { intercept[CastException] { D4().as[E1] } }
+  test("D4 as E2 throws") { intercept[CastException] { D4().as[E2] } }
+
+  test("D1 is not C") { assert(!D1().is[C]) }
+  test("D2 is not C") { assert(!D1().is[C]) }
+  test("D3 is not C") { assert(!D1().is[C]) }
+  test("D4 is not C") { assert(!D1().is[C]) }
+
+  test("D1 as C throws") { intercept[CastException] { D1().as[C] } }
+  test("D2 as C throws") { intercept[CastException] { D2().as[C] } }
+  test("D3 as C throws") { intercept[CastException] { D3().as[C] } }
+  test("D4 as C throws") { intercept[CastException] { D4().as[C] } }
+
+  test("D1 toString") { assert(D1().toString == "E1.D1()"   ) }
+  test("D2 toString") { assert(D2().toString == "E1.E2.D2()") }
+  test("D3 toString") { assert(D3().toString == "E1.D3()"   ) }
+  test("D4 toString") { assert(D4().toString == "D4()"      ) }
+
+  test("coerce D1 to E1") { val e1: E1 = D1()        }
+  test("coerce D2 to E1") { val e1: E1 = D2()        }
+  test("coerce D3 to E1") { val e1: E1 = D3()        }
+  test("coerce D2 to E2") { val e1: E2 = D2()        }
+  test("coerce E2 to E1") { val e1: E1 = D2().as[E2] }
+}
