@@ -223,7 +223,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
   // TODO: modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
-  // TODO: gracefully fail on inner classes and objects
+  // TODO: pattern matching on parent scrutinees
   def dataTransform(clazz: Tree, companion: Tree) = debug("@data") {
     // Parse the input trees
     val q"""
@@ -339,15 +339,6 @@ class Annotations(val c: whitebox.Context) extends Common {
     }
     val unapplyBody = if (argNames.isEmpty) q"true" else q"$scrutinee"
     val unapplyTpt = if (argNames.isEmpty) tq"$BooleanClass" else tq"$name"
-    val unapplyParents = parents.headOption.map { p =>
-      val isC = q"$scrutinee.is[$name]"
-      val asC = q"$scrutinee.as[$name]"
-      val body =
-        if (fields.filter(_.isCtorField).isEmpty) isC
-        else q"if ($isC) unapply($asC) else empty"
-      q"def unapply($scrutinee: $p): $unapplyTpt = $body"
-    }.toSeq
-
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
@@ -355,9 +346,12 @@ class Annotations(val c: whitebox.Context) extends Common {
     )
 
     q"""
-      $mods class $name private(
+      $mods class $name private (
         private val $ref: $RefClass
       ) extends $AnyValClass with ..$traits { $rawSelf =>
+        ..$initializer
+        ..$accessors
+
         def isEmpty  = $ref == null
         def nonEmpty = $ref != null
         def get      = $getBody
@@ -373,21 +367,17 @@ class Annotations(val c: whitebox.Context) extends Common {
         def as[T]: T             = macro $internal.macros.Method.as[$name, T]
 
         ..$types
-        ..$initializer
-        ..$accessors
         ..$methods
       }
-      object ${name.toTermName}
-          extends { ..$companionEarly }
-          with ..$companionParents { $companionSelf =>
+      $companionMods object ${name.toTermName}
+                     extends { ..$companionEarly }
+                     with ..$companionParents { $companionSelf =>
         val empty: $name                       = null.asInstanceOf[$name]
         def fromRef($ref: $RefClass): $name    = new $name($ref)
         def toRef($instance: $name): $RefClass = $instance.$ref
         def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
         def unapply($scrutinee: $name): $unapplyTpt = $unapplyBody
-
-        ..$unapplyParents
 
         ..$companionStats
       }
