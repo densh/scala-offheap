@@ -71,4 +71,11 @@ class EnumSuite extends FunSuite {
   test("coerce D3 to E1") { val e1: E1 = D3()        }
   test("coerce D2 to E2") { val e1: E2 = D2()        }
   test("coerce E2 to E1") { val e1: E1 = D2().as[E2] }
+
+  test("match E1 as D1") { val D1() = D1().as[E1] }
+  test("match E1 as D2") { val D2() = D2().as[E1] }
+  test("match E1 as D3") { val D3() = D3().as[E1] }
+  test("match E2 as D2") { val D2() = D2().as[E2] }
+
+  test("match D1 as D2 fails") { intercept[MatchError] { val D1() = D2() } }
 }

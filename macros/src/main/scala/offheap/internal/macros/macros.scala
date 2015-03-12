@@ -18,17 +18,20 @@ trait Definitions {
   val MethodModule  = staticModule("offheap.internal.Method")
   val PoolModule    = staticModule(s"$prefix.Pool")
 
-  val StringBuilderClass = staticClass("scala.collection.mutable.StringBuilder")
-  val RegionClass        = staticClass(s"$prefix.Region")
-  val RefClass           = staticClass(s"$prefix.Ref")
-  val MemoryClass        = staticClass(s"$prefix.Memory")
-  val DataClass          = staticClass("offheap.internal.Data")
-  val EnumClass          = staticClass("offheap.internal.Enum")
-  val LayoutClass        = staticClass("offheap.internal.Layout")
-  val TagClass           = staticClass("offheap.internal.Tag")
-  val ClassTagClass      = staticClass("offheap.internal.ClassTag")
-  val ClassTagRangeClass = staticClass("offheap.internal.ClassTagRange")
-  val ParentClass        = staticClass("offheap.internal.Parent")
+  val StringBuilderClass      = staticClass("scala.collection.mutable.StringBuilder")
+  val RegionClass             = staticClass(s"$prefix.Region")
+  val RefClass                = staticClass(s"$prefix.Ref")
+  val MemoryClass             = staticClass(s"$prefix.Memory")
+  val DataClass               = staticClass("offheap.internal.Data")
+  val EnumClass               = staticClass("offheap.internal.Enum")
+  val LayoutClass             = staticClass("offheap.internal.Layout")
+  val TagClass                = staticClass("offheap.internal.Tag")
+  val ClassTagClass           = staticClass("offheap.internal.ClassTag")
+  val ClassTagRangeClass      = staticClass("offheap.internal.ClassTagRange")
+  val ParentClass             = staticClass("offheap.internal.Parent")
+  val PrimaryExtractorClass   = staticClass("offheap.internal.PrimaryExtractor")
+  val ParentExtractorClass    = staticClass("offheap.internal.ParentExractor")
+  val UniversalExtractorClass = staticClass("offheap.internal.UniversalExtractor")
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
@@ -74,12 +77,15 @@ trait Common extends Definitions {
       if (trees.isEmpty) None else Some(trees)
     }
   }
-  object ExtractEnum          extends ExtractAnnotation(EnumClass)
-  object ExtractData          extends ExtractAnnotation(DataClass)
-  object ExtractLayout        extends ExtractAnnotation(LayoutClass)
-  object ExtractParent        extends ExtractAnnotation(ParentClass)
-  object ExtractClassTag      extends ExtractAnnotation(ClassTagClass)
-  object ExtractClassTagRange extends ExtractAnnotation(ClassTagRangeClass)
+  object ExtractEnum               extends ExtractAnnotation(EnumClass)
+  object ExtractData               extends ExtractAnnotation(DataClass)
+  object ExtractLayout             extends ExtractAnnotation(LayoutClass)
+  object ExtractParent             extends ExtractAnnotation(ParentClass)
+  object ExtractClassTag           extends ExtractAnnotation(ClassTagClass)
+  object ExtractClassTagRange      extends ExtractAnnotation(ClassTagRangeClass)
+  object ExtractParentExtractor    extends ExtractAnnotation(ParentExtractorClass)
+  object ExtractPrimaryExtractor   extends ExtractAnnotation(PrimaryExtractorClass)
+  object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
 
   object ClassOf {
     def unapply(tpe: Type): Option[(List[Field], List[Tree], Option[(Tree, Tree)])] =
@@ -94,14 +100,11 @@ trait Common extends Definitions {
               }
             case q"new $_" =>
               Nil
-            case other =>
-              panic(s"can't parse annotation $other")
           }
         }
       fieldsOpt.map { fields =>
         val parents = ExtractParent.unapply(sym).toList.flatten.map {
           case q"new $_(new $_[$tpt]())" => tpt
-          case other => println(showRaw(other)); panic()
         }
         val tagOpt = ExtractClassTag.unapply(sym).map(_.head).map {
           case q"new $_($value: $tpt)" => (value, tpt)
@@ -219,15 +222,10 @@ trait Common extends Definitions {
   }
 
   def isParent(T: Type, C: Type): Boolean =
-    debug(s"isParent($T, $C)")(
     ExtractParent.unapply(C.typeSymbol).getOrElse(Nil).exists {
-      case q"new $_(new $_[$tpt]())" =>
-        val left = tpt.tpe.typeSymbol
-        val right = T.typeSymbol
-        debug(s"$left == $right")(left == right)
+      case q"new $_(new $_[$tpt]())" => tpt.tpe.typeSymbol == T.typeSymbol
       case _                         => false
     }
-    )
 
   def cast(v: Tree, from: Type, to: Type) = {
     val fromCompanion = from.typeSymbol.companion
@@ -304,6 +302,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val value        = fresh("value")
 
     // Process and existing members
+    val termName = name.toTermName
     val traits = rawTraits match {
       case tq"$pkg.AnyRef" :: Nil if pkg.symbol == ScalaPackage => Nil
       case other                                                => other
@@ -378,18 +377,64 @@ class Annotations(val c: whitebox.Context) extends Common {
     val args = fields.collect { case f if f.isCtorField =>
       q"val ${f.name}: ${f.tpt} = ${f.default}"
     }
-    val unapplyBody = if (argNames.isEmpty) q"true" else q"$scrutinee"
     val unapplyTpt = if (argNames.isEmpty) tq"$BooleanClass" else tq"$name"
+    val unapplyEmpty = if (argNames.isEmpty) q"false" else q"$termName.empty"
+
+    val primaryExtractor = {
+      val extractor = fresh("PrimaryExtractor")
+      val body = if (argNames.isEmpty) q"true" else q"$scrutinee"
+      q"""
+        object $extractor {
+          def unapply($scrutinee: $name): $unapplyTpt = $body
+        }
+      """
+    }
+    val parentExtractors = parents.map { p =>
+      val extractor = fresh("ParentExtractor")
+      val isC = q"$scrutinee.is[$name]"
+      val asC = q"$scrutinee.as[$name]"
+      val body =
+        if (fields.filter(_.isCtorField).isEmpty) isC
+        else q"if ($isC) $termName.${primaryExtractor.name}.unapply($asC) else $termName.empty"
+      q"""
+        object $extractor {
+          def unapply($scrutinee: $p): $unapplyTpt = $body
+        }
+      """
+    }
+    val universalExtractor = {
+      val extractor = fresh("UniversalExtractor")
+      val parentCases = parents.zip(parentExtractors).map { case (p, u) =>
+        cq"$scrutinee: $p => ${u.name}.unapply($scrutinee)"
+      }
+      q"""
+        object $extractor {
+          def unapply($scrutinee: $AnyClass): $unapplyTpt = $scrutinee match {
+            case $scrutinee: $name => ${primaryExtractor.name}.unapply($scrutinee)
+            case ..$parentCases
+            case _                 => $unapplyEmpty
+          }
+        }
+      """
+    }
+    val extractorAnnots =
+      q"new $PrimaryExtractorClass($termName.${primaryExtractor.name})" ::
+      q"new $UniversalExtractorClass($termName.${universalExtractor.name})" ::
+      parents.zip(parentExtractors).map { case (p, u) =>
+        q"new $ParentExtractorClass(new $TagClass[$p], $termName.${u.name})"
+      }
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
-      q"new $DataClass" :: layout(fields) :: rawMods.annotations
+      q"new $DataClass" :: layout(fields) :: extractorAnnots ::: rawMods.annotations
     )
 
     q"""
       $mods class $name private (
         private val $ref: $RefClass
       ) extends $AnyValClass with ..$traits { $rawSelf =>
+        import scala.language.experimental.{macros => $canUseMacros}
+
         ..$initializer
         ..$accessors
 
@@ -399,26 +444,32 @@ class Annotations(val c: whitebox.Context) extends Common {
         ..${_ns}
 
         def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
-          ${name.toTermName}.apply(..$argNames)($memory)
+          $termName.apply(..$argNames)($memory)
         override def toString(): $StringClass =
           $MethodModule.toString[$name](this)
 
-        import scala.language.experimental.{macros => $canUseMacros}
         def is[T]: $BooleanClass = macro $internal.macros.Method.is[$name, T]
         def as[T]: T             = macro $internal.macros.Method.as[$name, T]
 
         ..$types
         ..$methods
       }
-      $companionMods object ${name.toTermName}
+      $companionMods object $termName
                      extends { ..$companionEarly }
                      with ..$companionParents { $companionSelf =>
+        import scala.language.experimental.{macros => $canUseMacros}
+
         val empty: $name                       = null.asInstanceOf[$name]
         def fromRef($ref: $RefClass): $name    = new $name($ref)
         def toRef($instance: $name): $RefClass = $instance.$ref
         def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
-        def unapply($scrutinee: $name): $unapplyTpt = $unapplyBody
+        def unapply(scrutinee: $AnyClass): $unapplyTpt =
+          macro $internal.macros.WhiteboxMethod.unapply[$name]
+
+        $primaryExtractor
+        $universalExtractor
+        ..$parentExtractors
 
         ..$companionStats
       }
@@ -688,10 +739,32 @@ class Method(val c: blackbox.Context) extends Common {
 class WhiteboxMethod(val c: whitebox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
 
-  def coerce[C: WeakTypeTag, T: WeakTypeTag](t: Tree): Tree = debug("coerce $C to $T") {
+  def unapply[C: WeakTypeTag](scrutinee: Tree): Tree = {
+    val q"$_(..$args)" = c.macroApplication
+    val C = wt[C]
+    val T = scrutinee.tpe
+    val extractor =
+      if (C =:= T) {
+        val ExtractPrimaryExtractor(q"new $_($_.${extractor: TermName})" :: Nil) = C.typeSymbol
+        extractor
+      } else if (isParent(T, C)) {
+        val ExtractParentExtractor(extractors) = C.typeSymbol
+        extractors.collectFirst {
+          case q"new $_(new $_[$tpt](), $_.${extractor: TermName})"
+            if tpt.tpe.typeSymbol == T.typeSymbol =>
+            extractor
+        }.get
+      } else {
+        val ExtractUniversalExtractor(q"new $_($_.${extractor: TermName})" :: Nil) = C.typeSymbol
+        extractor
+      }
+    val companion = C.typeSymbol.companion
+    q"$companion.$extractor.unapply(..$args)"
+  }
+
+  def coerce[C: WeakTypeTag, T: WeakTypeTag](t: Tree): Tree = {
     val T = wt[T]
     val C = wt[C]
-    debug("t")(t)
     if (isParent(C, T)) cast(t, T, C)
     else abort(s"can't coerce $T to $C")
   }

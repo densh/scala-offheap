@@ -11,3 +11,6 @@ final class ClassTag(tag: Any) extends StaticAnnotation
 final class ClassTagRange(from: Any, to: Any) extends StaticAnnotation // > from <= to
 final class Layout(fields: (String, Tag[_])*) extends StaticAnnotation
 final class Tag[T]()
+final class ParentExractor(tag: Tag[_], value: Any) extends StaticAnnotation
+final class PrimaryExtractor(value: Any) extends StaticAnnotation
+final class UniversalExtractor(value: Any) extends StaticAnnotation
