@@ -2,19 +2,18 @@ package test
 
 import org.scalatest.FunSuite
 import offheap._, x64._
+import E1._, E2._
 
-object Workaround {
-  @enum object E1 {
-    @data class D1
-    @enum object E2 {
-      @data class D2
-    }
-    @data class D3
+@enum class E1
+object E1 {
+  @data class D1
+  @enum object E2 {
+    @data class D2
   }
-  @data class D4
-  class C
+  @data class D3
 }
-import Workaround._, E1._, E2._
+@data class D4
+class C
 
 class EnumSuite extends FunSuite {
   implicit val r = Region.open(Pool(UnsafeMemory))
@@ -77,5 +76,6 @@ class EnumSuite extends FunSuite {
   test("match E1 as D3") { val D3() = D3().as[E1] }
   test("match E2 as D2") { val D2() = D2().as[E2] }
 
-  test("match D1 as D2 fails") { intercept[MatchError] { val D1() = D2() } }
+  test("match D1 as D2 fails") { intercept[MatchError] { val D1() = D2()  } }
+  test("match C as D1 fails")  { intercept[MatchError] { val D1() = new C } }
 }

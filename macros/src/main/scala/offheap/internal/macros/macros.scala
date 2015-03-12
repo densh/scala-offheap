@@ -491,12 +491,33 @@ class Annotations(val c: whitebox.Context) extends Common {
     case _            => 0
   }.sum
 
-  def enumTransform(module: ModuleDef) = debug("@enum") {
+  def enumTransform(clazz: ClassDef, module: ModuleDef) = debug("@enum") {
+    val q"""
+      $classMods class $name[..$classTargs] $classCtorMods(...$classArgss)
+                 extends { ..$classEarly }
+                 with ..$classParents { $classSelf => ..$classStats }
+    """ = clazz
+    if (classMods.flags != NoFlags)
+      abort("enum classes may not have any modifiers")
+    if (classTargs.nonEmpty)
+      abort("enum classes may not have type arguments", at = classTargs.head.pos)
+    if (classCtorMods.flags != NoFlags)
+      abort("enum classes may not have constructor modifiers")
+    if (classArgss != List(Nil))
+      abort("enum classes may not have constructor arguments", at = classArgss.head.head.pos)
+    if (classEarly.nonEmpty)
+      abort("enum classes may not have early definitions", at = classEarly.head.pos)
+    classParents match {
+      case tq"$pkg.AnyRef" :: Nil if pkg.symbol == ScalaPackage =>
+      case _ => abort("enum classes may not inherit from other classes", at = classParents.head.pos)
+    }
+    if (classStats.nonEmpty)
+      abort("enum classes may not have body statements", at = classStats.head.pos)
+
     val q"""
       $rawMods object $termName extends { ..$rawEarly }
                with ..$rawParents { $rawSelf => ..$rawStats }
     """ = module
-    val name = termName.toTypeName
 
     val ref          = fresh("ref")
     val instance     = fresh("instance")
@@ -581,10 +602,14 @@ class Annotations(val c: whitebox.Context) extends Common {
   }
 
   def enum(annottees: Tree*): Tree = annottees match {
+    case (clazz: ClassDef) :: Nil =>
+      enumTransform(clazz, q"object ${clazz.name.toTermName}")
+    case (clazz: ClassDef) :: (module: ModuleDef) :: Nil =>
+      enumTransform(clazz, module)
     case (module: ModuleDef) :: Nil =>
-      enumTransform(module)
+      enumTransform(q"class ${module.name.toTypeName}", module)
     case _ =>
-      abort("@enum anottation only works on objects")
+      abort("@enum anottation only works on objects and classes")
   }
 }
 
