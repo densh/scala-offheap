@@ -39,6 +39,7 @@ trait Definitions {
   val MethodModule  = staticModule("offheap.internal.Method")
   val PoolModule    = staticModule(s"$prefix.Pool")
   val ArrayModule   = staticModule(s"$prefix.Array")
+  val MemoryModule  = staticModule(s"$prefix.Memory")
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
@@ -122,6 +123,12 @@ trait Common extends Definitions {
     }
   }
 
+  object TupleOf {
+    def unapply(tpe: Type): Option[List[Type]] =
+      if (tpe.typeSymbol == UnitClass) Some(Nil)
+      else TupleClass.seq.find(_ == tpe.typeSymbol).map(sym => tpe.baseType(sym).typeArgs)
+  }
+
   object Primitive {
     def unapply(tpe: Type): Boolean = tpe.typeSymbol match {
       case sym: ClassSymbol if sym.isPrimitive && sym != UnitClass => true
@@ -134,6 +141,16 @@ trait Common extends Definitions {
       case Primitive() | ClassOf(_, _, _) => true
       case _                              => false
     }
+  }
+
+  def sizeof(tpe: Type): Int = tpe match {
+    case ByteTpe  | BooleanTpe => 1
+    case ShortTpe | CharTpe    => 2
+    case IntTpe   | FloatTpe   => 4
+    case LongTpe  | DoubleTpe  => 8
+    case ClassOf(_, _, _)      => if (bitDepth == 64) 12 else 8
+    case TupleOf(tpes)         => tpes.map(sizeof).sum
+    case _                     => abort(s"can't compute size of $tpe")
   }
 
   def read(addr: Tree, tpe: Type, memory: Tree): Tree = tpe match {
@@ -658,7 +675,7 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         val mem = q"$ref.memory"
         val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-        val offset = q"$mem.sizeOf[(..$tpes)]"
+        val offset = q"$MemoryModule.sizeof[(..$tpes)]"
         read(q"$ref.addr + $offset", f.tpe, mem)
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
@@ -674,7 +691,7 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         val mem = q"$ref.memory"
         val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-        val offset = q"$mem.sizeOf[(..$tpes)]"
+        val offset = q"$MemoryModule.sizeof[(..$tpes)]"
         write(q"$ref.addr + $offset", f.tpe, value, mem)
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
@@ -692,11 +709,11 @@ class Method(val c: blackbox.Context) extends Common {
       if (fields.isEmpty) q"1"
       else {
         val fieldTpes = fields.map(_.tpe)
-        q"$memory.sizeOf[(..$fieldTpes)]"
+        q"$MemoryModule.sizeof[(..$fieldTpes)]"
       }
     val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
       val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-      val offset = q"$memory.sizeOf[(..$tpes)]"
+      val offset = q"$MemoryModule.sizeof[(..$tpes)]"
       write(q"$addr + $offset", f.tpe, arg, memory)
     }
     val newC = q"new $C(new $RefClass($addr, $memory))"
@@ -808,34 +825,7 @@ class WhiteboxMethod(val c: whitebox.Context) extends Common {
 
 class Memory(val c: blackbox.Context) extends Common {
   import c.universe._
-  import c.universe.definitions._
-
-  object TupleOf {
-    def unapply(tpe: Type): Option[List[Type]] =
-      if (tpe.typeSymbol == UnitClass) Some(Nil)
-      else TupleClass.seq.find(_ == tpe.typeSymbol).map(sym => tpe.baseType(sym).typeArgs)
-  }
-
-  def sizeOfSplit(tpe: Type): (Int, Int) = tpe match {
-    case ByteTpe  | BooleanTpe => (1, 0)
-    case ShortTpe | CharTpe    => (2, 0)
-    case IntTpe   | FloatTpe   => (4, 0)
-    case LongTpe  | DoubleTpe  => (8, 0)
-    case ClassOf(_, _, _)      => (0, 1)
-    case TupleOf(tpes)         =>
-      tpes.map(sizeOfSplit).foldLeft((0, 0)) {
-        case ((bytes1, refs1), (bytes2, refs2)) =>
-          (bytes1 + bytes2, refs1 + refs2)
-      }
-    case _ =>
-      abort(s"can't compute size of $tpe")
-  }
-
-  def sizeOf[T: WeakTypeTag] = {
-    val (bytes, refs) = sizeOfSplit(weakTypeOf[T])
-    if (refs == 0) q"$bytes"
-    else q"$bytes + $refs * ${c.prefix}.sizeOfRef"
-  }
+  def sizeof_[T: WeakTypeTag] = q"${sizeof(weakTypeOf[T]).toLong}"
 }
 
 class Array(val c: blackbox.Context) extends Common {
@@ -870,7 +860,7 @@ class Array(val c: blackbox.Context) extends Common {
       val mem  = fresh("mem")
       q"""
         val $mem = $pre.$ref.memory
-        val $addr = $pre.$ref.addr + $mem.sizeOf[$SizeTpe] + $i * $mem.sizeOf[$A]
+        val $addr = $pre.$ref.addr + $MemoryModule.sizeof[$SizeTpe] + $i * $MemoryModule.sizeof[$A]
         ${read(q"$addr", A, q"$mem")}
       """
     }
@@ -881,7 +871,7 @@ class Array(val c: blackbox.Context) extends Common {
       val mem  = fresh("mem")
       q"""
         val $mem = $pre.$ref.memory
-        val $addr = $pre.$ref.addr + $mem.sizeOf[$SizeTpe] + $i * $mem.sizeOf[$A]
+        val $addr = $pre.$ref.addr + $MemoryModule.sizeof[$SizeTpe] + $i * $MemoryModule.sizeof[$A]
         ${write(q"$addr", A, value, q"$mem")}
       """
     }
@@ -905,8 +895,8 @@ class Array(val c: blackbox.Context) extends Common {
     q"""
       var $p: $AddrTpe = $pre.$ref.addr
       val $len: $SizeTpe = ${read(q"$p", SizeTpe, mem)}
-      $p += $mem.sizeOf[$SizeTpe]
-      val $step: $SizeTpe = $mem.sizeOf[$T]
+      $p += $MemoryModule.sizeof[$SizeTpe]
+      val $step: $SizeTpe = $MemoryModule.sizeof[$T]
       val $bound: $AddrTpe = $p + $len * $step
       while ($p < $bound) {
         ${f(q"$p")}
@@ -926,8 +916,8 @@ class Array(val c: blackbox.Context) extends Common {
         val step = fresh("step")
         q"""
           val $narr = $ArrayModule.uninit[$B]($pre.length)($mem)
-          val $step = $mem.sizeOf[$B]
-          var $p    = $narr.$ref.addr + $mem.sizeOf[$SizeTpe]
+          val $step = $MemoryModule.sizeof[$B]
+          var $p    = $narr.$ref.addr + $MemoryModule.sizeof[$SizeTpe]
           $pre.foreach { $v: $A =>
             ${write(q"$p", B, app(f, q"$v"), mem)}
             $p += $step
@@ -944,11 +934,12 @@ class Array(val c: blackbox.Context) extends Common {
     stabilized(n) { len =>
       stabilized(m) { mem =>
         val addr = fresh("addr")
+        val size = q"$MemoryModule.sizeof[$AddrTpe] + $len * $MemoryModule.sizeof[$T]"
         q"""
           if ($len < 0) throw new $IllegalArgumentExceptionClass
           else if ($len == 0) $ArrayModule.empty[$T]
           else {
-            val $addr = $mem.allocate($mem.sizeOf[$AddrTpe] + $len * $mem.sizeOf[$T])
+            val $addr = $mem.allocate($size)
             ${write(q"$addr", SizeTpe, len, mem)}
             $ArrayModule.fromRef[$T](new $RefClass($addr, $mem))
           }
@@ -965,14 +956,14 @@ class Array(val c: blackbox.Context) extends Common {
     else stabilized(m) { mem =>
       val arr    = fresh("arr")
       val addr   = fresh("adr")
-      val tsize  = fresh("tsize")
+      val step   = fresh("step")
       val writes = values.zipWithIndex.map { case (v, i) =>
-        write(q"$addr + $i * $tsize", T, v, mem)
+        write(q"$addr + $i * $step", T, v, mem)
       }
       q"""
         val $arr = $ArrayModule.uninit[$T](${values.length})($mem)
-        val $tsize = $mem.sizeOf[$T]
-        val $addr = $arr.$ref.addr + $mem.sizeOf[$AddrTpe]
+        val $step = $MemoryModule.sizeof[$T]
+        val $addr = $arr.$ref.addr + $MemoryModule.sizeof[$AddrTpe]
         ..$writes
         $arr
       """
@@ -993,5 +984,22 @@ class Array(val c: blackbox.Context) extends Common {
     }
   }
 
-  def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree, to: Tree, toIndex: Tree) = q"???"
+  // TODO: bounds checks
+  def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree,
+                           to: Tree, toIndex: Tree, size: Tree) =
+    stabilized(from) { from =>
+      stabilized(to) { to =>
+        val T = wt[T]
+        def offset(idx: Tree) =
+          q"$MemoryModule.sizeof[$SizeTpe] + $idx * $MemoryModule.sizeof[$T]"
+        q"""
+          if ($to.$ref.memory ne $from.$ref.memory)
+            throw new $IllegalArgumentExceptionClass(
+              "copy between different memories is not supported")
+          $to.$ref.memory.copy($from.$ref.addr + ${offset(fromIndex)},
+                               $to.$ref.addr + ${offset(toIndex)},
+                               $size * $MemoryModule.sizeof[$T])
+        """
+      }
+    }
 }

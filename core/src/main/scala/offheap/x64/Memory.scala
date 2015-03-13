@@ -5,6 +5,7 @@ import scala.language.experimental.{macros => CanMacro}
 
 trait Memory {
   def allocate(size: Size): Addr
+  def copy(from: Addr, to: Addr, size: Size)
 
   def getChar(addr: Addr): Char
   def getByte(addr: Addr): Byte
@@ -28,10 +29,9 @@ trait Memory {
   def putRef(addr: Addr, value: Ref): Unit =
     if (value != null) putLong(addr, value.addr)
     else putLong(addr, 0L)
-
-  def sizeOf[T]: Size = macro internal.macros.Memory.sizeOf[T]
-  def sizeOfRef: Size = 8
-
-  def copy(from: Addr, to: Addr, size: Size) = ???
+}
+object Memory {
+  def sizeof[T]: Size =
+    macro internal.macros.Memory.sizeof_[T]
 }
 

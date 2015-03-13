@@ -1,7 +1,7 @@
 package offheap
 
-class OutOfMemoryException extends Exception
+class OutOfMemoryException(reason: String = "") extends Exception(reason)
 
-class InaccessibleRegionException extends Exception
+class InaccessibleRegionException(reason: String = "") extends Exception(reason)
 
-class CastException extends Exception
+class CastException(reason: String = "") extends Exception(reason)

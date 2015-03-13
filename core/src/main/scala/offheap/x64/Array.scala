@@ -19,21 +19,13 @@ final class Array[A] private (val $ref: Ref) extends AnyVal {
     else super.toString
 }
 object Array {
-  def uninit[T](n: Size)(implicit m: Memory): Array[T] =
-    macro macros.Array.uninit[T]
-
-  def apply[T](values: T*)(implicit m: Memory): Array[T] =
-    macro macros.Array.vararg[T]
-
-  def fill[T](n: Size)(elem: => T)(implicit m: Memory): Array[T] =
-    macro macros.Array.fill[T]
-
-  def copy[T](from: Array[T], fromIndex: Addr, to: Array[T], toIndex: Addr): Unit =
-    macro macros.Array.copy[T]
-
-  def empty[T]: Array[T] = new Array[T](null)
-
-  def fromRef[T](ref: Ref): Array[T] = new Array[T](ref)
-
-  def toRef[T](arr: Array[T]): Ref = arr.$ref
+  def uninit[T](n: Size)(implicit m: Memory): Array[T]       = macro macros.Array.uninit[T]
+  def apply[T](values: T*)(implicit m: Memory): Array[T]     = macro macros.Array.vararg[T]
+  def fill[T](n: Size)(elem: => T)
+             (implicit m: Memory): Array[T]                  = macro macros.Array.fill[T]
+  def copy[T](from: Array[T], fromIndex: Addr,
+              to: Array[T], toIndex: Addr, size: Size): Unit = macro macros.Array.copy[T]
+  def empty[T]: Array[T]                                     = new Array[T](null)
+  def fromRef[T](ref: Ref): Array[T]                         = new Array[T](ref)
+  def toRef[T](arr: Array[T]): Ref                           = arr.$ref
 }

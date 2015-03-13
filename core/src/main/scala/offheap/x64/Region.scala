@@ -37,7 +37,6 @@ final class Region(pool: Pool) extends Memory {
     page.start + resOffset
   }
 
-  override def sizeOfRef: Size = 8 + 4
 
   override def getRef(addr: Addr): Ref = {
     checkOpen
@@ -46,7 +45,8 @@ final class Region(pool: Pool) extends Memory {
     else {
       val refRegionId = memory.getInt(addr + 8L)
       if (refRegionId != this.id)
-        throw new InaccessibleRegionException
+        throw new InaccessibleRegionException(
+          "can't read a reference from different region")
       Ref(refAddr, this)
     }
   }
@@ -61,6 +61,7 @@ final class Region(pool: Pool) extends Memory {
     }
   }
 
+  def copy(from: Addr, to: Addr, size: Size)     = { checkOpen; memory.copy(from, to, size)   }
   def getChar(addr: Addr): Char                  = { checkOpen; memory.getChar(addr)          }
   def getByte(addr: Addr): Byte                  = { checkOpen; memory.getByte(addr)          }
   def getShort(addr: Addr): Short                = { checkOpen; memory.getShort(addr)         }
@@ -68,7 +69,6 @@ final class Region(pool: Pool) extends Memory {
   def getLong(addr: Addr): Long                  = { checkOpen; memory.getLong(addr)          }
   def getFloat(addr: Addr): Float                = { checkOpen; memory.getFloat(addr)         }
   def getDouble(addr: Addr): Double              = { checkOpen; memory.getDouble(addr)        }
-
   def putChar(addr: Addr, value: Char): Unit     = { checkOpen; memory.putChar(addr, value)   }
   def putByte(addr: Addr, value: Byte): Unit     = { checkOpen; memory.putByte(addr, value)   }
   def putShort(addr: Addr, value: Short): Unit   = { checkOpen; memory.putShort(addr, value)  }
