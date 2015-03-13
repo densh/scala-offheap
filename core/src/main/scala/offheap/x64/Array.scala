@@ -4,7 +4,7 @@ package x64
 import scala.language.experimental.{macros => CanMacro}
 import offheap.internal.macros
 
-final class Array[A](val $ref: Ref) extends AnyVal {
+final class Array[A] private (val $ref: Ref) extends AnyVal {
   def isEmpty: Boolean                                = macro macros.Array.isEmpty
   def nonEmpty: Boolean                               = macro macros.Array.nonEmpty
   def size: Size                                      = macro macros.Array.size
@@ -12,11 +12,18 @@ final class Array[A](val $ref: Ref) extends AnyVal {
   def apply(index: Addr): A                           = macro macros.Array.apply
   def update(index: Addr, value: A): Unit             = macro macros.Array.update
   def foreach(f: A => Unit): Unit                     = macro macros.Array.foreach
-  def map[B](f: A => B)(implicit m: Memory): Array[B] = macro macros.Array.map
+  def map[B](f: A => B)(implicit m: Memory): Array[B] = macro macros.Array.map[B]
+
+  override def toString =
+    if ($ref == null) s"offheap.x64.Array.empty"
+    else super.toString
 }
 object Array {
+  def uninit[T](n: Size)(implicit m: Memory): Array[T] =
+    macro macros.Array.uninit[T]
+
   def apply[T](values: T*)(implicit m: Memory): Array[T] =
-    macro macros.Array.alloc[T]
+    macro macros.Array.vararg[T]
 
   def fill[T](n: Size)(elem: => T)(implicit m: Memory): Array[T] =
     macro macros.Array.fill[T]

@@ -64,7 +64,7 @@ object RegionsBuild extends Build {
       parallelExecution in Test := false,
       fork in Test := true
     ),
-    dependencies = Seq(core)
+    dependencies = Seq(core, macros)
   )
 
   lazy val jmh = Project(

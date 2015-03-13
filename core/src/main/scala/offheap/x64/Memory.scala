@@ -3,10 +3,6 @@ package x64
 
 import scala.language.experimental.{macros => CanMacro}
 
-final case class Ref(addr: Addr, memory: Memory) {
-  if (addr == 0) throw new IllegalArgumentException("Ref's addr can not be 0L")
-}
-
 trait Memory {
   def allocate(size: Size): Addr
 
