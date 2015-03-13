@@ -7,13 +7,16 @@ import scala.reflect.macros.{whitebox, blackbox}
 
 trait Definitions {
   val c: blackbox.Context
-  val bitDepth: Int = 64
 
   import c.universe._
   import c.universe.definitions._
   import c.universe.rootMirror._
 
+  val bitDepth: Int = 64
   private val prefix = s"offheap.x$bitDepth"
+  val offheapx  = staticPackage(prefix)
+  val AddrTpe  = LongClass.toType
+  val SizeTpe  = LongClass.toType
 
   val MethodModule  = staticModule("offheap.internal.Method")
   val PoolModule    = staticModule(s"$prefix.Pool")
@@ -22,6 +25,7 @@ trait Definitions {
   val RegionClass             = staticClass(s"$prefix.Region")
   val RefClass                = staticClass(s"$prefix.Ref")
   val MemoryClass             = staticClass(s"$prefix.Memory")
+  val ArrayClass              = staticClass(s"$prefix.Array")
   val DataClass               = staticClass("offheap.internal.Data")
   val EnumClass               = staticClass("offheap.internal.Enum")
   val LayoutClass             = staticClass("offheap.internal.Layout")
@@ -38,6 +42,7 @@ trait Definitions {
 
   val initialize   = TermName("$initialize")
   val tag          = TermName("$tag")
+  val ref          = TermName("$ref")
   val canUseMacros = TermName("$canUseMacros")
 }
 
@@ -276,9 +281,9 @@ class Annotations(val c: whitebox.Context) extends Common {
       abort("data classes don't support generics", at = rawTargs.head.pos)
     if (rawEarly.nonEmpty)
       abort("data classes don't suport early initializer", at = rawEarly.head.pos)
-    if (rawMods.flags != NoFlag)
+    if (rawMods.flags != NoFlags)
       abort("data classes may not have any modifiers")
-    if (rawCtorMods.flags != NoFlag)
+    if (rawCtorMods.flags != NoFlags)
       abort("data classes may not have any constructor modifiers")
     if (rawRestArgs.nonEmpty)
       abort("data classes may not have more than one argument list",
@@ -295,7 +300,6 @@ class Annotations(val c: whitebox.Context) extends Common {
     }
 
     // Generate fresh names used in desugaring
-    val ref          = fresh("ref")
     val memory       = fresh("memory")
     val instance     = fresh("instance")
     val scrutinee    = fresh("scrutinee")
@@ -521,7 +525,6 @@ class Annotations(val c: whitebox.Context) extends Common {
       abort("enum classes may not have body statements", at = classStats.head.pos)
 
     // Generate some fresh names
-    val ref      = fresh("ref")
     val instance = fresh("instance")
     val coerce   = fresh("coerce")
 
@@ -675,6 +678,7 @@ class Method(val c: blackbox.Context) extends Common {
   }
 
   // TODO: zero fields by default
+  // TODO: zero-size data structures should not allocate any memory
   def allocator[C: WeakTypeTag](memory: Tree, args: Tree*): Tree = {
     val C = wt[C]
     val ClassOf(fields, _, tagOpt) = C
@@ -828,4 +832,124 @@ class Memory(val c: blackbox.Context) extends Common {
     if (refs == 0) q"$bytes"
     else q"$bytes + $refs * ${c.prefix}.sizeOfRef"
   }
+}
+
+class Array(val c: blackbox.Context) extends Common {
+  import c.universe.{ weakTypeOf => wt, _ }
+  import c.universe.definitions._
+
+  lazy val A = c.prefix.tree.tpe.baseType(ArrayClass).typeArgs.head
+
+  def isEmpty = q"${c.prefix.tree}.$ref == null"
+
+  def nonEmpty = q"${c.prefix.tree}.$ref == null"
+
+  def size = stabilized(c.prefix.tree) { pre =>
+    read(q"$pre.$ref.addr", SizeTpe, q"$pre.$ref.memory")
+  }
+
+  def boundsChecked(index: Tree)(ifOk: Tree => Tree => Tree) =
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(index) { idx =>
+        val size = fresh("size")
+        q"""
+          val $size: $SizeTpe = ${read(q"$pre.$ref.addr", AddrTpe, q"$pre.$ref.memory")}
+          if ($idx >= 0 && $idx < $size)  ${ifOk(pre)(idx)}
+          else throw new _root_.java.lang.IndexOutOfBoundsException($index.toString)
+        """
+      }
+    }
+
+  def apply(index: Tree) =
+    boundsChecked(index) { pre => i =>
+      val addr = fresh("addr")
+      val mem  = fresh("mem")
+      q"""
+        val $mem = $pre.$ref.memory
+        val $addr = $pre.$ref.addr + $mem.sizeOf[$SizeTpe] + $i * $mem.sizeOf[$A]
+        ${read(q"$addr", A, q"$mem")}
+      """
+    }
+
+  def update(index: Tree, value: Tree) =
+    boundsChecked(index) { pre => i =>
+      val addr = fresh("addr")
+      val mem  = fresh("mem")
+      q"""
+        val $mem = $pre.$ref.memory
+        val $addr = $pre.$ref.addr + $mem.sizeOf[$SizeTpe] + $i * $mem.sizeOf[$A]
+        ${write(q"$addr", A, value, q"$mem")}
+      """
+    }
+
+  def foreach(f: Tree) = stabilized(c.prefix.tree) { pre =>
+    val len = fresh("len")
+    val mem = fresh("mem")
+    val asize = fresh("asize")
+    val p = fresh("p")
+    val bound = fresh("bound")
+    q"""
+      if ($pre.$ref != null) {
+        val $len = $pre.length
+        val $mem = $pre.$ref.memory
+        val $asize = $mem.sizeOf[$A]
+        var $p: $AddrTpe = $pre.$ref.addr + $mem.sizeOf[$SizeTpe]
+        val $bound: $AddrTpe = $p + $asize * $len
+        while ($p < $bound) {
+          ${app(f, read(q"$p", A, q"$mem"))}
+          $p += $asize
+        }
+      }
+    """
+  }
+
+  def map(f: Tree)(m: Tree) = q"???"
+
+  def alloc[T: WeakTypeTag](values: Tree*)(m: Tree) = debug("alloc")(stabilized(m) { mem =>
+    val T = wt[T]
+    val addr = fresh("addr")
+    val tsize = fresh("tsize")
+    val data = fresh("data")
+    val len = q"${values.length}"
+    val writes = values.zipWithIndex.map { case (v, i) =>
+      write(q"$data + $i * $tsize", T, v, mem)
+    }
+    q"""
+      val $tsize = $mem.sizeOf[$T]
+      val $addr = $mem.allocate($mem.sizeOf[$AddrTpe] + $len * $tsize)
+      val $data = $addr + $mem.sizeOf[$AddrTpe]
+      ${write(q"$addr", SizeTpe, len, mem)}
+      ..$writes
+      new $ArrayClass[$T](new $RefClass($addr, $mem))
+    """
+  })
+
+  def fill[T: WeakTypeTag](n: Tree)(elem: Tree)(m: Tree) = {
+    val T = wt[T]
+    val addr = fresh("addr")
+    val tsize = fresh("tsize")
+    val bound = fresh("bound")
+    val p = fresh("p")
+    stabilized(elem) { v =>
+      stabilized(n) { len =>
+        stabilized(m) { mem =>
+          q"""
+            val $tsize = $mem.sizeOf[$T]
+            val $size = $mem.sizeOf[$AddrTpe] + $len * $tsize
+            val $addr = $mem.allocate()
+            ${write(q"$addr", SizeTpe, len, mem)}
+            var $p: $AddrTpe = $addr + $mem.sizeOf[$AddrTpe]
+            val $bound: $AddrTpe = $addr + $size
+            while ($p < $bound) {
+              ${write(q"$p", T, v, mem)}
+              $p += $tsize
+            }
+            new $ArrayClass[$T](new $RefClass($addr), $mem)
+          """
+        }
+      }
+    }
+  }
+
+  def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree, to: Tree, toIndex: Tree) = q"???"
 }

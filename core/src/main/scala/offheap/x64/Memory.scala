@@ -9,6 +9,7 @@ final case class Ref(addr: Addr, memory: Memory) {
 
 trait Memory {
   def allocate(size: Size): Addr
+
   def getChar(addr: Addr): Char
   def getByte(addr: Addr): Byte
   def getShort(addr: Addr): Short
@@ -20,6 +21,7 @@ trait Memory {
     val value = getLong(addr)
     if (value == 0L) null else Ref(value, this)
   }
+
   def putChar(addr: Addr, value: Char): Unit
   def putByte(addr: Addr, value: Byte): Unit
   def putShort(addr: Addr, value: Short): Unit
@@ -30,7 +32,10 @@ trait Memory {
   def putRef(addr: Addr, value: Ref): Unit =
     if (value != null) putLong(addr, value.addr)
     else putLong(addr, 0L)
+
   def sizeOf[T]: Size = macro internal.macros.Memory.sizeOf[T]
   def sizeOfRef: Size = 8
+
+  def copy(from: Addr, to: Addr, size: Size) = ???
 }
 
