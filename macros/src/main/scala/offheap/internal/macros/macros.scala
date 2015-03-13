@@ -276,10 +276,10 @@ class Annotations(val c: whitebox.Context) extends Common {
       abort("data classes don't support generics", at = rawTargs.head.pos)
     if (rawEarly.nonEmpty)
       abort("data classes don't suport early initializer", at = rawEarly.head.pos)
-    if (rawMods.hasFlag(IMPLICIT))
-      abort("implicit data classes are not supported")
-    if (rawMods.hasFlag(CASE))
-      abort("data classes are case-like by default")
+    if (rawMods.flags != NoFlag)
+      abort("data classes may not have any modifiers")
+    if (rawCtorMods.flags != NoFlag)
+      abort("data classes may not have any constructor modifiers")
     if (rawRestArgs.nonEmpty)
       abort("data classes may not have more than one argument list",
             at = rawRestArgs.head.head.pos)
@@ -497,6 +497,12 @@ class Annotations(val c: whitebox.Context) extends Common {
                  extends { ..$classEarly }
                  with ..$classParents { $classSelf => ..$classStats }
     """ = clazz
+    val q"""
+      $rawMods object $termName extends { ..$rawEarly }
+               with ..$rawParents { $rawSelf => ..$rawStats }
+    """ = module
+
+    // Well-formedness checks
     if (classMods.flags != NoFlags)
       abort("enum classes may not have any modifiers")
     if (classTargs.nonEmpty)
@@ -514,15 +520,12 @@ class Annotations(val c: whitebox.Context) extends Common {
     if (classStats.nonEmpty)
       abort("enum classes may not have body statements", at = classStats.head.pos)
 
-    val q"""
-      $rawMods object $termName extends { ..$rawEarly }
-               with ..$rawParents { $rawSelf => ..$rawStats }
-    """ = module
+    // Generate some fresh names
+    val ref      = fresh("ref")
+    val instance = fresh("instance")
+    val coerce   = fresh("coerce")
 
-    val ref          = fresh("ref")
-    val instance     = fresh("instance")
-    val coerce       = fresh("coerce")
-
+    // Member and annotation transformation
     val groupedAnns = rawMods.annotations.groupBy {
       case q"new $ann[..$_](...$_)" =>
         ann.symbol match {
