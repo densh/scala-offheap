@@ -905,9 +905,9 @@ class Array(val c: blackbox.Context) extends Common {
     q"""
       var $p: $AddrTpe = $pre.$ref.addr
       val $len: $SizeTpe = ${read(q"$p", SizeTpe, mem)}
+      $p += $mem.sizeOf[$SizeTpe]
       val $step: $SizeTpe = $mem.sizeOf[$T]
       val $bound: $AddrTpe = $p + $len * $step
-      $p += $mem.sizeOf[$SizeTpe]
       while ($p < $bound) {
         ${f(q"$p")}
         $p += $step
@@ -920,17 +920,17 @@ class Array(val c: blackbox.Context) extends Common {
     assertAllocatable(B)
     stabilized(c.prefix.tree) { pre =>
       stabilized(m) { mem =>
-        val narr  = fresh("narr")
-        val v     = fresh("v")
-        val to    = fresh("to")
-        val tsize = fresh("tsize")
+        val narr = fresh("narr")
+        val v    = fresh("v")
+        val p    = fresh("p")
+        val step = fresh("step")
         q"""
-          val $narr  = $ArrayModule.uninit[$A]($pre.length)
-          var $to    = $narr.$ref.addr + $mem.sizeOf[$SizeTpe]
-          val $tsize = $mem.sizeOf[$A]
-          $pre.foreach { $v: ${tq""} =>
-            ${write(q"$to", A, app(f, q"$v"), mem)}
-            $to += $tsize
+          val $narr = $ArrayModule.uninit[$B]($pre.length)($mem)
+          val $step = $mem.sizeOf[$B]
+          var $p    = $narr.$ref.addr + $mem.sizeOf[$SizeTpe]
+          $pre.foreach { $v: $A =>
+            ${write(q"$p", B, app(f, q"$v"), mem)}
+            $p += $step
           }
           $narr
         """
