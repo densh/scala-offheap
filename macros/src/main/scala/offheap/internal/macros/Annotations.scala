@@ -26,7 +26,6 @@ class Annotations(val c: whitebox.Context) extends Common {
 
   // TODO: modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
-  // TODO: pattern matching on parent scrutinees
   def dataTransform(clazz: Tree, companion: Tree) = {
     // Parse the input trees
     val q"""
