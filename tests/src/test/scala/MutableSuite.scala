@@ -11,7 +11,7 @@ import offheap._, x64._
 object C3 { var x = 0 }
 
 class MutableSuite extends FunSuite {
-  implicit val r = Region.open(Pool(UnsafeMemory))
+  implicit val r = Region.open(Pool(UnsafeMemory()))
   protected override def finalize = r.close
 
   test("mutable constructor argument") {

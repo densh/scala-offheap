@@ -16,7 +16,7 @@ object E1 {
 class C
 
 class EnumSuite extends FunSuite {
-  implicit val r = Region.open(Pool(UnsafeMemory))
+  implicit val r = Region.open(Pool(UnsafeMemory()))
   protected override def finalize = r.close
 
   test("D1 is D1") { assert(D1().is[D1]) }

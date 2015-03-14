@@ -3,11 +3,23 @@ package x64
 
 import offheap.internal.Unsafer.unsafe
 
-object UnsafeMemory extends Memory {
+class UnsafeMemory extends NativeMemory {
   assert(unsafe.addressSize() == 8,
     "unsafe memory is only supported 64-bit systems")
 
-  def allocate(size: Size): Addr                   = unsafe.allocateMemory(size)
+  protected class Alloc(val addr: Addr, val next: Alloc)
+  protected var alloc: Alloc = null
+  protected override def finalize(): Unit =
+    while (alloc != null) {
+      unsafe.freeMemory(alloc.addr)
+      alloc = alloc.next
+    }
+
+  def allocate(size: Size): Addr = this.synchronized {
+    val addr = unsafe.allocateMemory(size)
+    alloc = new Alloc(addr, alloc)
+    addr
+  }
   def copy(from: Addr, to: Addr, size: Size): Unit = unsafe.copyMemory(from, to, size)
   def getChar(addr: Addr): Char                    = unsafe.getChar(addr)
   def getByte(addr: Addr): Byte                    = unsafe.getByte(addr)
@@ -23,4 +35,7 @@ object UnsafeMemory extends Memory {
   def putLong(addr: Addr, value: Long): Unit       = unsafe.putLong(addr, value)
   def putFloat(addr: Addr, value: Float): Unit     = unsafe.putFloat(addr, value)
   def putDouble(addr: Addr, value: Double): Unit   = unsafe.putDouble(addr, value)
+}
+object UnsafeMemory {
+  def apply() = new UnsafeMemory()
 }

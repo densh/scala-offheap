@@ -9,7 +9,7 @@ import offheap._, x64._
 }
 
 class PointSuite extends FunSuite {
-  implicit val pool = Pool(UnsafeMemory)
+  implicit val pool = Pool(UnsafeMemory())
 
   test("accessors") {
     Region { r =>

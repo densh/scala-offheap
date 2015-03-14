@@ -4,7 +4,7 @@ import org.scalatest.FunSuite
 import offheap._, x64._
 
 class ArraySuite extends FunSuite {
-  implicit val memory = UnsafeMemory
+  implicit val memory = new UnsafeMemory
 
   test("uninit") {
     val arr = Array.uninit[Int](10)

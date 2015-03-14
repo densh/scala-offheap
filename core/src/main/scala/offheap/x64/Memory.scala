@@ -35,3 +35,4 @@ object Memory {
     macro internal.macros.Memory.sizeof_[T]
 }
 
+trait NativeMemory extends Memory
