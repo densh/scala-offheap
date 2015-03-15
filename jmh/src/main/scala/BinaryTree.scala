@@ -5,7 +5,7 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class GCBinaryTree {
-  @Param(scala.Array("16", "18", "20"))
+  @Param(scala.Array("16", "17", "18", "19", "20", "21", "22"))
   var n: Int = _
 
   @Benchmark
@@ -14,7 +14,7 @@ class GCBinaryTree {
 
 @State(Scope.Thread)
 class OffheapBinaryTree {
-  @Param(scala.Array("16", "18", "20"))
+  @Param(scala.Array("16", "17", "18", "19", "20", "21", "22"))
   var n: Int = _
 
   @Benchmark
@@ -52,10 +52,11 @@ object GCHeap {
   }
 }
 
+@data class OhTree(i: Int, left: OhTree, right: OhTree)
 object Offheap {
-  implicit val pool = Pool(UnsafeMemory())
+  implicit val pool = NativePool(UnsafeMemory())
   def run(n: Int) = {
-    val outer = Region.open
+    val outer = NativeRegion.open
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = tree(0,maxDepth)(outer)
@@ -64,7 +65,7 @@ object Offheap {
       val iterations = 1 << (maxDepth - depth + minDepth)
       var i,sum = 0
       def rsum(i: Int, depth: Int): Int = {
-        val r = Region.open
+        val r = NativeRegion.open
         val res = isum(tree(i, depth)(r))
         r.close
         res
@@ -77,14 +78,13 @@ object Offheap {
     }
     outer.close
   }
-  @data class Tree(i: Int, left: Tree, right: Tree)
-  def isum(tree: Tree): Int = {
+  def isum(tree: OhTree): Int = {
     val left = tree.left
     if (left.isEmpty) tree.i
     else tree.i + isum(left) - isum(tree.right)
   }
-  def tree(i: Int, depth: Int)(implicit region: Region): Tree = {
-    if (depth > 0) Tree(i, tree(i*2-1, depth-1), tree(i*2, depth-1))
-    else Tree(i, Tree.empty, Tree.empty)
+  def tree(i: Int, depth: Int)(implicit region: NativeRegion): OhTree = {
+    if (depth > 0) OhTree(i, tree(i*2-1, depth-1), tree(i*2, depth-1))
+    else OhTree(i, OhTree.empty, OhTree.empty)
   }
 }
