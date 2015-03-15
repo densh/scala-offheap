@@ -7,7 +7,11 @@ sealed class Region(pool: Pool) extends Memory {
   val id = Region.atomicFresh.next
   val memory = pool.memory
 
-  def isOpen = page != null
+  def isOpen   = page != null
+  def isClosed = page == null
+
+  protected override def finalize(): Unit =
+    if (isOpen) close
 
   private def checkOpen(): Unit =
     if (page == null) throw new InaccessibleRegionException
