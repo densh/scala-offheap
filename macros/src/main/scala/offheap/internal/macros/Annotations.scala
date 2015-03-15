@@ -9,6 +9,9 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe.definitions._
   import Flag._
 
+  val Ref    = if (checked) tq"$RefClass"    else tq"$AddrTpe"
+  val Memory = if (checked) tq"$MemoryClass" else q"$NativeMemoryClass"
+
   def layout(fields: List[SyntacticField]): Tree = {
     val tuples = fields.map { f =>
       q"(${f.name.toString}, new $TagClass[${f.tpt}]())"
@@ -199,19 +202,19 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     q"""
       $mods class $name private (
-        private val $ref: $RefClass
+        private val $ref: $Ref
       ) extends $AnyValClass with ..$traits { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
 
         ..$initializer
         ..$accessors
 
-        def isEmpty  = $ref == null
-        def nonEmpty = $ref != null
+        def isEmpty  = ${isNull(q"$ref")}
+        def nonEmpty = ${notNull(q"$ref")}
         def get      = $getBody
         ..${_ns}
 
-        def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
+        def copy(..$copyArgs)(implicit $memory: $Memory): $name =
           $termName.apply(..$argNames)($memory)
         override def toString(): $StringClass =
           $MethodModule.toString[$name](this)
@@ -227,10 +230,10 @@ class Annotations(val c: whitebox.Context) extends Common {
                      with ..$companionParents { $companionSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
 
-        val empty: $name                       = null.asInstanceOf[$name]
-        def fromRef($ref: $RefClass): $name    = new $name($ref)
-        def toRef($instance: $name): $RefClass = $instance.$ref
-        def apply(..$args)(implicit $memory: $MemoryClass): $name =
+        val empty: $name                  = null.asInstanceOf[$name]
+        def fromRef($ref: $Ref): $name    = new $name($ref)
+        def toRef($instance: $name): $Ref = $instance.$ref
+        def apply(..$args)(implicit $memory: $Memory): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
         def unapply(scrutinee: $AnyClass): $unapplyTpt =
           macro $internal.macros.WhiteboxMethod.unapply[$name]
@@ -352,7 +355,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     q"""
       @..$annots final class $name private(
-        private val $ref: $RefClass
+        private val $ref: $Ref
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
         def $tag: $tagTpt        = $MethodModule.accessor[$name, $tagTpt]($ref, ${tag.toString})
@@ -361,10 +364,10 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       $moduleMods object $termName extends { ..$rawEarly } with ..$rawParents { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
-        val empty: $name                       = null.asInstanceOf[$name]
-        def fromRef($ref: $RefClass): $name    = new $name($ref)
-        def toRef($instance: $name): $RefClass = $instance.$ref
-        implicit def $coerce[T](t: T): $name   =
+        val empty: $name                     = null.asInstanceOf[$name]
+        def fromRef($ref: $Ref): $name       = new $name($ref)
+        def toRef($instance: $name): $Ref    = $instance.$ref
+        implicit def $coerce[T](t: T): $name =
           macro $internal.macros.WhiteboxMethod.coerce[$name, T]
         ..$stats
       }

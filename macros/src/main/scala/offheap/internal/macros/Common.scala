@@ -113,7 +113,8 @@ trait Common extends Definitions {
       q"$memory.getByte($addr) != ${Literal(Constant(0.toByte))}"
     case ClassOf(_, _, _) =>
       val companion = tpe.typeSymbol.companion
-      q"$companion.fromRef($memory.getRef($addr))"
+      val getRef = if (checked) TermName("getRef") else TermName("getLong")
+      q"$companion.fromRef($memory.$getRef($addr))"
   }
 
   def write(addr: Tree, tpe: Type, value: Tree, memory: Tree): Tree = tpe match {
@@ -128,7 +129,8 @@ trait Common extends Definitions {
       """
     case ClassOf(_, _, _) =>
       val companion = tpe.typeSymbol.companion
-      q"$memory.putRef($addr, $companion.toRef($value))"
+      val putRef = if (checked) TermName("putRef") else TermName("putLong")
+      q"$memory.$putRef($addr, $companion.toRef($value))"
   }
 
 

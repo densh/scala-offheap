@@ -1,7 +1,7 @@
 package offheap
 package x64
 
-final class Pool(
+sealed class Pool(
   val memory: Memory,
   val pageSize: Size = 4096,
   val chunkSize: Size = 1024 * 4096
@@ -37,6 +37,13 @@ final class Pool(
 }
 object Pool {
   def apply(memory: Memory): Pool = new Pool(memory)
+}
+
+final class NativePool(memory: NativeMemory,
+                       pageSize: Size = 4096,
+                       chunkSize: Size = 1024 * 4096) extends Pool(memory, pageSize, chunkSize)
+object NativePool {
+  def apply(memory: NativeMemory): NativePool = new NativePool(memory)
 }
 
 final class Chunk(val start: Addr, var offset: Size, var next: Chunk)

@@ -10,6 +10,13 @@ class Method(val c: blackbox.Context) extends Common {
 
   def throwNullRef = q"throw new _root_.java.lang.NullPointerException"
 
+  def nullChecked(ref: Tree, ifOk: Tree) =
+    if (checked) ifOk
+    else q"""
+      if (${isNull(ref)}) throw new $NullPointerExceptionClass
+      else $ifOk
+    """
+
   def accessor[C: WeakTypeTag, T: WeakTypeTag](ref: Tree, name: Tree): Tree = {
     val C = wt[C]
     assertAllocatable(C)
@@ -17,10 +24,9 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val mem = q"$ref.memory"
         val tpes = fields.takeWhile(_ ne f).map(_.tpe)
         val offset = q"$MemoryModule.sizeof[(..$tpes)]"
-        read(q"$ref.addr + $offset", f.tpe, mem)
+        nullChecked(ref, read(q"${addr(ref)} + $offset", f.tpe, memory(ref)))
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -33,10 +39,9 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val mem = q"$ref.memory"
         val tpes = fields.takeWhile(_ ne f).map(_.tpe)
         val offset = q"$MemoryModule.sizeof[(..$tpes)]"
-        write(q"$ref.addr + $offset", f.tpe, value, mem)
+        nullChecked(ref, write(q"${addr(ref)} + $offset", f.tpe, value, memory(ref)))
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -60,7 +65,9 @@ class Method(val c: blackbox.Context) extends Common {
       val offset = q"$MemoryModule.sizeof[(..$tpes)]"
       write(q"$addr + $offset", f.tpe, arg, memory)
     }
-    val newC = q"new $C(new $RefClass($addr, $memory))"
+    val newC =
+      if (checked) q"new $C(new $RefClass($addr, $memory))"
+      else q"new $C($addr)"
     val instantiate = C.members.find(_.name == initialize).map { _ =>
       val instance = fresh("instance")
       q"""

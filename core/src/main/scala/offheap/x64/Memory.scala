@@ -35,4 +35,5 @@ object Memory {
     macro internal.macros.Memory.sizeof_[T]
 }
 
+/** Memory that uses physical machine address space. */
 trait NativeMemory extends Memory

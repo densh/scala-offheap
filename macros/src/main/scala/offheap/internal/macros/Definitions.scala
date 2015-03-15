@@ -16,13 +16,21 @@ trait Definitions {
   val offheapx  = staticPackage(prefix)
   val AddrTpe  = LongClass.toType
   val SizeTpe  = LongClass.toType
+  val checked  = !System.getProperties.containsKey("offheap.unchecked")
+
+  def addr(ref: Tree)    = if (checked) q"$ref.addr"    else ref
+  def memory(ref: Tree)  = if (checked) q"$ref.memory"  else q"$internal.Unsafer.unsafe"
+  def isNull(ref: Tree)  = if (checked) q"$ref == null" else q"$ref == 0L"
+  def notNull(ref: Tree) = if (checked) q"$ref != null" else q"$ref != 0L"
 
   val StringBuilderClass            = staticClass("scala.collection.mutable.StringBuilder")
+  val NullPointerExceptionClass     = staticClass("java.lang.NullPointerException")
   val IllegalArgumentExceptionClass = staticClass("java.lang.IllegalArgumentException")
 
   val RegionClass             = staticClass(s"$prefix.Region")
   val RefClass                = staticClass(s"$prefix.Ref")
   val MemoryClass             = staticClass(s"$prefix.Memory")
+  val NativeMemoryClass       = staticClass(s"$prefix.NativeMemory")
   val ArrayClass              = staticClass(s"$prefix.Array")
   val DataClass               = staticClass("offheap.internal.Data")
   val EnumClass               = staticClass("offheap.internal.Enum")

@@ -5,7 +5,7 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class GCBinaryTree {
-  @Param(Array("16", "18", "20"))
+  @Param(scala.Array("16", "18", "20"))
   var n: Int = _
 
   @Benchmark
@@ -14,7 +14,7 @@ class GCBinaryTree {
 
 @State(Scope.Thread)
 class OffheapBinaryTree {
-  @Param(Array("16", "18", "20"))
+  @Param(scala.Array("16", "18", "20"))
   var n: Int = _
 
   @Benchmark
@@ -53,7 +53,7 @@ object GCHeap {
 }
 
 object Offheap {
-  implicit val pool = Pool(UnsafeMemory)
+  implicit val pool = Pool(UnsafeMemory())
   def run(n: Int) = {
     val outer = Region.open
     val minDepth = 4

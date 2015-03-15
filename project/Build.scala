@@ -7,7 +7,7 @@ object RegionsBuild extends Build {
     scalaVersion := "2.11.4",
     resolvers += Resolver.sonatypeRepo("snapshots"),
     resolvers += Resolver.sonatypeRepo("releases"),
-    initialCommands in console += "import offheap.x64._; implicit val memory = UnsafeMemory",
+    initialCommands in console += "import offheap.x64._; implicit val memory = UnsafeMemory()",
     addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)
   )
 

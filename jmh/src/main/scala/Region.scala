@@ -5,11 +5,10 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class RegionClose {
-  implicit val pool: Pool = Pool(UnsafeMemory)
+  implicit val pool: Pool = Pool(UnsafeMemory())
   var r: Region = _
 
-  //@Param(Array("1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1024"))
-  @Param(Array("1024", "2048", "4096"))
+  @Param(scala.Array("1024", "2048", "4096"))
   var allocatedPages: Int = _
 
   @Setup(Level.Invocation)
@@ -25,7 +24,7 @@ class RegionClose {
 
 @State(Scope.Thread)
 class RegionOpen {
-  implicit val pool: Pool = Pool(UnsafeMemory)
+  implicit val pool: Pool = NativePool(UnsafeMemory())
   var r: Region = _
 
   @TearDown(Level.Invocation)
@@ -40,7 +39,7 @@ class RegionOpen {
 
 @State(Scope.Thread)
 class RegionAllocateCurrent {
-  implicit val pool: Pool = Pool(UnsafeMemory)
+  implicit val pool: Pool = Pool(UnsafeMemory())
   var r: Region = _
 
   @Setup(Level.Invocation)
@@ -56,7 +55,7 @@ class RegionAllocateCurrent {
 
 @State(Scope.Thread)
 class RegionAllocateNext {
-  implicit val pool: Pool = Pool(UnsafeMemory)
+  implicit val pool: Pool = Pool(UnsafeMemory())
   var r: Region = _
 
   @Setup(Level.Invocation)
