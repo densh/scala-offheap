@@ -88,15 +88,15 @@ not on the top-level (caused by restrictions of macro-annotations.)
 
 ## How to contribute
 
-1. Check the list of open issues and see if you are interested in any of them. If you
-   have enountered a problem or have feature suggestion feel free opening another issue
-   to start a discussion.
-1. If you have problems with getting starting contact [@densh](https://github.com/densh)
-   to help you out.
+1. Check the list of open issues and see if you are interested in fixing any of them.
+   If you have enountered a problem or have feature suggestion feel free opening another
+   issue to start a discussion.
 1. Fork the [main repo](https://github.com/desh/scala-offheap) and starting hacking up
-   the solution.
-1. If you fix an issue, add a test that shows that it was indeed fixed. If you introduce
-   a new feature, add a new test suite with a bunch of tests that cover common use cases.
-   If you propose a performance enhancement include before & after results of jmh
-   performance test run in the commit message.
-1. Fire up the pull request. Don't forget to add yourself to the [list of authors]().
+   the solution. If you have problems with getting starting contact
+   [@densh](https://github.com/densh) to help you out.
+1. Whenever you fix an issue, add a test that shows that it was indeed fixed. If you
+   introduce a new feature, add a new test suite with a bunch of tests that cover common
+   use cases. If you propose a performance enhancement include before & after results of
+   jmh performance test run in the commit message.
+1. Fire up the pull request. Don't forget to add yourself to the
+   [list of contributors](https://github.com/densh/scala-offheap/blob/master/AUTHORS.md).
