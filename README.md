@@ -1,5 +1,22 @@
 # Type-safe off-heap memory for Scala
 
+## Memory & regions
+
+Scala-offheap introduces a concept of `Memory` which is an offpsring of ByteBuffers
+and sun.misc.Unsafe. This part of API is intentionally left low-level as it's going to
+be an underlying abstraction that higher-abstractions like offheap classes and arrays
+are going to be desugared into.
+
+We also introduce special kind of `Memory` called `Region` which denotes a specific
+kind of growable memory api that implements efficient allocation & deallocation based
+on memory pooling.
+
+```scala
+Region { r =>
+  // perform arbitrary allocations here
+}
+```
+
 ## Offheap classes
 
 Offheap classes come in two flavors: `@enum` classes and `@data` classes. Both of them
@@ -21,7 +38,7 @@ support methods (`isEmpty`, `nonEmpty`, `get`, `_1`, ... , `_N`), `copy` method,
 To allocate a data object one needs to have an implicit memory in scope.
 
 ```scala
-  implicit val memory = UnsafeMemory()
+  implicit val memory = NativeMemory()
   val point = Point(10, 20)
 ```
 
@@ -77,12 +94,6 @@ object Tree {
 Nested enums can use shorthand form that annotation object rather than the class. This
 shorthand form can be used whenever an `@enum` class is defined inside other objects and
 not on the top-level (caused by restrictions of macro-annotations.)
-
-## Offheap arrays
-
-## Regions and memory pools
-
-## Memory safety
 
 ## How to contribute
 

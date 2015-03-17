@@ -37,3 +37,6 @@ object Memory {
 
 /** Memory that uses physical machine address space. */
 trait NativeMemory extends Memory
+object NativeMemory {
+  def apply() = UnsafeMemory()
+}
