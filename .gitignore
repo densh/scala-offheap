@@ -1,0 +1,15 @@
+# sbt specific
+target/
+project/project/
+
+# general ignores
+*.swp
+*.class
+
+# IntelliJ IDE specific
+.idea/
+.idea/modules
+*.iml
+
+# scala-IDE specific
+.scala_dependencies
