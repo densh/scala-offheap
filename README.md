@@ -1,5 +1,8 @@
 # Type-safe off-heap memory for Scala
 
+[![Join the chat at https://gitter.im/densh/scala-offheap](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/densh/scala-offheap)
+
+
 ## Memory & regions
 
 Scala-offheap introduces a concept of `Memory` which is an offpsring of ByteBuffers
