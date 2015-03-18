@@ -101,11 +101,12 @@ not on the top-level (caused by restrictions of macro-annotations.)
    if you are interested in fixing any of them. If you have encountered a problem or have
    feature suggestion feel free opening up a new issue.
 1. Fork the [main repo](https://github.com/desh/scala-offheap) and start hacking up
-   the fix. If you have problems with getting starting contact
+   the fix. If you have problems with getting started contact
    [@densh](https://github.com/densh) to help you out.
 1. Whenever you fix an issue, add a test that shows that it was indeed fixed. If you
    introduce a new feature, add a new test suite with a bunch of tests that cover common
    use cases. If you propose a performance enhancement include before & after results of
    corresponding jmh performance benchmark run in the commit message.
-1. Fire up the pull request. Don't forget to add yourself to the
+1. Fire up a pull request. Don't forget to sign
+   [Scala CLA](http://typesafe.com/contribute/cla/scala) and add yourself to the
    [list of contributors](https://github.com/densh/scala-offheap/blob/master/AUTHORS.md).
