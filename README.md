@@ -43,7 +43,7 @@ To allocate a data object one needs to have an implicit memory in scope.
 ```
 
 Similarly to case classes one can have methods and type alias definitions inside them.
-Due to restrictions of values classes, traits or objects in the body of @data class.
+Due to restrictions of value classes, traits or objects in the body of @data class are not supported.
 
 Another important distinction is the fact that comparison on offheap classes always
 works by-reference rather than by-value. This is caused by the fact that one can not define
