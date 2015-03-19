@@ -103,7 +103,7 @@ not on the top-level (caused by restrictions of macro-annotations.)
 1. Check the list of [open issues](https://github.com/densh/scala-offheap/issues) and see
    if you are interested in fixing any of them. If you have encountered a problem or have
    feature suggestion feel free opening up a new issue.
-1. Fork the [main repo](https://github.com/desh/scala-offheap) and start hacking up
+1. Fork the [main repo](https://github.com/densh/scala-offheap) and start hacking up
    the fix. If you have problems with getting started contact
    [@densh](https://github.com/densh) to help you out.
 1. Whenever you fix an issue, add a test that shows that it was indeed fixed. If you
