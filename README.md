@@ -1,7 +1,7 @@
 # Type-safe off-heap memory for Scala
 
+[![Build Status](https://travis-ci.org/densh/scala-offheap.svg)](https://travis-ci.org/densh/scala-offheap)
 [![Join the chat at https://gitter.im/densh/scala-offheap](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/densh/scala-offheap)
-
 
 ## Memory & regions
 
