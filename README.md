@@ -111,5 +111,4 @@ not on the top-level (caused by restrictions of macro-annotations.)
    use cases. If you propose a performance enhancement include before & after results of
    corresponding jmh performance benchmark run in the commit message.
 1. Fire up a pull request. Don't forget to sign
-   [Scala CLA](http://typesafe.com/contribute/cla/scala) and add yourself to the
-   [list of contributors](https://github.com/densh/scala-offheap/blob/master/AUTHORS.md).
+   [Scala CLA](http://typesafe.com/contribute/cla/scala).
