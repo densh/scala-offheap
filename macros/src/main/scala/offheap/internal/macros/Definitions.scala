@@ -30,7 +30,6 @@ trait Definitions {
   val RegionClass             = staticClass(s"$prefix.Region")
   val RefClass                = staticClass(s"$prefix.Ref")
   val MemoryClass             = staticClass(s"$prefix.Memory")
-  val NativeMemoryClass       = staticClass(s"$prefix.NativeMemory")
   val ArrayClass              = staticClass(s"$prefix.Array")
   val DataClass               = staticClass("offheap.internal.Data")
   val EnumClass               = staticClass("offheap.internal.Enum")
@@ -42,6 +41,7 @@ trait Definitions {
   val PrimaryExtractorClass   = staticClass("offheap.internal.PrimaryExtractor")
   val ParentExtractorClass    = staticClass("offheap.internal.ParentExractor")
   val UniversalExtractorClass = staticClass("offheap.internal.UniversalExtractor")
+  val UncheckedClass          = staticClass("offheap.internal.Unchecked")
 
   val MethodModule  = staticModule("offheap.internal.Method")
   val PoolModule    = staticModule(s"$prefix.Pool")

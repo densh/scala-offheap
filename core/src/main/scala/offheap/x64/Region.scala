@@ -1,9 +1,9 @@
 package offheap
 package x64
 
-sealed class Region(pool: Pool) extends Memory {
-  private val tail = pool.claim
-  private var page = tail
+sealed class Region(private[this] val pool: Pool) extends Memory {
+  private[this] val tail = pool.claim
+  private[this] var page = tail
   val id = Region.atomicFresh.next
   val memory = pool.memory
 
@@ -80,22 +80,12 @@ sealed class Region(pool: Pool) extends Memory {
   def putLong(addr: Addr, value: Long): Unit     = { checkOpen; memory.putLong(addr, value)   }
   def putFloat(addr: Addr, value: Float): Unit   = { checkOpen; memory.putFloat(addr, value)  }
   def putDouble(addr: Addr, value: Double): Unit = { checkOpen; memory.putDouble(addr, value) }
+  def isNative: Boolean                          = memory.isNative
 }
 object Region {
   private val atomicFresh = new offheap.internal.AtomicFresh
   def open(implicit pool: Pool) = new Region(pool)
   def apply[T](f: Region => T)(implicit pool: Pool): T = {
-    val region = open(pool)
-    try f(region)
-    finally if (region.isOpen) region.close
-  }
-}
-
-final class NativeRegion(pool: NativePool) extends Region(pool) with NativeMemory
-object NativeRegion {
-  private val atomicFresh = new offheap.internal.AtomicFresh
-  def open(implicit pool: NativePool) = new NativeRegion(pool)
-  def apply[T](f: NativeRegion => T)(implicit pool: NativePool): T = {
     val region = open(pool)
     try f(region)
     finally if (region.isOpen) region.close

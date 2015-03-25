@@ -47,6 +47,7 @@ trait Common extends Definitions {
   object ExtractParentExtractor    extends ExtractAnnotation(ParentExtractorClass)
   object ExtractPrimaryExtractor   extends ExtractAnnotation(PrimaryExtractorClass)
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
+  object ExtractUnchecked          extends ExtractAnnotation(UncheckedClass)
 
   object ClassOf {
     def unapply(tpe: Type): Option[(List[Field], List[Tree], Option[(Tree, Tree)])] =

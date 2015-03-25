@@ -10,7 +10,6 @@ class Annotations(val c: whitebox.Context) extends Common {
   import Flag._
 
   val Ref    = if (checked) tq"$RefClass"    else tq"$AddrTpe"
-  val Memory = if (checked) tq"$MemoryClass" else q"$NativeMemoryClass"
 
   def layout(fields: List[SyntacticField]): Tree = {
     val tuples = fields.map { f =>
@@ -194,10 +193,12 @@ class Annotations(val c: whitebox.Context) extends Common {
       parents.zip(parentExtractors).map { case (p, u) =>
         q"new $ParentExtractorClass(new $TagClass[$p], $termName.${u.name})"
       }
+    val uncheckedAnnot = if (checked) Nil else List(q"new $UncheckedClass")
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
-      q"new $DataClass" :: layout(fields) :: extractorAnnots ::: rawMods.annotations
+      q"new $DataClass" :: layout(fields) ::
+      extractorAnnots ::: uncheckedAnnot ::: rawMods.annotations
     )
 
     q"""
@@ -214,7 +215,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         def get      = $getBody
         ..${_ns}
 
-        def copy(..$copyArgs)(implicit $memory: $Memory): $name =
+        def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
           $termName.apply(..$argNames)($memory)
         override def toString(): $StringClass =
           $MethodModule.toString[$name](this)
@@ -233,7 +234,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         val empty: $name                  = null.asInstanceOf[$name]
         def fromRef($ref: $Ref): $name    = new $name($ref)
         def toRef($instance: $name): $Ref = $instance.$ref
-        def apply(..$args)(implicit $memory: $Memory): $name =
+        def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
         def unapply(scrutinee: $AnyClass): $unapplyTpt =
           macro $internal.macros.WhiteboxMethod.unapply[$name]
@@ -296,7 +297,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val coerce   = fresh("coerce")
 
     // Member and annotation transformation
-    val groupedAnns = rawMods.annotations.groupBy {
+    val groupedAnnots = rawMods.annotations.groupBy {
       case q"new $ann[..$_](...$_)" =>
         ann.symbol match {
           case ParentClass        => 'parent
@@ -304,9 +305,9 @@ class Annotations(val c: whitebox.Context) extends Common {
           case _                  => 'rest
         }
     }
-    val parents    = groupedAnns.get('parent).getOrElse(Nil)
-    val rangeOpt   = groupedAnns.get('range).map(_.head)
-    val moduleMods = rawMods.mapAnnotations { _ => groupedAnns.get('rest).getOrElse(Nil) }
+    val parentAnnots  = groupedAnnots.get('parent).getOrElse(Nil)
+    val rangeAnnotOpt = groupedAnnots.get('range).map(_.head)
+    val moduleMods    = rawMods.mapAnnotations { _ => groupedAnnots.get('rest).getOrElse(Nil) }
 
     val total = countClasses(rawStats)
     def const(value: Int) =
@@ -328,7 +329,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       case c: ClassDef =>
         count += 1
         val mods = c.mods.mapAnnotations { anns =>
-          if (parents.nonEmpty) parentAnnot :: anns
+          if (parentAnnots.nonEmpty) parentAnnot :: anns
           else parentAnnot :: classTagAnnot :: anns
         }
         treeCopy.ClassDef(c, mods, c.name, c.tparams, c.impl)
@@ -337,7 +338,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         val impl = treeCopy.Template(m.impl, m.impl.parents, m.impl.self,
                                      transformStats(m.impl.body))
         val mods = m.mods.mapAnnotations { anns =>
-          if (parents.nonEmpty) parentAnnot :: anns
+          if (parentAnnots.nonEmpty) parentAnnot :: anns
           else parentAnnot :: classTagRangeAnnot(start) :: anns
         }
         treeCopy.ModuleDef(m, mods, m.name, impl)
@@ -346,12 +347,14 @@ class Annotations(val c: whitebox.Context) extends Common {
     }
     val stats = transformStats(rawStats)
 
-    val range =
-      if (parents.nonEmpty) rangeOpt.get
+    val rangeAnnot =
+      if (parentAnnots.nonEmpty) rangeAnnotOpt.get
       else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
     val q"$_: $tagTpt" = const(0)
-    val layt = layout(List(new SyntacticField(q"val $tag: $tagTpt")))
-    val annots = q"new $EnumClass" :: layt :: range :: parents
+    val layoutAnnot    = layout(List(new SyntacticField(q"val $tag: $tagTpt")))
+    val uncheckedAnnot = if (checked) Nil else List(q"new $UncheckedClass")
+    val annots         = q"new $EnumClass" :: layoutAnnot :: rangeAnnot ::
+                         (uncheckedAnnot ::: parentAnnots)
 
     q"""
       @..$annots final class $name private(

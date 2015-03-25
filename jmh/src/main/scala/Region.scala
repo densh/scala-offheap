@@ -24,7 +24,7 @@ class RegionClose {
 
 @State(Scope.Thread)
 class RegionOpen {
-  implicit val pool: Pool = NativePool(UnsafeMemory())
+  implicit val pool: Pool = Pool(UnsafeMemory())
   var r: Region = _
 
   @TearDown(Level.Invocation)
