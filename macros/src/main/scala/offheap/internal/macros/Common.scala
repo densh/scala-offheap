@@ -31,6 +31,8 @@ trait Common extends Definitions {
   case class Field(name: String, tpe: Type)
 
   class ExtractAnnotation(annSym: Symbol) {
+    def has(sym: Symbol): Boolean =
+      unapply(sym).nonEmpty
     def unapply(sym: Symbol): Option[List[Tree]] = {
       val trees = sym.annotations.collect {
         case ann if ann.tpe.typeSymbol == annSym => ann.tree
@@ -47,6 +49,7 @@ trait Common extends Definitions {
   object ExtractParentExtractor    extends ExtractAnnotation(ParentExtractorClass)
   object ExtractPrimaryExtractor   extends ExtractAnnotation(PrimaryExtractorClass)
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
+  object ExtractUnsafe             extends ExtractAnnotation(UnsafeClass)
 
   object ClassOf {
     def unapply(tpe: Type): Option[(List[Field], List[Tree], Option[(Tree, Tree)])] =

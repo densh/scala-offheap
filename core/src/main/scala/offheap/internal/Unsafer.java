@@ -1,21 +1,18 @@
 package offheap.internal;
 
-import sun.misc.Unsafe;
-import java.lang.reflect.Field;
-
 public class Unsafer {
     static {
         try {
-            unsafe = Unsafe.getUnsafe();
+            unsafe = sun.misc.Unsafe.getUnsafe();
         } catch (SecurityException e) {
             try {
-                Field f = Unsafe.class.getDeclaredField("theUnsafe");
+                java.lang.reflect.Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
                 f.setAccessible(true);
-                unsafe = (Unsafe) f.get(null);
+                unsafe = (sun.misc.Unsafe) f.get(null);
             } catch (NoSuchFieldException nsfe) {
             } catch (IllegalAccessException iae) {
             }
         }
     }
-    public static Unsafe unsafe;
+    public static sun.misc.Unsafe unsafe;
 }

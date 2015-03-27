@@ -24,6 +24,7 @@ trait Definitions {
   def notNull(ref: Tree) = if (checked) q"$ref != null" else q"$ref != 0L"
 
   val StringBuilderClass            = staticClass("scala.collection.mutable.StringBuilder")
+  val compileTimeOnlyClass          = staticClass("scala.annotation.compileTimeOnly")
   val NullPointerExceptionClass     = staticClass("java.lang.NullPointerException")
   val IllegalArgumentExceptionClass = staticClass("java.lang.IllegalArgumentException")
 
@@ -42,7 +43,9 @@ trait Definitions {
   val PrimaryExtractorClass   = staticClass("offheap.internal.PrimaryExtractor")
   val ParentExtractorClass    = staticClass("offheap.internal.ParentExractor")
   val UniversalExtractorClass = staticClass("offheap.internal.UniversalExtractor")
+  val UnsafeClass             = staticClass("offheap.internal.Unsafe")
 
+  val unsafeModule  = staticModule("offheap.unsafe")
   val MethodModule  = staticModule("offheap.internal.Method")
   val PoolModule    = staticModule(s"$prefix.Pool")
   val ArrayModule   = staticModule(s"$prefix.Array")
