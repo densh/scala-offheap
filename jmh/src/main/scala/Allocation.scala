@@ -6,7 +6,7 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class OffheapAllocation {
-  implicit val pool: Pool = Pool(UnsafeMemory())
+  implicit val pool: Pool = Pool(Memory())
   var r: Region = _
 
   @Setup(Level.Iteration)

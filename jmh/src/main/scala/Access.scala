@@ -5,7 +5,7 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class Access {
-  implicit val pool: Pool = Pool(UnsafeMemory())
+  implicit val pool: Pool = Pool(Memory())
   var r: Region = _
   var op1: OffheapPoint1 = _
   var op2: OffheapPoint2 = _

@@ -34,6 +34,6 @@ trait Memory {
   def isVirtual: Boolean = !isNative
 }
 object Memory {
-  def sizeof[T]: Size =
-    macro internal.macros.Memory.sizeof_[T]
+  def sizeof[T]: Size = macro internal.macros.Memory.sizeof_[T]
+  def apply(): Memory = new UnsafeMemory()
 }

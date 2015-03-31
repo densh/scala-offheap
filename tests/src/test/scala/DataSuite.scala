@@ -9,7 +9,7 @@ import offheap._, x64._
 }
 
 class DataSuite extends FunSuite {
-  implicit val memory = UnsafeMemory()
+  implicit val memory = Memory()
 
   test("accessors") {
     val p = Point(10, 20)
