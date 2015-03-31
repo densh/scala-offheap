@@ -28,7 +28,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
   // TODO: modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
-  def dataTransform(clazz: Tree, companion: Tree) = {
+  def dataTransform(clazz: Tree, companion: Tree) = debug("@data") {
     // Parse the input trees
     val q"""
       $rawMods class $name[..$rawTargs] $rawCtorMods(..$rawArgs)
