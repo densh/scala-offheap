@@ -13,9 +13,10 @@ class Annotations(val c: whitebox.Context) extends Common {
 
   def layout(fields: List[SyntacticField]): Tree = {
     val tuples = fields.map { f =>
-      q"(${f.name.toString}, new $TagClass[${f.tpt}]())"
+      q"(${f.name.toString}, $PredefModule.classOf[${f.tpt}])"
     }
-    q"new $LayoutClass(..$tuples)"
+    val q"$ann: $_" = c.typecheck(q"$LayoutModule.packed(..$tuples)")
+    ann
   }
 
   implicit class SyntacticField(vd: ValDef) {
@@ -28,7 +29,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
   // TODO: modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
-  def dataTransform(clazz: Tree, companion: Tree) = debug("@data") {
+  def dataTransform(clazz: Tree, companion: Tree) = {
     // Parse the input trees
     val q"""
       $rawMods class $name[..$rawTargs] $rawCtorMods(..$rawArgs)
@@ -78,7 +79,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       case other                                                => other
     }
     val parents = rawMods.annotations.collect {
-      case q"new $annot(new $_[$tpt]())" if annot.symbol == ParentClass =>
+      case q"new $annot(${m: RefTree}.classOf[$tpt])" if annot.symbol == ParentClass =>
         tpt
     }
     val tagOpt = rawMods.annotations.collectFirst {
@@ -191,7 +192,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       q"new $PrimaryExtractorClass($termName.${primaryExtractor.name})" ::
       q"new $UniversalExtractorClass($termName.${universalExtractor.name})" ::
       parents.zip(parentExtractors).map { case (p, u) =>
-        q"new $ParentExtractorClass(new $TagClass[$p], $termName.${u.name})"
+        q"new $ParentExtractorClass($PredefModule.classOf[$p], $termName.${u.name})"
       }
     val uncheckedAnnot = if (checked) Nil else List(q"new $UncheckedClass")
     val mods = Modifiers(
@@ -320,7 +321,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     var count: Int = 0
     def parentAnnot =
-      q"new $ParentClass(new $TagClass[$name]())"
+      q"new $ParentClass($PredefModule.classOf[$name])"
     def classTagAnnot =
       q"new $ClassTagClass(${const(count)})"
     def classTagRangeAnnot(start: Int) =

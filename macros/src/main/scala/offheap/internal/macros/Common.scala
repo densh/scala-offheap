@@ -28,7 +28,32 @@ trait Common extends Definitions {
     vd
   }
 
-  case class Field(name: String, tpe: Type)
+  case class Field(name: String, tpe: Type, offset: Long)
+  object Field {
+    implicit val lift: Liftable[Field] = Liftable { f =>
+      q"(${f.name}, $PredefModule.classOf[${f.tpe}], ${f.offset})"
+    }
+    implicit val unlift: Unliftable[Field] = Unliftable {
+      case q"(${s: String}, ${t: Type}, ${offset: Long})" =>
+        Field(s, t, offset)
+    }
+  }
+
+  /** Extension to default type unlifting that also handles
+   *  literal constant types produced by classOf.
+   */
+  implicit object UnliftType extends Unliftable[Type] {
+    def unapply(t: Tree) = t match {
+      case Literal(Constant(tpe: Type)) =>
+        Some(tpe)
+      case tt: TypeTree if tt.tpe != null =>
+        Some(tt.tpe)
+      case q"${m: RefTree}.classOf[${tpe: Type}]" if m.symbol == PredefModule =>
+        Some(tpe)
+      case _ =>
+        None
+    }
+  }
 
   class ExtractAnnotation(annSym: Symbol) {
     def unapply(sym: Symbol): Option[List[Tree]] = {
@@ -50,23 +75,19 @@ trait Common extends Definitions {
   object ExtractUnchecked          extends ExtractAnnotation(UncheckedClass)
 
   object ClassOf {
-    def unapply(tpe: Type): Option[(List[Field], List[Tree], Option[(Tree, Tree)])] =
+    def unapply(tpe: Type): Option[(List[Field], List[Type], Option[(Tree, Tree)])] =
       unapply(tpe.widen.typeSymbol)
-    def unapply(sym: Symbol): Option[(List[Field], List[Tree], Option[(Tree, Tree)])] = {
+    def unapply(sym: Symbol): Option[(List[Field], List[Type], Option[(Tree, Tree)])] = {
       val fieldsOpt: Option[List[Field]] =
         ExtractLayout.unapply(sym).map { layouts =>
           layouts.head match {
-            case q"new $_(..$descriptors)" =>
-              descriptors.map { case q"(${name: String}, new $_[$tpt]())" =>
-                Field(name, tpt.tpe)
-              }
-            case q"new $_" =>
-              Nil
+            case q"new $_(..${fields: List[Field]})" => fields
+            case q"new $_"                           => Nil
           }
         }
       fieldsOpt.map { fields =>
         val parents = ExtractParent.unapply(sym).toList.flatten.map {
-          case q"new $_(new $_[$tpt]())" => tpt
+          case q"new $_(${tpe: Type})" => tpe
         }
         val tagOpt = ExtractClassTag.unapply(sym).map(_.head).map {
           case q"new $_($value: $tpt)" => (value, tpt)
@@ -102,14 +123,29 @@ trait Common extends Definitions {
     }
   }
 
-  def sizeof(tpe: Type): Int = tpe match {
+  def sizeOf(tpe: Type): Long = tpe match {
     case ByteTpe  | BooleanTpe         => 1
     case ShortTpe | CharTpe            => 2
     case IntTpe   | FloatTpe           => 4
     case LongTpe  | DoubleTpe          => 8
     case ClassOf(_, _, _) | ArrayOf(_) => if (bitDepth == 64) 12 else 8
-    case TupleOf(tpes)                 => tpes.map(sizeof).sum
     case _                             => abort(s"can't compute size of $tpe")
+  }
+
+  def sizeOfData(tpe: Type): Long = tpe match {
+    case ClassOf(fields, _, _) =>
+      val lastfield = fields.maxBy(_.offset)
+      lastfield.offset + sizeOf(lastfield.tpe)
+    case _ =>
+      abort(s"$tpe is not a an offheap class")
+  }
+
+  def alignment(tpe: Type) = tpe match {
+    case ByteTpe  | BooleanTpe                   => 1
+    case ShortTpe | CharTpe                      => 2
+    case IntTpe   | FloatTpe                     => 4
+    case LongTpe  | DoubleTpe | ClassOf(_, _, _) => 8
+    case _                                       => abort(s"can't comput alignment for $tpe")
   }
 
   def read(addr: Tree, tpe: Type, memory: Tree): Tree = tpe match {
@@ -208,15 +244,15 @@ trait Common extends Definitions {
   def isRelated(T: Type, C: Type): Boolean = {
     def topmostParent(sym: Symbol): Symbol =
       ExtractParent.unapply(sym).map {
-        case _ :+ q"new $_(new $_[$tpt]())" => tpt.tpe.typeSymbol
+        case _ :+ q"new $_(${tpe: Type})" => tpe.typeSymbol
       }.getOrElse(sym)
     topmostParent(T.typeSymbol) == topmostParent(C.typeSymbol)
   }
 
   def isParent(T: Type, C: Type): Boolean =
     ExtractParent.unapply(C.typeSymbol).getOrElse(Nil).exists {
-      case q"new $_(new $_[$tpt]())" => tpt.tpe.typeSymbol == T.typeSymbol
-      case _                         => false
+      case q"new $_(${tpe: Type})" => tpe.typeSymbol == T.typeSymbol
+      case _                       => false
     }
 
   def cast(v: Tree, from: Type, to: Type) = {
