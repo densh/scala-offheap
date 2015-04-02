@@ -15,8 +15,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val tuples = fields.map { f =>
       q"(${f.name.toString}, $PredefModule.classOf[${f.tpt}])"
     }
-    val q"$ann: $_" = c.typecheck(q"$LayoutModule.packed(..$tuples)")
-    ann
+    q"new $LayoutAnnotationClass($LayoutModule.packed(..$tuples))"
   }
 
   implicit class SyntacticField(vd: ValDef) {

@@ -2,6 +2,7 @@ package offheap
 package x64
 
 import scala.language.experimental.{macros => CanMacro}
+import offheap.internal.macros
 
 trait Memory {
   def allocate(size: Size): Addr
@@ -34,7 +35,7 @@ trait Memory {
   def isVirtual: Boolean = !isNative
 }
 object Memory {
-  def sizeOf[T]: Size     = macro internal.macros.Memory.sizeOf_[T]
-  def sizeOfData[T]: Size = macro internal.macros.Memory.sizeOfData_[T]
+  def sizeOf[T]: Size     = macro macros.Memory.sizeOf_[T]
+  def sizeOfData[T]: Size = macro macros.Memory.sizeOfData_[T]
   def apply(): Memory     = new UnsafeMemory()
 }

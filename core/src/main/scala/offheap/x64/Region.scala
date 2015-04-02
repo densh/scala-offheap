@@ -1,7 +1,7 @@
 package offheap
 package x64
 
-sealed class Region(private[this] val pool: Pool) extends Memory {
+sealed class Region(private[this] val pool: Pool)(implicit alignment: Alignment) extends Memory {
   private[this] val tail = pool.claim
   private[this] var page = tail
   val id = Region.atomicFresh.next
@@ -16,6 +16,13 @@ sealed class Region(private[this] val pool: Pool) extends Memory {
   private def checkOpen(): Unit =
     if (page == null) throw new InaccessibleRegionException
 
+  private def pad(addr: Addr) = {
+    val padding =
+      if (addr % alignment.value == 0) 0
+      else alignment.value - addr % alignment.value
+    addr + padding
+  }
+
   def close(): Unit = this.synchronized {
     checkOpen
     pool.reclaim(page, tail)
@@ -27,20 +34,20 @@ sealed class Region(private[this] val pool: Pool) extends Memory {
     if (size > pool.pageSize)
       throw new IllegalArgumentException("can't allocate object larger than the virtual page")
     val currentOffset = page.offset
+    val paddedOffset = pad(currentOffset)
     val resOffset =
-      if (currentOffset + size <= pool.pageSize) {
-        page.offset = (currentOffset + size).toShort
-        currentOffset
+      if (paddedOffset + size <= pool.pageSize) {
+        page.offset = paddedOffset + size
+        paddedOffset
       } else {
         val newpage = pool.claim
         newpage.next = page
-        newpage.offset = size.toShort
+        newpage.offset = size
         page = newpage
         0L
       }
     page.start + resOffset
   }
-
 
   override def getRef(addr: Addr): Ref = {
     checkOpen
@@ -84,9 +91,9 @@ sealed class Region(private[this] val pool: Pool) extends Memory {
 }
 object Region {
   private val atomicFresh = new offheap.internal.AtomicFresh
-  def open(implicit pool: Pool) = new Region(pool)
-  def apply[T](f: Region => T)(implicit pool: Pool): T = {
-    val region = open(pool)
+  def open(implicit pool: Pool, alignment: Alignment) = new Region(pool)
+  def apply[T](f: Region => T)(implicit pool: Pool, alignment: Alignment): T = {
+    val region = Region.open
     try f(region)
     finally if (region.isOpen) region.close
   }

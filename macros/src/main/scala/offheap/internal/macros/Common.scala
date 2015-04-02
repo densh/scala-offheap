@@ -28,19 +28,8 @@ trait Common extends Definitions {
     vd
   }
 
-  case class Field(name: String, tpe: Type, offset: Long)
-  object Field {
-    implicit val lift: Liftable[Field] = Liftable { f =>
-      q"(${f.name}, $PredefModule.classOf[${f.tpe}], ${f.offset})"
-    }
-    implicit val unlift: Unliftable[Field] = Unliftable {
-      case q"(${s: String}, ${t: Type}, ${offset: Long})" =>
-        Field(s, t, offset)
-    }
-  }
-
   /** Extension to default type unlifting that also handles
-   *  literal constant types produced by classOf.
+   *  literal constant types produced after typechecking of classOf.
    */
   implicit object UnliftType extends Unliftable[Type] {
     def unapply(t: Tree) = t match {
@@ -55,6 +44,17 @@ trait Common extends Definitions {
     }
   }
 
+  case class Field(name: String, tpe: Type, offset: Long)
+  object Field {
+    implicit val lift: Liftable[Field] = Liftable { f =>
+      q"(${f.name}, $PredefModule.classOf[${f.tpe}], ${f.offset})"
+    }
+    implicit val unlift: Unliftable[Field] = Unliftable {
+      case q"(${s: String}, ${t: Type}, ${offset: Long})" =>
+        Field(s, t, offset)
+    }
+  }
+
   class ExtractAnnotation(annSym: Symbol) {
     def unapply(sym: Symbol): Option[List[Tree]] = {
       val trees = sym.annotations.collect {
@@ -65,7 +65,7 @@ trait Common extends Definitions {
   }
   object ExtractEnum               extends ExtractAnnotation(EnumClass)
   object ExtractData               extends ExtractAnnotation(DataClass)
-  object ExtractLayout             extends ExtractAnnotation(LayoutClass)
+  object ExtractLayout             extends ExtractAnnotation(LayoutAnnotationClass)
   object ExtractParent             extends ExtractAnnotation(ParentClass)
   object ExtractClassTag           extends ExtractAnnotation(ClassTagClass)
   object ExtractClassTagRange      extends ExtractAnnotation(ClassTagRangeClass)
@@ -81,8 +81,8 @@ trait Common extends Definitions {
       val fieldsOpt: Option[List[Field]] =
         ExtractLayout.unapply(sym).map { layouts =>
           layouts.head match {
-            case q"new $_(..${fields: List[Field]})" => fields
-            case q"new $_"                           => Nil
+            case q"new $_((new $_(..${fields: List[Field]})): $_)" => fields
+            case q"new $_((new $_): $_)"                           => Nil
           }
         }
       fieldsOpt.map { fields =>
