@@ -140,12 +140,13 @@ trait Common extends Definitions {
       abort(s"$tpe is not a an offheap class")
   }
 
-  def alignment(tpe: Type) = tpe match {
-    case ByteTpe  | BooleanTpe                   => 1
-    case ShortTpe | CharTpe                      => 2
-    case IntTpe   | FloatTpe                     => 4
-    case LongTpe  | DoubleTpe | ClassOf(_, _, _) => 8
-    case _                                       => abort(s"can't comput alignment for $tpe")
+  def alignmentOf(tpe: Type) = tpe match {
+    case ByteTpe  | BooleanTpe          => 1
+    case ShortTpe | CharTpe             => 2
+    case IntTpe   | FloatTpe            => 4
+    case LongTpe  | DoubleTpe           => 8
+    case ClassOf(_, _, _) | ArrayOf(_)  => 8
+    case _                              => abort(s"can't comput alignment for $tpe")
   }
 
   def read(addr: Tree, tpe: Type, memory: Tree): Tree = tpe match {

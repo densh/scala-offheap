@@ -22,7 +22,7 @@ class Layout(val c: blackbox.Context) extends Common {
     val sortedfields = if (sorted) fields.sortBy(f => sizeOf(f.tpe)).reverse else fields
     var lastoffset = 0L
     val offsetMap = sortedfields.map { f =>
-      val tpealignment = alignment(f.tpe)
+      val tpealignment = alignmentOf(f.tpe)
       val padding =
         if (!padded | lastoffset % tpealignment == 0) 0
         else tpealignment - lastoffset % tpealignment
