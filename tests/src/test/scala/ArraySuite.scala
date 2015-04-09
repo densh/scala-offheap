@@ -3,6 +3,8 @@ package test
 import org.scalatest.FunSuite
 import offheap._, x64._
 
+@data class ArrayContainer(var arr: Array[Int])
+
 class ArraySuite extends FunSuite {
   implicit val memory = new UnsafeMemory
 
@@ -53,5 +55,14 @@ class ArraySuite extends FunSuite {
     val arr3 = Array(0, 0, 1, 1, 1, 0, 0, 0)
     for (i <- 0 to 7)
       assert(arr1(i) == arr3(i))
+  }
+
+  test("arrays can be fields in data classes") {
+    val arr1 = Array(1, 2, 3)
+    val arr2 = Array(2, 3, 4)
+    val cont = ArrayContainer(arr1)
+    assert(cont.arr == arr1)
+    cont.arr = arr2
+    assert(cont.arr == arr2)
   }
 }
