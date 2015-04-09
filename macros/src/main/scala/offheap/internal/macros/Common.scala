@@ -75,6 +75,12 @@ trait Common extends Definitions {
     }
   }
 
+  object ArrayOf {
+    def unapply(tpe: Type): Option[Type] =
+      if (tpe.typeSymbol != ArrayClass) None
+      else Some(paramTpe(tpe))
+  }
+
   object TupleOf {
     def unapply(tpe: Type): Option[List[Type]] =
       if (tpe.typeSymbol == UnitClass) Some(Nil)
@@ -96,13 +102,13 @@ trait Common extends Definitions {
   }
 
   def sizeof(tpe: Type): Int = tpe match {
-    case ByteTpe  | BooleanTpe => 1
-    case ShortTpe | CharTpe    => 2
-    case IntTpe   | FloatTpe   => 4
-    case LongTpe  | DoubleTpe  => 8
-    case ClassOf(_, _, _)      => if (bitDepth == 64) 12 else 8
-    case TupleOf(tpes)         => tpes.map(sizeof).sum
-    case _                     => abort(s"can't compute size of $tpe")
+    case ByteTpe  | BooleanTpe         => 1
+    case ShortTpe | CharTpe            => 2
+    case IntTpe   | FloatTpe           => 4
+    case LongTpe  | DoubleTpe          => 8
+    case ClassOf(_, _, _) | ArrayOf(_) => if (bitDepth == 64) 12 else 8
+    case TupleOf(tpes)                 => tpes.map(sizeof).sum
+    case _                             => abort(s"can't compute size of $tpe")
   }
 
   def read(addr: Tree, tpe: Type, memory: Tree): Tree = tpe match {
@@ -111,6 +117,8 @@ trait Common extends Definitions {
       q"$memory.$getT($addr)"
     case BooleanTpe =>
       q"$memory.getByte($addr) != ${Literal(Constant(0.toByte))}"
+    case ArrayOf(tpe) =>
+      q"$ArrayModule.fromRef[$tpe]($memory.getRef($addr))"
     case ClassOf(_, _, _) =>
       val companion = tpe.typeSymbol.companion
       val getRef = if (checked) TermName("getRef") else TermName("getLong")
@@ -127,6 +135,8 @@ trait Common extends Definitions {
                         if ($value) ${Literal(Constant(1.toByte))}
                         else ${Literal(Constant(0.toByte))})
       """
+    case ArrayOf(_) =>
+      q"$memory.putRef($addr, $ArrayModule.toRef($value))"
     case ClassOf(_, _, _) =>
       val companion = tpe.typeSymbol.companion
       val putRef = if (checked) TermName("putRef") else TermName("putLong")
@@ -181,7 +191,8 @@ trait Common extends Definitions {
       }
   }
 
-  def paramTpe(f: Tree) = f.tpe.typeArgs.head
+  def paramTpe(tpe: Type): Type = tpe.typeArgs.head
+  def paramTpe(t: Tree): Type   = paramTpe(t.tpe)
 
   def assertAllocatable(T: Type, msg: String = ""): Unit =
     T match {
