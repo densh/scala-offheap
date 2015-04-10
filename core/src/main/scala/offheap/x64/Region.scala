@@ -1,7 +1,7 @@
 package offheap
 package x64
 
-sealed class Region(private[this] val pool: Pool)(implicit alignment: Alignment) extends Memory {
+sealed class Region(private[this] val pool: Pool) extends Memory {
   private[this] val tail = pool.claim
   private[this] var page = tail
   val id = Region.atomicFresh.next
@@ -17,9 +17,10 @@ sealed class Region(private[this] val pool: Pool)(implicit alignment: Alignment)
     if (page == null) throw new InaccessibleRegionException
 
   private def pad(addr: Addr) = {
+    val alignment = Memory.sizeOf[Long]
     val padding =
-      if (addr % alignment.value == 0) 0
-      else alignment.value - addr % alignment.value
+      if (addr % alignment == 0) 0
+      else alignment - addr % alignment
     addr + padding
   }
 
@@ -91,8 +92,8 @@ sealed class Region(private[this] val pool: Pool)(implicit alignment: Alignment)
 }
 object Region {
   private val atomicFresh = new offheap.internal.AtomicFresh
-  def open(implicit pool: Pool, alignment: Alignment) = new Region(pool)
-  def apply[T](f: Region => T)(implicit pool: Pool, alignment: Alignment): T = {
+  def open(implicit pool: Pool) = new Region(pool)
+  def apply[T](f: Region => T)(implicit pool: Pool): T = {
     val region = Region.open
     try f(region)
     finally if (region.isOpen) region.close
