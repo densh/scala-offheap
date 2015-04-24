@@ -41,7 +41,7 @@ support methods (`isEmpty`, `nonEmpty`, `get`, `_1`, ... , `_N`), `copy` method,
 To allocate a data object one needs to have an implicit memory in scope.
 
 ```scala
-  implicit val memory = NativeMemory()
+  implicit val memory = Memory()
   val point = Point(10, 20)
 ```
 
