@@ -16,7 +16,7 @@ class Layout(val c: blackbox.Context) extends Common {
         abort(s"expected a static sequence of pairs but got $pairs")
     }
 
-  def wrap(fields: Seq[Field]): Tree = q"new $offheapx.Layout(..$fields)"
+  def wrap(fields: Seq[Field]): Tree = q"new $FieldsClass(..$fields)"
 
   def align(fields: Seq[Field]): Seq[Field] = {
     var lastoffset = 0L

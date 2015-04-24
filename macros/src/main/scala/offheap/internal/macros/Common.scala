@@ -65,7 +65,7 @@ trait Common extends Definitions {
   }
   object ExtractEnum               extends ExtractAnnotation(EnumClass)
   object ExtractData               extends ExtractAnnotation(DataClass)
-  object ExtractLayout             extends ExtractAnnotation(LayoutAnnotationClass)
+  object ExtractLayout             extends ExtractAnnotation(LayoutClass)
   object ExtractParent             extends ExtractAnnotation(ParentClass)
   object ExtractClassTag           extends ExtractAnnotation(ClassTagClass)
   object ExtractClassTagRange      extends ExtractAnnotation(ClassTagRangeClass)
