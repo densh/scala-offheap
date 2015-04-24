@@ -134,15 +134,13 @@ trait Common extends Definitions {
     }
   }
 
-  def refSize = if (bitDepth == 64) 12 else 8
-
   def sizeOf(tpe: Type): Long = tpe match {
     case ByteTpe  | BooleanTpe => 1
     case ShortTpe | CharTpe    => 2
     case IntTpe   | FloatTpe   => 4
     case LongTpe  | DoubleTpe  => 8
     case _ if ClassOf.is(tpe)  ||
-              ArrayOf.is(tpe)  => refSize
+              ArrayOf.is(tpe)  => if (bitDepth == 64) 12 else 8
     case _                     => abort(s"can't compute size of $tpe")
   }
 
@@ -154,15 +152,13 @@ trait Common extends Definitions {
       abort(s"$tpe is not a an offheap class")
   }
 
-  def refAlignment = 8
-
   def alignmentOf(tpe: Type) = tpe match {
     case ByteTpe  | BooleanTpe => 1
     case ShortTpe | CharTpe    => 2
     case IntTpe   | FloatTpe   => 4
     case LongTpe  | DoubleTpe  => 8
     case _ if ClassOf.is(tpe)  ||
-              ArrayOf.is(tpe)  => refAlignment
+              ArrayOf.is(tpe)  => 8
     case _                     => abort(s"can't comput alignment for $tpe")
   }
 
