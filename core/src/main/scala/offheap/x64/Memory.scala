@@ -2,6 +2,7 @@ package offheap
 package x64
 
 import scala.language.experimental.{macros => CanMacro}
+import offheap.internal.macros
 
 trait Memory {
   def allocate(size: Size): Addr
@@ -29,14 +30,10 @@ trait Memory {
   def putRef(addr: Addr, value: Ref): Unit =
     if (value != null) putLong(addr, value.addr)
     else putLong(addr, 0L)
+
+  def isNative: Boolean
+  def isVirtual: Boolean = !isNative
 }
 object Memory {
-  def sizeof[T]: Size =
-    macro internal.macros.Memory.sizeof_[T]
-}
-
-/** Memory that uses physical machine address space. */
-trait NativeMemory extends Memory
-object NativeMemory {
-  def apply() = UnsafeMemory()
+  def apply(): Memory     = new UnsafeMemory()
 }

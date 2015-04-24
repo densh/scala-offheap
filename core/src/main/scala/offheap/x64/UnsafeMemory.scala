@@ -3,7 +3,7 @@ package x64
 
 import offheap.internal.Unsafer.unsafe
 
-class UnsafeMemory extends NativeMemory {
+class UnsafeMemory extends Memory {
   assert(unsafe.addressSize() == 8,
     "unsafe memory is only supported 64-bit systems")
 
@@ -35,6 +35,7 @@ class UnsafeMemory extends NativeMemory {
   def putLong(addr: Addr, value: Long): Unit       = unsafe.putLong(addr, value)
   def putFloat(addr: Addr, value: Float): Unit     = unsafe.putFloat(addr, value)
   def putDouble(addr: Addr, value: Double): Unit   = unsafe.putDouble(addr, value)
+  def isNative: Boolean                            = true
 }
 object UnsafeMemory {
   def apply() = new UnsafeMemory()

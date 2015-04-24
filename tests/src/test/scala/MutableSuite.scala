@@ -11,7 +11,7 @@ import offheap._, x64._
 object C3 { var x = 0 }
 
 class MutableSuite extends FunSuite {
-  implicit val memory = UnsafeMemory()
+  implicit val memory = Memory()
 
   test("mutable constructor argument") {
     val c1 = C1(10)

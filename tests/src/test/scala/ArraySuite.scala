@@ -6,7 +6,7 @@ import offheap._, x64._
 @data class ArrayContainer(var arr: Array[Int])
 
 class ArraySuite extends FunSuite {
-  implicit val memory = new UnsafeMemory
+  implicit val memory = Memory()
 
   test("uninit") {
     val arr = Array.uninit[Int](10)

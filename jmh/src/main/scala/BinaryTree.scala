@@ -54,9 +54,9 @@ object GCHeap {
 
 @data class OhTree(i: Int, left: OhTree, right: OhTree)
 object Offheap {
-  implicit val pool = NativePool(UnsafeMemory())
+  implicit val pool = Pool(Memory())
   def run(n: Int) = {
-    val outer = NativeRegion.open
+    val outer = Region.open
     val minDepth = 4
     val maxDepth = n max (minDepth+2)
     val longLivedTree = tree(0,maxDepth)(outer)
@@ -65,7 +65,7 @@ object Offheap {
       val iterations = 1 << (maxDepth - depth + minDepth)
       var i,sum = 0
       def rsum(i: Int, depth: Int): Int = {
-        val r = NativeRegion.open
+        val r = Region.open
         val res = isum(tree(i, depth)(r))
         r.close
         res
@@ -83,7 +83,7 @@ object Offheap {
     if (left.isEmpty) tree.i
     else tree.i + isum(left) - isum(tree.right)
   }
-  def tree(i: Int, depth: Int)(implicit region: NativeRegion): OhTree = {
+  def tree(i: Int, depth: Int)(implicit region: Region): OhTree = {
     if (depth > 0) OhTree(i, tree(i*2-1, depth-1), tree(i*2, depth-1))
     else OhTree(i, OhTree.empty, OhTree.empty)
   }

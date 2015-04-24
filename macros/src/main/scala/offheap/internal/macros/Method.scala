@@ -24,9 +24,7 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-        val offset = q"$MemoryModule.sizeof[(..$tpes)]"
-        nullChecked(ref, read(q"${addr(ref)} + $offset", f.tpe, memory(ref)))
+        nullChecked(ref, read(q"${addr(ref)} + ${f.offset}", f.tpe, memory(ref)))
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -39,9 +37,7 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-        val offset = q"$MemoryModule.sizeof[(..$tpes)]"
-        nullChecked(ref, write(q"${addr(ref)} + $offset", f.tpe, value, memory(ref)))
+        nullChecked(ref, write(q"${addr(ref)} + ${f.offset}", f.tpe, value, memory(ref)))
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -52,25 +48,29 @@ class Method(val c: blackbox.Context) extends Common {
   def allocator[C: WeakTypeTag](memory: Tree, args: Tree*): Tree = {
     val C = wt[C]
     val ClassOf(fields, _, tagOpt) = C
+    val checked = ExtractUnchecked.unapply(C.typeSymbol).isEmpty
     val tagValueOpt = tagOpt.map { case (v, tpt) => v }
     val addr = fresh("addr")
     val size =
       if (fields.isEmpty) q"1"
-      else {
-        val fieldTpes = fields.map(_.tpe)
-        q"$MemoryModule.sizeof[(..$fieldTpes)]"
-      }
+      else q"$offheapx.sizeOfData[$C]"
     val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
-      val tpes = fields.takeWhile(_ ne f).map(_.tpe)
-      val offset = q"$MemoryModule.sizeof[(..$tpes)]"
-      write(q"$addr + $offset", f.tpe, arg, memory)
+      write(q"$addr + ${f.offset}", f.tpe, arg, memory)
     }
     val newC =
       if (checked) q"new $C(new $RefClass($addr, $memory))"
       else q"new $C($addr)"
+    val checkNative =
+      if (checked) q""
+      else q"""
+        if ($memory.isVirtual)
+          throw new $IllegalArgumentExceptionClass(
+            "Unchecked offheap can only be allocated in native memory.")
+      """
     val instantiate = C.members.find(_.name == initialize).map { _ =>
       val instance = fresh("instance")
       q"""
+        ..$checkNative
         val $instance = $newC
         $instance.$initialize
         $instance
@@ -93,17 +93,18 @@ class Method(val c: blackbox.Context) extends Common {
       else actualFields.flatMap { f =>
         List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
       }.init
-    val path =
-      (C :: parents.map(_.tpe))
-        .reverse
-        .map(_.typeSymbol.name.toString)
-        .mkString("", ".", "")
+    val path = (C :: parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
+    val companion = C.typeSymbol.companion
     q"""
       val $sb = new $StringBuilderClass
       $sb.append($path)
-      $sb.append("(")
-      ..$appends
-      $sb.append(")")
+      if ($self == $companion.empty)
+        $sb.append(".empty")
+      else {
+        $sb.append("(")
+        ..$appends
+        $sb.append(")")
+      }
       $sb.toString
     """
   }

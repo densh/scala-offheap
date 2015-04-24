@@ -18,8 +18,8 @@ class WhiteboxMethod(val c: whitebox.Context) extends Common {
       } else if (isParent(T, C)) {
         val ExtractParentExtractor(extractors) = C.typeSymbol
         extractors.collectFirst {
-          case q"new $_(new $_[$tpt](), $_.${extractor: TermName})"
-            if tpt.tpe.typeSymbol == T.typeSymbol =>
+          case q"new $_(${tpe: Type}, $_.${extractor: TermName})"
+            if tpe.typeSymbol == T.typeSymbol =>
             extractor
         }.get
       } else {

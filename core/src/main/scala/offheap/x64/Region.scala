@@ -1,9 +1,9 @@
 package offheap
 package x64
 
-sealed class Region(pool: Pool) extends Memory {
-  private val tail = pool.claim
-  private var page = tail
+sealed class Region(private[this] val pool: Pool) extends Memory {
+  private[this] val tail = pool.claim
+  private[this] var page = tail
   val id = Region.atomicFresh.next
   val memory = pool.memory
 
@@ -16,6 +16,14 @@ sealed class Region(pool: Pool) extends Memory {
   private def checkOpen(): Unit =
     if (page == null) throw new InaccessibleRegionException
 
+  private def pad(addr: Addr) = {
+    val alignment = sizeOf[Long]
+    val padding =
+      if (addr % alignment == 0) 0
+      else alignment - addr % alignment
+    addr + padding
+  }
+
   def close(): Unit = this.synchronized {
     checkOpen
     pool.reclaim(page, tail)
@@ -27,20 +35,20 @@ sealed class Region(pool: Pool) extends Memory {
     if (size > pool.pageSize)
       throw new IllegalArgumentException("can't allocate object larger than the virtual page")
     val currentOffset = page.offset
+    val paddedOffset = pad(currentOffset)
     val resOffset =
-      if (currentOffset + size <= pool.pageSize) {
-        page.offset = (currentOffset + size).toShort
-        currentOffset
+      if (paddedOffset + size <= pool.pageSize) {
+        page.offset = paddedOffset + size
+        paddedOffset
       } else {
         val newpage = pool.claim
         newpage.next = page
-        newpage.offset = size.toShort
+        newpage.offset = size
         page = newpage
         0L
       }
     page.start + resOffset
   }
-
 
   override def getRef(addr: Addr): Ref = {
     checkOpen
@@ -80,23 +88,13 @@ sealed class Region(pool: Pool) extends Memory {
   def putLong(addr: Addr, value: Long): Unit     = { checkOpen; memory.putLong(addr, value)   }
   def putFloat(addr: Addr, value: Float): Unit   = { checkOpen; memory.putFloat(addr, value)  }
   def putDouble(addr: Addr, value: Double): Unit = { checkOpen; memory.putDouble(addr, value) }
+  def isNative: Boolean                          = memory.isNative
 }
 object Region {
   private val atomicFresh = new offheap.internal.AtomicFresh
   def open(implicit pool: Pool) = new Region(pool)
   def apply[T](f: Region => T)(implicit pool: Pool): T = {
-    val region = open(pool)
-    try f(region)
-    finally if (region.isOpen) region.close
-  }
-}
-
-final class NativeRegion(pool: NativePool) extends Region(pool) with NativeMemory
-object NativeRegion {
-  private val atomicFresh = new offheap.internal.AtomicFresh
-  def open(implicit pool: NativePool) = new NativeRegion(pool)
-  def apply[T](f: NativeRegion => T)(implicit pool: NativePool): T = {
-    val region = open(pool)
+    val region = Region.open
     try f(region)
     finally if (region.isOpen) region.close
   }

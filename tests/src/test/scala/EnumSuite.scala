@@ -16,7 +16,7 @@ object E1 {
 class C
 
 class EnumSuite extends FunSuite {
-  implicit val memory = UnsafeMemory()
+  implicit val memory = Memory()
 
   test("D1 is D1") { assert(D1().is[D1]) }
   test("D2 is D2") { assert(D2().is[D2]) }

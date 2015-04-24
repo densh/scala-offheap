@@ -6,7 +6,7 @@ import offheap.x64._
 
 @State(Scope.Thread)
 class OffheapAllocation {
-  implicit val pool: Pool = Pool(UnsafeMemory())
+  implicit val pool: Pool = Pool(Memory())
   var r: Region = _
 
   @Setup(Level.Iteration)
@@ -17,28 +17,12 @@ class OffheapAllocation {
     r.close()
 
   @Benchmark
-  def offheapPoint1() =
-    OffheapPoint1(10)(r)
-
-  @Benchmark
-  def offheapPoint2() =
-    OffheapPoint2(10, 20)(r)
-
-  @Benchmark
-  def offheapPoint4() =
-    OffheapPoint4(10, 20, 30, 40)(r)
+  def offheapPoint() =
+    OffheapPoint(10, 20)(r)
 }
 
 class GCAllocation {
   @Benchmark
-  def point1(): Point1 =
-    new Point1(10)
-
-  @Benchmark
-  def point2() =
-    new Point2(10, 20)
-
-  @Benchmark
-  def point4() =
-    new Point4(10, 20, 30, 40)
+  def point() =
+    new Point(10, 20)
 }
