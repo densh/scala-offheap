@@ -17,7 +17,7 @@ sealed class Region(private[this] val pool: Pool) extends Memory {
     if (page == null) throw new InaccessibleRegionException
 
   private def pad(addr: Addr) = {
-    val alignment = Memory.sizeOf[Long]
+    val alignment = sizeOf[Long]
     val padding =
       if (addr % alignment == 0) 0
       else alignment - addr % alignment
