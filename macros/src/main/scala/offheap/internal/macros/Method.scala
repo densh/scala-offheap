@@ -94,12 +94,17 @@ class Method(val c: blackbox.Context) extends Common {
         List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
       }.init
     val path = (C :: parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
+    val companion = C.typeSymbol.companion
     q"""
       val $sb = new $StringBuilderClass
       $sb.append($path)
-      $sb.append("(")
-      ..$appends
-      $sb.append(")")
+      if ($self == $companion.empty)
+        $sb.append(".empty")
+      else {
+        $sb.append("(")
+        ..$appends
+        $sb.append(")")
+      }
       $sb.toString
     """
   }

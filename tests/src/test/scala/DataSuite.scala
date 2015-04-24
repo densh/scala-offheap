@@ -89,9 +89,7 @@ class DataSuite extends FunSuite {
   }
 
   test("toString on null") {
-    intercept[NullPointerException] {
-      Point.empty.toString
-    }
+    assert(Point.empty.toString == "Point.empty")
   }
 
   test("equality") {
