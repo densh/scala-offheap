@@ -9,13 +9,13 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe.definitions._
   import Flag._
 
-  val Ref    = if (checked) tq"$RefClass"    else tq"$AddrTpe"
+  val Ref = if (checked) tq"$RefClass" else tq"$AddrTpe"
 
-  def layout(fields: List[SyntacticField]): Tree = {
+  def performLayout(C: Tree, fields: List[SyntacticField]): Tree = {
     val tuples = fields.map { f =>
       q"(${f.name.toString}, $PredefModule.classOf[${f.tpt}])"
     }
-    q"new $LayoutAnnotationClass($LayoutModule.packed(..$tuples))"
+    q"new $LayoutAnnotationClass($LayoutModule.perform[$C](..$tuples))"
   }
 
   implicit class SyntacticField(vd: ValDef) {
@@ -194,10 +194,11 @@ class Annotations(val c: whitebox.Context) extends Common {
         q"new $ParentExtractorClass($PredefModule.classOf[$p], $termName.${u.name})"
       }
     val uncheckedAnnot = if (checked) Nil else List(q"new $UncheckedClass")
+    val layoutAnnot = performLayout(tq"$name", fields)
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
-      q"new $DataClass" :: layout(fields) ::
+      q"new $DataClass" :: layoutAnnot ::
       extractorAnnots ::: uncheckedAnnot ::: rawMods.annotations
     )
 
@@ -351,9 +352,9 @@ class Annotations(val c: whitebox.Context) extends Common {
       if (parentAnnots.nonEmpty) rangeAnnotOpt.get
       else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
     val q"$_: $tagTpt" = const(0)
-    val layoutAnnot    = layout(List(new SyntacticField(q"val $tag: $tagTpt")))
     val uncheckedAnnot = if (checked) Nil else List(q"new $UncheckedClass")
-    val annots         = q"new $EnumClass" :: layoutAnnot :: rangeAnnot ::
+    val layoutAnnot    = performLayout(tq"$name", List(new SyntacticField(q"val $tag: $tagTpt")))
+    val annots         = q"new $EnumClass" :: rangeAnnot :: layoutAnnot ::
                          (uncheckedAnnot ::: parentAnnots)
 
     q"""
@@ -361,9 +362,9 @@ class Annotations(val c: whitebox.Context) extends Common {
         private val $ref: $Ref
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
-        def $tag: $tagTpt        = $MethodModule.accessor[$name, $tagTpt]($ref, ${tag.toString})
-        def is[T]: $BooleanClass = macro $internal.macros.Method.is[$name, T]
-        def as[T]: T             = macro $internal.macros.Method.as[$name, T]
+        def $tag: $tagTpt         = $MethodModule.accessor[$name, $tagTpt]($ref, ${tag.toString})
+        def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
+        def as[T]: T              = macro $internal.macros.Method.as[$name, T]
       }
       $moduleMods object $termName extends { ..$rawEarly } with ..$rawParents { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}

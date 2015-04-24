@@ -8,6 +8,9 @@ import offheap._, x64._
     math.sqrt(math.pow(other.x - x, 2) + math.pow(other.y - y, 2))
 }
 
+@data class A(b: B)
+@data class B(a: A)
+
 class DataSuite extends FunSuite {
   implicit val memory = Memory()
 
@@ -100,5 +103,10 @@ class DataSuite extends FunSuite {
     assert(p1 != Point.empty)
     assert(p2 != Point.empty)
     assert(Point.empty == Point.empty)
+  }
+
+  test("circular") {
+    val aba = A(B(A.empty))
+    assert(aba.toString == "A(B(A.empty))")
   }
 }

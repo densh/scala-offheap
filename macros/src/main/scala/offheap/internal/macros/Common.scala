@@ -74,17 +74,26 @@ trait Common extends Definitions {
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
   object ExtractUnchecked          extends ExtractAnnotation(UncheckedClass)
 
+  final case class IsClass(value: Boolean)
   object ClassOf {
+    import c.internal._, decorators._
+    def is(tpe: Type): Boolean =
+      is(tpe.widen.typeSymbol)
+    def is(sym: Symbol): Boolean = {
+      sym.attachments.get[IsClass].map { _.value }.getOrElse {
+        val value = ExtractLayout.unapply(sym).nonEmpty
+        sym.updateAttachment(IsClass(value))
+        value
+      }
+    }
     def unapply(tpe: Type): Option[(List[Field], List[Type], Option[(Tree, Tree)])] =
       unapply(tpe.widen.typeSymbol)
     def unapply(sym: Symbol): Option[(List[Field], List[Type], Option[(Tree, Tree)])] = {
       val fieldsOpt: Option[List[Field]] =
-        ExtractLayout.unapply(sym).map { layouts =>
-          layouts.head match {
-            case q"new $_((new $_(..${fields: List[Field]})): $_)" => fields
-            case q"new $_((new $_): $_)"                           => Nil
-          }
-        }
+        ExtractLayout.unapply(sym).map { _.head match {
+          case q"new $_((new $_(..${fields: List[Field]})): $_)" => fields
+          case q"new $_((new $_): $_)"                           => Nil
+        }}
       fieldsOpt.map { fields =>
         val parents = ExtractParent.unapply(sym).toList.flatten.map {
           case q"new $_(${tpe: Type})" => tpe
@@ -98,8 +107,10 @@ trait Common extends Definitions {
   }
 
   object ArrayOf {
+    def is(tpe: Type): Boolean =
+      tpe.typeSymbol == ArrayClass
     def unapply(tpe: Type): Option[Type] =
-      if (tpe.typeSymbol != ArrayClass) None
+      if (!is(tpe)) None
       else Some(paramTpe(tpe))
   }
 
@@ -123,13 +134,16 @@ trait Common extends Definitions {
     }
   }
 
+  def refSize = if (bitDepth == 64) 12 else 8
+
   def sizeOf(tpe: Type): Long = tpe match {
-    case ByteTpe  | BooleanTpe         => 1
-    case ShortTpe | CharTpe            => 2
-    case IntTpe   | FloatTpe           => 4
-    case LongTpe  | DoubleTpe          => 8
-    case ClassOf(_, _, _) | ArrayOf(_) => if (bitDepth == 64) 12 else 8
-    case _                             => abort(s"can't compute size of $tpe")
+    case ByteTpe  | BooleanTpe => 1
+    case ShortTpe | CharTpe    => 2
+    case IntTpe   | FloatTpe   => 4
+    case LongTpe  | DoubleTpe  => 8
+    case _ if ClassOf.is(tpe)  ||
+              ArrayOf.is(tpe)  => refSize
+    case _                     => abort(s"can't compute size of $tpe")
   }
 
   def sizeOfData(tpe: Type): Long = tpe match {
@@ -140,13 +154,16 @@ trait Common extends Definitions {
       abort(s"$tpe is not a an offheap class")
   }
 
+  def refAlignment = 8
+
   def alignmentOf(tpe: Type) = tpe match {
-    case ByteTpe  | BooleanTpe          => 1
-    case ShortTpe | CharTpe             => 2
-    case IntTpe   | FloatTpe            => 4
-    case LongTpe  | DoubleTpe           => 8
-    case ClassOf(_, _, _) | ArrayOf(_)  => 8
-    case _                              => abort(s"can't comput alignment for $tpe")
+    case ByteTpe  | BooleanTpe => 1
+    case ShortTpe | CharTpe    => 2
+    case IntTpe   | FloatTpe   => 4
+    case LongTpe  | DoubleTpe  => 8
+    case _ if ClassOf.is(tpe)  ||
+              ArrayOf.is(tpe)  => refAlignment
+    case _                     => abort(s"can't comput alignment for $tpe")
   }
 
   def read(addr: Tree, tpe: Type, memory: Tree): Tree = tpe match {

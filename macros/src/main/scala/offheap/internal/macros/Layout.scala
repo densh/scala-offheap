@@ -5,7 +5,7 @@ package macros
 import scala.reflect.macros.blackbox
 
 class Layout(val c: blackbox.Context) extends Common {
-  import c.universe._
+  import c.universe.{weakTypeOf => wt, _}
 
   def unwrap(pairs: Seq[Tree]): Seq[Field] =
     try pairs.map {
@@ -18,13 +18,12 @@ class Layout(val c: blackbox.Context) extends Common {
 
   def wrap(fields: Seq[Field]): Tree = q"new $offheapx.Layout(..$fields)"
 
-  def align(fields: Seq[Field], sorted: Boolean, padded: Boolean) = {
-    val sortedfields = if (sorted) fields.sortBy(f => sizeOf(f.tpe)).reverse else fields
+  def align(fields: Seq[Field]): Seq[Field] = {
     var lastoffset = 0L
-    val offsetMap = sortedfields.map { f =>
+    val offsetMap = fields.map { f =>
       val tpealignment = alignmentOf(f.tpe)
       val padding =
-        if (!padded | lastoffset % tpealignment == 0) 0
+        if (lastoffset % tpealignment == 0) 0
         else tpealignment - lastoffset % tpealignment
       val offset = lastoffset + padding
       lastoffset = offset + sizeOf(f.tpe)
@@ -33,7 +32,9 @@ class Layout(val c: blackbox.Context) extends Common {
     fields.map { f => f.copy(offset = offsetMap(f)) }
   }
 
-  def unaligned(pairs: Tree*) = wrap(align(unwrap(pairs), sorted = false, padded = false))
-  def aligned(pairs: Tree*)   = wrap(align(unwrap(pairs), sorted = false, padded = true))
-  def packed(pairs: Tree*)    = wrap(align(unwrap(pairs), sorted = true,  padded = true))
+  def perform[C: WeakTypeTag](pairs: Tree*) = {
+    import c.internal._, decorators._
+    wt[C].typeSymbol.updateAttachment(IsClass(true))
+    wrap(align(unwrap(pairs)))
+  }
 }
