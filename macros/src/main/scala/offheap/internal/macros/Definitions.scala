@@ -35,6 +35,7 @@ trait Definitions {
   val ParentExtractorClass    = staticClass("offheap.internal.ParentExractor")
   val UniversalExtractorClass = staticClass("offheap.internal.UniversalExtractor")
 
+  val RegionModule = staticModule(s"$prefix.Region")
   val PoolModule   = staticModule(s"$prefix.Pool")
   val ArrayModule  = staticModule(s"$prefix.Array")
   val MemoryModule = staticModule(s"$prefix.Memory")
@@ -49,4 +50,7 @@ trait Definitions {
   val tag          = TermName("$tag")
   val addr         = TermName("$addr")
   val canUseMacros = TermName("$canUseMacros")
+
+  val UNSAFE  = q"$internal.UnsafeHolder.UNSAFE"
+  val CHECKED = q"$internal.CheckedHolder.CHECKED"
 }

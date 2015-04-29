@@ -1,7 +1,7 @@
 package offheap
 package x64
 
-sealed class Pool(
+final class Pool(
   val memory: Memory,
   val pageSize: Size = 4096,
   val chunkSize: Size = 1024 * 4096

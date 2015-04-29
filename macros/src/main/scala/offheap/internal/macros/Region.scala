@@ -8,17 +8,15 @@ class Region(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def open(pool: Tree) = q"???"
-
-  def apply[T: WeakTypeTag](f: Tree)(pool: Tree) = {
-    val r = freshVal("r", tpe = RegionClass.toType, value = open(pool))
+  def apply(f: Tree)(pool: Tree) = {
+    val r = fresh("r")
     val res = fresh("res")
-    val body = app(f, q"${r.symbol}")
+    val body = app(f, q"$r")
     q"""
-      $r
+      val $r = $RegionModule.open($pool)
       val $res =
         try $body
-        finally ${r.symbol}.close()
+        finally $r.close()
       $res
     """
   }

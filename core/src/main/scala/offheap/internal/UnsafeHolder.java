@@ -3,19 +3,21 @@ package offheap.internal;
 import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 
-public class Unsafer {
+public class UnsafeHolder {
+    public static final Unsafe UNSAFE;
     static {
+        Unsafe value = null;
         try {
-            unsafe = Unsafe.getUnsafe();
+            value = Unsafe.getUnsafe();
         } catch (SecurityException e) {
             try {
                 Field f = Unsafe.class.getDeclaredField("theUnsafe");
                 f.setAccessible(true);
-                unsafe = (Unsafe) f.get(null);
+                value = (Unsafe) f.get(null);
             } catch (NoSuchFieldException nsfe) {
             } catch (IllegalAccessException iae) {
             }
         }
+        UNSAFE = value;
     }
-    public static Unsafe unsafe;
 }

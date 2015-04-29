@@ -8,12 +8,11 @@ class Method(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
 
-  def throwNullRef = q"throw new _root_.java.lang.NullPointerException"
-
   def nullChecked(addr: Tree, ifOk: Tree) =
     q"""
-      if (${isNull(addr)}) throw new $NullPointerExceptionClass
-      else $ifOk
+      if ($CHECKED)
+        if ($addr == 0L) throw new $NullPointerExceptionClass
+      $ifOk
     """
 
   def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
@@ -25,7 +24,7 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         nullChecked(addr, read(q"$addr + ${f.offset}", f.tpe, memory(addr)))
     }.getOrElse {
-      abort(s"$C ($fields) doesn't have field `$nameStr`")
+      abort(s"$C doesn't have field `$nameStr`")
     }
   }
 
@@ -38,7 +37,7 @@ class Method(val c: blackbox.Context) extends Common {
       case f if f.name.toString == nameStr =>
         nullChecked(addr, write(q"$addr + ${f.offset}", f.tpe, value, memory(addr)))
     }.getOrElse {
-      abort(s"$C ($fields) doesn't have field `$nameStr`")
+      abort(s"$C doesn't have field `$nameStr`")
     }
   }
 

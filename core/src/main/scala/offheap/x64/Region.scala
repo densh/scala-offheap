@@ -1,7 +1,10 @@
 package offheap
 package x64
 
-sealed class Region(private[this] val pool: Pool) extends Memory {
+import scala.language.experimental.{macros => canMacro}
+import offheap.internal.macros
+
+final class Region(private[this] val pool: Pool) extends Memory {
   private[this] val tail = pool.claim
   private[this] var page = tail
   val id = Region.atomicFresh.next
@@ -67,9 +70,5 @@ sealed class Region(private[this] val pool: Pool) extends Memory {
 object Region {
   private val atomicFresh = new offheap.internal.AtomicFresh
   def open(implicit pool: Pool) = new Region(pool)
-  def apply[T](f: Region => T)(implicit pool: Pool): T = {
-    val region = Region.open
-    try f(region)
-    finally if (region.isOpen) region.close
-  }
+  def apply[T](f: Region => T)(implicit pool: Pool): T = macro macros.Region.apply
 }

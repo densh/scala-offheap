@@ -272,7 +272,7 @@ trait Common extends Definitions {
     q"$toCompanion.fromAddr($fromCompanion.toAddr($v))"
   }
 
-  def memory(addr: Tree)  = q"$internal.Unsafer.unsafe"
+  def memory(addr: Tree)  = UNSAFE
   def isNull(addr: Tree)  = q"$addr == 0L"
   def notNull(addr: Tree) = q"$addr != 0L"
 }

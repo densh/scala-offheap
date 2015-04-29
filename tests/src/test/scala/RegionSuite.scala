@@ -16,7 +16,7 @@ class RegionSuite extends FunSuite {
     }
   }
 
-  test("access after end") {
+  ignore("access after end") {
     var d = Dummy.empty
     Region { r =>
       d = Dummy(10)(r)
@@ -26,7 +26,7 @@ class RegionSuite extends FunSuite {
     }
   }
 
-  test("allocate after end") {
+  ignore("allocate after end") {
     var rr: Region = null
     Region { r =>
       rr = r
@@ -36,7 +36,7 @@ class RegionSuite extends FunSuite {
     }
   }
 
-  test("close before end") {
+  ignore("close before end") {
     Region { r =>
       assert(r.isOpen)
       r.close
