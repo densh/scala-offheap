@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._, x64._
+import offheap._
 
 @data class Point(x: Double, y: Double) {
   def distanceTo(other: Point): Double =

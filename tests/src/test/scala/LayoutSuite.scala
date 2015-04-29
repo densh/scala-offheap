@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._, x64._
+import offheap._
 
 @data class L1(x: Byte, y: Byte)
 @data class L2(x: Byte, y: Short)

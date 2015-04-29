@@ -1,7 +1,7 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
-import offheap.x64._
+import offheap._
 
 @data class AlignedInt0(v: Int, b1: Byte, b2: Byte, b3: Byte, b4: Byte)
 @data class AlignedInt1(b1: Byte, v: Int, b2: Byte, b3: Byte, b4: Byte)

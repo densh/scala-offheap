@@ -1,5 +1,4 @@
 package offheap
-package x64
 
 import offheap.internal.UnsafeHolder.UNSAFE
 

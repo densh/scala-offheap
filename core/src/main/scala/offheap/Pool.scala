@@ -1,5 +1,4 @@
 package offheap
-package x64
 
 final class Pool(
   val memory: Memory,

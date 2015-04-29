@@ -11,9 +11,6 @@ trait Definitions {
   import c.universe.definitions._
   import c.universe.rootMirror._
 
-  val bitDepth: Int = 64
-  private val prefix = s"offheap.x$bitDepth"
-
   val AddrTpe = LongClass.toType
   val SizeTpe = LongClass.toType
 
@@ -21,11 +18,11 @@ trait Definitions {
   val NullPointerExceptionClass     = staticClass("java.lang.NullPointerException")
   val IllegalArgumentExceptionClass = staticClass("java.lang.IllegalArgumentException")
 
-  val RegionClass             = staticClass(s"$prefix.Region")
-  val MemoryClass             = staticClass(s"$prefix.Memory")
-  val ArrayClass              = staticClass(s"$prefix.Array")
-  val LayoutClass             = staticClass(s"$prefix.internal.Layout")
-  val FieldsClass             = staticClass(s"$prefix.internal.Fields")
+  val RegionClass             = staticClass("offheap.Region")
+  val MemoryClass             = staticClass("offheap.Memory")
+  val ArrayClass              = staticClass("offheap.Array")
+  val LayoutClass             = staticClass("offheap.internal.Layout")
+  val FieldsClass             = staticClass("offheap.internal.Fields")
   val DataClass               = staticClass("offheap.internal.Data")
   val EnumClass               = staticClass("offheap.internal.Enum")
   val ClassTagClass           = staticClass("offheap.internal.ClassTag")
@@ -35,14 +32,13 @@ trait Definitions {
   val ParentExtractorClass    = staticClass("offheap.internal.ParentExractor")
   val UniversalExtractorClass = staticClass("offheap.internal.UniversalExtractor")
 
-  val RegionModule = staticModule(s"$prefix.Region")
-  val PoolModule   = staticModule(s"$prefix.Pool")
-  val ArrayModule  = staticModule(s"$prefix.Array")
-  val MemoryModule = staticModule(s"$prefix.Memory")
-  val FieldsModule = staticModule(s"$prefix.internal.Fields")
+  val RegionModule = staticModule("offheap.Region")
+  val PoolModule   = staticModule("offheap.Pool")
+  val ArrayModule  = staticModule("offheap.Array")
+  val MemoryModule = staticModule("offheap.Memory")
+  val FieldsModule = staticModule("offheap.internal.Fields")
   val MethodModule = staticModule("offheap.internal.Method")
 
-  val offheapx = staticPackage(prefix)
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
 

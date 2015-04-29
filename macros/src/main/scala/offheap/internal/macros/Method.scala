@@ -50,7 +50,7 @@ class Method(val c: blackbox.Context) extends Common {
     val addr = fresh("addr")
     val size =
       if (fields.isEmpty) q"1"
-      else q"$offheapx.sizeOfData[$C]"
+      else q"$offheap.sizeOfData[$C]"
     val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
       write(q"$addr + ${f.offset}", f.tpe, arg, memory)
     }

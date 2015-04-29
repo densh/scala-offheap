@@ -1,5 +1,4 @@
 package offheap
-package x64
 
 import scala.language.experimental.{macros => canMacro}
 import offheap.internal.macros

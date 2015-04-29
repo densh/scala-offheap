@@ -139,7 +139,7 @@ trait Common extends Definitions {
     case IntTpe   | FloatTpe   => 4
     case LongTpe  | DoubleTpe  => 8
     case _ if ClassOf.is(tpe)  ||
-              ArrayOf.is(tpe)  => if (bitDepth == 64) 12 else 8
+              ArrayOf.is(tpe)  => 8
     case _                     => abort(s"can't compute size of $tpe")
   }
 
