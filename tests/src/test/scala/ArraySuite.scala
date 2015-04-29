@@ -65,4 +65,14 @@ class ArraySuite extends FunSuite {
     cont.arr = arr2
     assert(cont.arr == arr2)
   }
+
+  test("empty array is empty") {
+    assert(Array.empty[Int].isEmpty)
+    assert(!Array.empty[Int].nonEmpty)
+  }
+
+  test("non-empty array is not empty") {
+    assert(Array(1).nonEmpty)
+    assert(!Array(1).isEmpty)
+  }
 }

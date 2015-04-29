@@ -10,12 +10,12 @@ class Array(val c: blackbox.Context) extends Common {
 
   lazy val A = c.prefix.tree.tpe.baseType(ArrayClass).typeArgs.head
 
-  def isEmpty = q"${c.prefix.tree}.$ref == null"
+  def isEmpty = q"${c.prefix.tree}.$addr == 0L"
 
-  def nonEmpty = q"${c.prefix.tree}.$ref != null"
+  def nonEmpty = q"${c.prefix.tree}.$addr != 0L"
 
   def size = stabilized(c.prefix.tree) { pre =>
-    read(q"$pre.$ref.addr", SizeTpe, q"$pre.$ref.memory")
+    read(q"$pre.$addr", SizeTpe, memory(q"$pre.$addr"))
   }
 
   def boundsChecked(index: Tree)(ifOk: Tree => Tree => Tree) =
@@ -23,7 +23,7 @@ class Array(val c: blackbox.Context) extends Common {
       stabilized(index) { idx =>
         val size = fresh("size")
         q"""
-          val $size: $SizeTpe = ${read(q"$pre.$ref.addr", AddrTpe, q"$pre.$ref.memory")}
+          val $size: $SizeTpe = ${read(q"$pre.$addr", AddrTpe, memory(q"$pre.$addr"))}
           if ($idx >= 0 && $idx < $size)  ${ifOk(pre)(idx)}
           else throw new _root_.java.lang.IndexOutOfBoundsException($index.toString)
         """
@@ -32,23 +32,23 @@ class Array(val c: blackbox.Context) extends Common {
 
   def apply(index: Tree) =
     boundsChecked(index) { pre => i =>
-      val addr = fresh("addr")
+      val naddr = fresh("addr")
       val mem  = fresh("mem")
       q"""
-        val $mem = $pre.$ref.memory
-        val $addr = $pre.$ref.addr + $offheapx.sizeOf[$SizeTpe] + $i * $offheapx.sizeOf[$A]
-        ${read(q"$addr", A, q"$mem")}
+        val $mem = ${memory(q"$pre.$addr")}
+        val $naddr = $pre.$addr + $offheapx.sizeOf[$SizeTpe] + $i * $offheapx.sizeOf[$A]
+        ${read(q"$naddr", A, q"$mem")}
       """
     }
 
   def update(index: Tree, value: Tree) =
     boundsChecked(index) { pre => i =>
-      val addr = fresh("addr")
+      val naddr = fresh("addr")
       val mem  = fresh("mem")
       q"""
-        val $mem = $pre.$ref.memory
-        val $addr = $pre.$ref.addr + $offheapx.sizeOf[$SizeTpe] + $i * $offheapx.sizeOf[$A]
-        ${write(q"$addr", A, value, q"$mem")}
+        val $mem = ${memory(q"$pre.$addr")}
+        val $naddr = $pre.$addr + $offheapx.sizeOf[$SizeTpe] + $i * $offheapx.sizeOf[$A]
+        ${write(q"$naddr", A, value, q"$mem")}
       """
     }
 
@@ -56,8 +56,8 @@ class Array(val c: blackbox.Context) extends Common {
     stabilized(c.prefix.tree) { pre =>
       val mem = fresh("mem")
       q"""
-        if ($pre.$ref != null) {
-          val $mem = $pre.$ref.memory
+        if ($pre.nonEmpty) {
+          val $mem = ${memory(q"$pre.$addr")}
           ${iterate(A, pre, q"$mem", p => app(f, read(p, A, q"$mem")))}
         }
       """
@@ -69,7 +69,7 @@ class Array(val c: blackbox.Context) extends Common {
     val step = fresh("step")
     val bound = fresh("bound")
     q"""
-      var $p: $AddrTpe = $pre.$ref.addr
+      var $p: $AddrTpe = $pre.$addr
       val $len: $SizeTpe = ${read(q"$p", SizeTpe, mem)}
       $p += $offheapx.sizeOf[$SizeTpe]
       val $step: $SizeTpe = $offheapx.sizeOf[$T]
@@ -93,7 +93,7 @@ class Array(val c: blackbox.Context) extends Common {
         q"""
           val $narr = $ArrayModule.uninit[$B]($pre.length)($mem)
           val $step = $offheapx.sizeOf[$B]
-          var $p    = $narr.$ref.addr + $offheapx.sizeOf[$SizeTpe]
+          var $p    = $narr.$addr + $offheapx.sizeOf[$SizeTpe]
           $pre.foreach { $v: $A =>
             ${write(q"$p", B, app(f, q"$v"), mem)}
             $p += $step
@@ -109,15 +109,15 @@ class Array(val c: blackbox.Context) extends Common {
     assertAllocatable(T)
     stabilized(n) { len =>
       stabilized(m) { mem =>
-        val addr = fresh("addr")
+        val naddr = fresh("addr")
         val size = q"$offheapx.sizeOf[$AddrTpe] + $len * $offheapx.sizeOf[$T]"
         q"""
           if ($len < 0) throw new $IllegalArgumentExceptionClass
           else if ($len == 0) $ArrayModule.empty[$T]
           else {
-            val $addr = $mem.allocate($size)
-            ${write(q"$addr", SizeTpe, len, mem)}
-            $ArrayModule.fromRef[$T](new $RefClass($addr, $mem))
+            val $naddr = $mem.allocate($size)
+            ${write(q"$naddr", SizeTpe, len, mem)}
+            $ArrayModule.fromAddr[$T]($naddr)
           }
         """
       }
@@ -131,15 +131,15 @@ class Array(val c: blackbox.Context) extends Common {
       q"$ArrayModule.empty[$T]"
     else stabilized(m) { mem =>
       val arr    = fresh("arr")
-      val addr   = fresh("adr")
+      val naddr  = fresh("adr")
       val step   = fresh("step")
       val writes = values.zipWithIndex.map { case (v, i) =>
-        write(q"$addr + $i * $step", T, v, mem)
+        write(q"$naddr + $i * $step", T, v, mem)
       }
       q"""
         val $arr = $ArrayModule.uninit[$T](${values.length})($mem)
         val $step = $offheapx.sizeOf[$T]
-        val $addr = $arr.$ref.addr + $offheapx.sizeOf[$AddrTpe]
+        val $naddr = $arr.$addr + $offheapx.sizeOf[$AddrTpe]
         ..$writes
         $arr
       """
@@ -169,12 +169,12 @@ class Array(val c: blackbox.Context) extends Common {
         def offset(idx: Tree) =
           q"$offheapx.sizeOf[$SizeTpe] + $idx * $offheapx.sizeOf[$T]"
         q"""
-          if ($to.$ref.memory ne $from.$ref.memory)
+          if (${memory(q"$to.$addr")} ne ${memory(q"$from.$addr")})
             throw new $IllegalArgumentExceptionClass(
               "copy between different memories is not supported")
-          $to.$ref.memory.copy($from.$ref.addr + ${offset(fromIndex)},
-                               $to.$ref.addr + ${offset(toIndex)},
-                               $size * $offheapx.sizeOf[$T])
+          ${memory(q"$to.$addr")}.copyMemory($from.$addr + ${offset(fromIndex)},
+                                             $to.$addr + ${offset(toIndex)},
+                                             $size * $offheapx.sizeOf[$T])
         """
       }
     }

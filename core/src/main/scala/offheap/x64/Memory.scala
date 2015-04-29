@@ -15,10 +15,6 @@ trait Memory {
   def getLong(addr: Addr): Long
   def getFloat(addr: Addr): Float
   def getDouble(addr: Addr): Double
-  def getRef(addr: Addr): Ref = {
-    val value = getLong(addr)
-    if (value == 0L) null else Ref(value, this)
-  }
 
   def putChar(addr: Addr, value: Char): Unit
   def putByte(addr: Addr, value: Byte): Unit
@@ -27,13 +23,10 @@ trait Memory {
   def putLong(addr: Addr, value: Long): Unit
   def putFloat(addr: Addr, value: Float): Unit
   def putDouble(addr: Addr, value: Double): Unit
-  def putRef(addr: Addr, value: Ref): Unit =
-    if (value != null) putLong(addr, value.addr)
-    else putLong(addr, 0L)
 
   def isNative: Boolean
   def isVirtual: Boolean = !isNative
 }
 object Memory {
-  def apply(): Memory     = new UnsafeMemory()
+  def apply(): Memory = new UnsafeMemory()
 }

@@ -9,8 +9,6 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe.definitions._
   import Flag._
 
-  val Ref = if (checked) tq"$RefClass" else tq"$AddrTpe"
-
   def performLayout(C: Tree, fields: List[SyntacticField]): Tree = {
     val tuples = fields.map { f =>
       q"(${f.name.toString}, $PredefModule.classOf[${f.tpt}])"
@@ -59,10 +57,9 @@ class Annotations(val c: whitebox.Context) extends Common {
         abort("data classes may not have implicit arguments", at = arg.pos)
     }
     rawTraits.foreach {
-      case q"${tq"$ref[..$targs]"}(...$args)" =>
+      case q"${tq"$_[..$targs]"}(...$args)" =>
         if (args.nonEmpty || targs.nonEmpty)
           abort("data classes can only inherit from universal traits")
-        ref
     }
 
     // Generate fresh names used in desugaring
@@ -110,7 +107,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val init = rawStats.collect {
       case t if t.isTerm               => t
       case ValDef(_, vname, tpt, value) =>
-        q"$MethodModule.assigner[$name, $tpt]($ref, ${vname.toString}, $value)"
+        q"$MethodModule.assigner[$name, $tpt]($addr, ${vname.toString}, $value)"
     }
     val methods = rawStats.collect { case t: DefDef => t }
     val types = rawStats.collect { case t: TypeDef => t }
@@ -119,12 +116,12 @@ class Annotations(val c: whitebox.Context) extends Common {
     val accessors = fields.flatMap { f =>
       val accessor = q"""
         def ${f.name}: ${f.tpt} =
-          $MethodModule.accessor[$name, ${f.tpt}]($ref, ${f.name.toString})
+          $MethodModule.accessor[$name, ${f.tpt}]($addr, ${f.name.toString})
       """
       val assignerName = TermName(f.name.toString + "_$eq")
       val assigner = q"""
         def $assignerName($value: ${f.tpt}): Unit =
-          $MethodModule.assigner[$name, ${f.tpt}]($ref, ${f.name.toString}, $value)
+          $MethodModule.assigner[$name, ${f.tpt}]($addr, ${f.name.toString}, $value)
       """
       if (!f.isMutable) accessor :: Nil
       else accessor :: assigner :: Nil
@@ -193,26 +190,25 @@ class Annotations(val c: whitebox.Context) extends Common {
       parents.zip(parentExtractors).map { case (p, u) =>
         q"new $ParentExtractorClass($PredefModule.classOf[$p], $termName.${u.name})"
       }
-    val uncheckedAnnot = if (checked) Nil else List(q"new $UncheckedClass")
     val layoutAnnot = performLayout(tq"$name", fields)
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
       q"new $DataClass" :: layoutAnnot ::
-      extractorAnnots ::: uncheckedAnnot ::: rawMods.annotations
+      extractorAnnots ::: rawMods.annotations
     )
 
     q"""
       $mods class $name private (
-        private val $ref: $Ref
+        private val $addr: $AddrTpe
       ) extends $AnyValClass with ..$traits { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
 
         ..$initializer
         ..$accessors
 
-        def isEmpty  = ${isNull(q"$ref")}
-        def nonEmpty = ${notNull(q"$ref")}
+        def isEmpty  = ${isNull(q"$addr")}
+        def nonEmpty = ${notNull(q"$addr")}
         def get      = $getBody
         ..${_ns}
 
@@ -232,9 +228,9 @@ class Annotations(val c: whitebox.Context) extends Common {
                      with ..$companionParents { $companionSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
 
-        val empty: $name                  = null.asInstanceOf[$name]
-        def fromRef($ref: $Ref): $name    = new $name($ref)
-        def toRef($instance: $name): $Ref = $instance.$ref
+        val empty: $name                       = null.asInstanceOf[$name]
+        def fromAddr($addr: $AddrTpe): $name   = new $name($addr)
+        def toAddr($instance: $name): $AddrTpe = $instance.$addr
         def apply(..$args)(implicit $memory: $MemoryClass): $name =
           $MethodModule.allocator[$name]($memory, ..$argNames)
         def unapply(scrutinee: $AnyClass): $unapplyTpt =
@@ -352,25 +348,23 @@ class Annotations(val c: whitebox.Context) extends Common {
       if (parentAnnots.nonEmpty) rangeAnnotOpt.get
       else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
     val q"$_: $tagTpt" = const(0)
-    val uncheckedAnnot = if (checked) Nil else List(q"new $UncheckedClass")
     val layoutAnnot    = performLayout(tq"$name", List(new SyntacticField(q"val $tag: $tagTpt")))
-    val annots         = q"new $EnumClass" :: rangeAnnot :: layoutAnnot ::
-                         (uncheckedAnnot ::: parentAnnots)
+    val annots         = q"new $EnumClass" :: rangeAnnot :: layoutAnnot :: parentAnnots
 
     q"""
       @..$annots final class $name private(
-        private val $ref: $Ref
+        private val $addr: $AddrTpe
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
-        def $tag: $tagTpt         = $MethodModule.accessor[$name, $tagTpt]($ref, ${tag.toString})
+        def $tag: $tagTpt         = $MethodModule.accessor[$name, $tagTpt]($addr, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]
       }
       $moduleMods object $termName extends { ..$rawEarly } with ..$rawParents { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
-        val empty: $name                     = null.asInstanceOf[$name]
-        def fromRef($ref: $Ref): $name       = new $name($ref)
-        def toRef($instance: $name): $Ref    = $instance.$ref
+        val empty: $name                       = null.asInstanceOf[$name]
+        def fromAddr($addr: $AddrTpe): $name   = new $name($addr)
+        def toAddr($instance: $name): $AddrTpe = $instance.$addr
         implicit def $coerce[T](t: T): $name =
           macro $internal.macros.WhiteboxMethod.coerce[$name, T]
         ..$stats

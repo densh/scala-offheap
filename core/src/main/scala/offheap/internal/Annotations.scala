@@ -12,4 +12,3 @@ final class ClassTagRange(from: Any, to: Any) extends StaticAnnotation // > from
 final class ParentExractor(tag: Class[_], value: Any) extends StaticAnnotation
 final class PrimaryExtractor(value: Any) extends StaticAnnotation
 final class UniversalExtractor(value: Any) extends StaticAnnotation
-final class Unchecked extends StaticAnnotation

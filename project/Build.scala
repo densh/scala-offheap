@@ -46,7 +46,8 @@ object RegionsBuild extends Build {
       incOptions := incOptions.value.withNameHashing(false),
       scalacOptions += "-Xprint:typer",
       fork in run := true,
-      javaOptions in run ++= Seq("-Xms64m", "-Xmx64m")
+      javaOptions in run ++= Seq("-Xms256m", "-Xmx256m"),
+      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
     ),
     dependencies = Seq(macros, core)
   )

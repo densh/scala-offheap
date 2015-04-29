@@ -72,7 +72,6 @@ trait Common extends Definitions {
   object ExtractParentExtractor    extends ExtractAnnotation(ParentExtractorClass)
   object ExtractPrimaryExtractor   extends ExtractAnnotation(PrimaryExtractorClass)
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
-  object ExtractUnchecked          extends ExtractAnnotation(UncheckedClass)
 
   final case class IsClass(value: Boolean)
   object ClassOf {
@@ -169,11 +168,10 @@ trait Common extends Definitions {
     case BooleanTpe =>
       q"$memory.getByte($addr) != ${Literal(Constant(0.toByte))}"
     case ArrayOf(tpe) =>
-      q"$ArrayModule.fromRef[$tpe]($memory.getRef($addr))"
+      q"$ArrayModule.fromAddr[$tpe]($memory.getLong($addr))"
     case ClassOf(_, _, _) =>
       val companion = tpe.typeSymbol.companion
-      val getRef = if (checked) TermName("getRef") else TermName("getLong")
-      q"$companion.fromRef($memory.$getRef($addr))"
+      q"$companion.fromAddr($memory.getLong($addr))"
   }
 
   def write(addr: Tree, tpe: Type, value: Tree, memory: Tree): Tree = tpe match {
@@ -187,11 +185,10 @@ trait Common extends Definitions {
                         else ${Literal(Constant(0.toByte))})
       """
     case ArrayOf(_) =>
-      q"$memory.putRef($addr, $ArrayModule.toRef($value))"
+      q"$memory.putLong($addr, $ArrayModule.toAddr($value))"
     case ClassOf(_, _, _) =>
       val companion = tpe.typeSymbol.companion
-      val putRef = if (checked) TermName("putRef") else TermName("putLong")
-      q"$memory.$putRef($addr, $companion.toRef($value))"
+      q"$memory.putLong($addr, $companion.toAddr($value))"
   }
 
 
@@ -272,6 +269,10 @@ trait Common extends Definitions {
   def cast(v: Tree, from: Type, to: Type) = {
     val fromCompanion = from.typeSymbol.companion
     val toCompanion = to.typeSymbol.companion
-    q"$toCompanion.fromRef($fromCompanion.toRef($v))"
+    q"$toCompanion.fromAddr($fromCompanion.toAddr($v))"
   }
+
+  def memory(addr: Tree)  = q"$internal.Unsafer.unsafe"
+  def isNull(addr: Tree)  = q"$addr == 0L"
+  def notNull(addr: Tree) = q"$addr != 0L"
 }

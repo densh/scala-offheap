@@ -10,9 +10,6 @@ sealed class Region(private[this] val pool: Pool) extends Memory {
   def isOpen   = page != null
   def isClosed = page == null
 
-  protected override def finalize(): Unit =
-    if (isOpen) close
-
   private def checkOpen(): Unit =
     if (page == null) throw new InaccessibleRegionException
 
@@ -48,29 +45,6 @@ sealed class Region(private[this] val pool: Pool) extends Memory {
         0L
       }
     page.start + resOffset
-  }
-
-  override def getRef(addr: Addr): Ref = {
-    checkOpen
-    val refAddr = memory.getLong(addr)
-    if (refAddr == 0L) null
-    else {
-      val refRegionId = memory.getInt(addr + 8L)
-      if (refRegionId != this.id)
-        throw new InaccessibleRegionException(
-          "can't read a reference from different region")
-      Ref(refAddr, this)
-    }
-  }
-
-  override def putRef(addr: Addr, value: Ref): Unit = {
-    checkOpen
-    if (value == null)
-      memory.putLong(addr, 0L)
-    else {
-      memory.putLong(addr, value.addr)
-      memory.putInt(addr + 8L, this.id)
-    }
   }
 
   def copy(from: Addr, to: Addr, size: Size)     = { checkOpen; memory.copy(from, to, size)   }

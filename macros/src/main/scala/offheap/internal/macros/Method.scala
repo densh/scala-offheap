@@ -10,34 +10,33 @@ class Method(val c: blackbox.Context) extends Common {
 
   def throwNullRef = q"throw new _root_.java.lang.NullPointerException"
 
-  def nullChecked(ref: Tree, ifOk: Tree) =
-    if (checked) ifOk
-    else q"""
-      if (${isNull(ref)}) throw new $NullPointerExceptionClass
+  def nullChecked(addr: Tree, ifOk: Tree) =
+    q"""
+      if (${isNull(addr)}) throw new $NullPointerExceptionClass
       else $ifOk
     """
 
-  def accessor[C: WeakTypeTag, T: WeakTypeTag](ref: Tree, name: Tree): Tree = {
+  def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
     val C = wt[C]
     assertAllocatable(C)
     val ClassOf(fields, _, _) = C
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(ref, read(q"${addr(ref)} + ${f.offset}", f.tpe, memory(ref)))
+        nullChecked(addr, read(q"$addr + ${f.offset}", f.tpe, memory(addr)))
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
   }
 
-  def assigner[C: WeakTypeTag, T: WeakTypeTag](ref: Tree, name: Tree, value: Tree) = {
+  def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
     val C = wt[C]
     assertAllocatable(C)
     val ClassOf(fields, _, _) = C
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(ref, write(q"${addr(ref)} + ${f.offset}", f.tpe, value, memory(ref)))
+        nullChecked(addr, write(q"$addr + ${f.offset}", f.tpe, value, memory(addr)))
     }.getOrElse {
       abort(s"$C ($fields) doesn't have field `$nameStr`")
     }
@@ -48,7 +47,6 @@ class Method(val c: blackbox.Context) extends Common {
   def allocator[C: WeakTypeTag](memory: Tree, args: Tree*): Tree = {
     val C = wt[C]
     val ClassOf(fields, _, tagOpt) = C
-    val checked = ExtractUnchecked.unapply(C.typeSymbol).isEmpty
     val tagValueOpt = tagOpt.map { case (v, tpt) => v }
     val addr = fresh("addr")
     val size =
@@ -57,20 +55,10 @@ class Method(val c: blackbox.Context) extends Common {
     val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
       write(q"$addr + ${f.offset}", f.tpe, arg, memory)
     }
-    val newC =
-      if (checked) q"new $C(new $RefClass($addr, $memory))"
-      else q"new $C($addr)"
-    val checkNative =
-      if (checked) q""
-      else q"""
-        if ($memory.isVirtual)
-          throw new $IllegalArgumentExceptionClass(
-            "Unchecked offheap can only be allocated in native memory.")
-      """
+    val newC = q"new $C($addr)"
     val instantiate = C.members.find(_.name == initialize).map { _ =>
       val instance = fresh("instance")
       q"""
-        ..$checkNative
         val $instance = $newC
         $instance.$initialize
         $instance
