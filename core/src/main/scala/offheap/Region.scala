@@ -3,17 +3,18 @@ package offheap
 import scala.language.experimental.{macros => canMacro}
 import offheap.internal.macros
 
-final class Region(private[this] val pool: Pool) extends Memory {
+final class Region(private[this] val pool: Pool) extends Allocator {
   private[this] val tail = pool.claim
+  tail.offset = 0
   private[this] var page = tail
-  val id = Region.atomicFresh.next
   val memory = pool.memory
 
   def isOpen   = page != null
   def isClosed = page == null
 
   private def checkOpen(): Unit =
-    if (page == null) throw new InaccessibleRegionException
+    if (page == null)
+      throw new IllegalArgumentException(s"$this has already been closed")
 
   private def pad(addr: Addr) = {
     val alignment = sizeOf[Long]
@@ -23,10 +24,11 @@ final class Region(private[this] val pool: Pool) extends Memory {
     addr + padding
   }
 
-  def close(): Unit = this.synchronized {
+  override def close(): Unit = this.synchronized {
     checkOpen
     pool.reclaim(page, tail)
     page = null
+    super.close
   }
 
   def allocate(size: Size): Addr = this.synchronized {
@@ -46,28 +48,10 @@ final class Region(private[this] val pool: Pool) extends Memory {
         page = newpage
         0L
       }
-    page.start + resOffset
+    packIfChecked(page.start + resOffset)
   }
-
-  def copy(from: Addr, to: Addr, size: Size)     = { checkOpen; memory.copy(from, to, size)   }
-  def getChar(addr: Addr): Char                  = { checkOpen; memory.getChar(addr)          }
-  def getByte(addr: Addr): Byte                  = { checkOpen; memory.getByte(addr)          }
-  def getShort(addr: Addr): Short                = { checkOpen; memory.getShort(addr)         }
-  def getInt(addr: Addr): Int                    = { checkOpen; memory.getInt(addr)           }
-  def getLong(addr: Addr): Long                  = { checkOpen; memory.getLong(addr)          }
-  def getFloat(addr: Addr): Float                = { checkOpen; memory.getFloat(addr)         }
-  def getDouble(addr: Addr): Double              = { checkOpen; memory.getDouble(addr)        }
-  def putChar(addr: Addr, value: Char): Unit     = { checkOpen; memory.putChar(addr, value)   }
-  def putByte(addr: Addr, value: Byte): Unit     = { checkOpen; memory.putByte(addr, value)   }
-  def putShort(addr: Addr, value: Short): Unit   = { checkOpen; memory.putShort(addr, value)  }
-  def putInt(addr: Addr, value: Int): Unit       = { checkOpen; memory.putInt(addr, value)    }
-  def putLong(addr: Addr, value: Long): Unit     = { checkOpen; memory.putLong(addr, value)   }
-  def putFloat(addr: Addr, value: Float): Unit   = { checkOpen; memory.putFloat(addr, value)  }
-  def putDouble(addr: Addr, value: Double): Unit = { checkOpen; memory.putDouble(addr, value) }
-  def isNative: Boolean                          = memory.isNative
 }
 object Region {
-  private val atomicFresh = new offheap.internal.AtomicFresh
   def open(implicit pool: Pool) = new Region(pool)
   def apply[T](f: Region => T)(implicit pool: Pool): T = macro macros.Region.apply
 }

@@ -43,7 +43,7 @@ class Method(val c: blackbox.Context) extends Common {
 
   // TODO: zero fields by default
   // TODO: zero-size data structures should not allocate any memory
-  def allocator[C: WeakTypeTag](memory: Tree, args: Tree*): Tree = {
+  def allocator[C: WeakTypeTag](alloc: Tree, args: Tree*): Tree = {
     val C = wt[C]
     val ClassOf(fields, _, tagOpt) = C
     val tagValueOpt = tagOpt.map { case (v, tpt) => v }
@@ -52,7 +52,7 @@ class Method(val c: blackbox.Context) extends Common {
       if (fields.isEmpty) q"1"
       else q"$offheap.sizeOfData[$C]"
     val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
-      write(q"$addr + ${f.offset}", f.tpe, arg, memory)
+      write(q"$addr + ${f.offset}", f.tpe, arg, memory(q"$addr"))
     }
     val newC = q"new $C($addr)"
     val instantiate = C.members.find(_.name == initialize).map { _ =>
@@ -64,7 +64,7 @@ class Method(val c: blackbox.Context) extends Common {
       """
     }.getOrElse(newC)
     q"""
-      val $addr = $memory.allocate($size)
+      val $addr = $alloc.allocate($size)
       ..$writes
       ..$instantiate
     """

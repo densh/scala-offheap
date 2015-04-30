@@ -8,7 +8,7 @@ class Region(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def apply(f: Tree)(pool: Tree) = {
+  def apply(f: Tree)(pool: Tree) = debug("Regiona.apply") {
     val r = fresh("r")
     val res = fresh("res")
     val body = app(f, q"$r")

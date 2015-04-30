@@ -3,7 +3,7 @@ package offheap
 import scala.language.experimental.{macros => CanMacro}
 import offheap.internal.macros
 
-trait Memory {
+trait Memory extends Allocator {
   def allocate(size: Size): Addr
   def copy(from: Addr, to: Addr, size: Size)
 

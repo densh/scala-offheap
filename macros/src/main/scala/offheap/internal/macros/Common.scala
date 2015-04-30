@@ -161,36 +161,43 @@ trait Common extends Definitions {
     case _                     => abort(s"can't comput alignment for $tpe")
   }
 
-  def read(addr: Tree, tpe: Type, memory: Tree): Tree = tpe match {
-    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-      val getT = TermName(s"get$tpe")
-      q"$memory.$getT($addr)"
-    case BooleanTpe =>
-      q"$memory.getByte($addr) != ${Literal(Constant(0.toByte))}"
-    case ArrayOf(tpe) =>
-      q"$ArrayModule.fromAddr[$tpe]($memory.getLong($addr))"
-    case ClassOf(_, _, _) =>
-      val companion = tpe.typeSymbol.companion
-      q"$companion.fromAddr($memory.getLong($addr))"
+  def validate(addr: Tree) = q"$SanitizerModule.validate($addr)"
+
+  def read(addr: Tree, tpe: Type, memory: Tree): Tree = {
+    val vaddr = validate(addr)
+    tpe match {
+      case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+        val getT = TermName(s"get$tpe")
+        q"$memory.$getT($vaddr)"
+      case BooleanTpe =>
+        q"$memory.getByte($vaddr) != ${Literal(Constant(0.toByte))}"
+      case ArrayOf(tpe) =>
+        q"$ArrayModule.fromAddr[$tpe]($memory.getLong($vaddr))"
+      case ClassOf(_, _, _) =>
+        val companion = tpe.typeSymbol.companion
+        q"$companion.fromAddr($memory.getLong($vaddr))"
+    }
   }
 
-  def write(addr: Tree, tpe: Type, value: Tree, memory: Tree): Tree = tpe match {
-    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-      val putT = TermName(s"put$tpe")
-      q"$memory.$putT($addr, $value)"
-    case BooleanTpe =>
-      q"""
-        $memory.putByte($addr,
-                        if ($value) ${Literal(Constant(1.toByte))}
-                        else ${Literal(Constant(0.toByte))})
-      """
-    case ArrayOf(_) =>
-      q"$memory.putLong($addr, $ArrayModule.toAddr($value))"
-    case ClassOf(_, _, _) =>
-      val companion = tpe.typeSymbol.companion
-      q"$memory.putLong($addr, $companion.toAddr($value))"
+  def write(addr: Tree, tpe: Type, value: Tree, memory: Tree): Tree = {
+    val vaddr = validate(addr)
+    tpe match {
+      case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+        val putT = TermName(s"put$tpe")
+        q"$memory.$putT($vaddr, $value)"
+      case BooleanTpe =>
+        q"""
+          $memory.putByte($vaddr,
+                          if ($value) ${Literal(Constant(1.toByte))}
+                          else ${Literal(Constant(0.toByte))})
+        """
+      case ArrayOf(_) =>
+        q"$memory.putLong($vaddr, $ArrayModule.toAddr($value))"
+      case ClassOf(_, _, _) =>
+        val companion = tpe.typeSymbol.companion
+        q"$memory.putLong($vaddr, $companion.toAddr($value))"
+    }
   }
-
 
   // TODO: handle non-function literal cases
   def appSubs(f: Tree, argValue: Tree, subs: Tree => Tree) = f match {

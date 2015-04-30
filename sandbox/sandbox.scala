@@ -1,5 +1,5 @@
 package test
-import offheap._, x64._
+import offheap._
 @data class OhTree(i: Int, left: OhTree, right: OhTree)
 object Offheap extends App {
   implicit val pool = Pool(Memory())

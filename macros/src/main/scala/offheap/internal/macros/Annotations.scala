@@ -63,10 +63,10 @@ class Annotations(val c: whitebox.Context) extends Common {
     }
 
     // Generate fresh names used in desugaring
-    val memory       = fresh("memory")
-    val instance     = fresh("instance")
-    val scrutinee    = fresh("scrutinee")
-    val value        = fresh("value")
+    val alloc     = fresh("alloc")
+    val instance  = fresh("instance")
+    val scrutinee = fresh("scrutinee")
+    val value     = fresh("value")
 
     // Process and existing members
     val termName = name.toTermName
@@ -107,7 +107,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val init = rawStats.collect {
       case t if t.isTerm               => t
       case ValDef(_, vname, tpt, value) =>
-        q"$MethodModule.assigner[$name, $tpt]($addr, ${vname.toString}, $value)"
+        q"$MethodModule.assign[$name, $tpt]($addr, ${vname.toString}, $value)"
     }
     val methods = rawStats.collect { case t: DefDef => t }
     val types = rawStats.collect { case t: TypeDef => t }
@@ -116,12 +116,12 @@ class Annotations(val c: whitebox.Context) extends Common {
     val accessors = fields.flatMap { f =>
       val accessor = q"""
         def ${f.name}: ${f.tpt} =
-          $MethodModule.accessor[$name, ${f.tpt}]($addr, ${f.name.toString})
+          $MethodModule.access[$name, ${f.tpt}]($addr, ${f.name.toString})
       """
       val assignerName = TermName(f.name.toString + "_$eq")
       val assigner = q"""
         def $assignerName($value: ${f.tpt}): Unit =
-          $MethodModule.assigner[$name, ${f.tpt}]($addr, ${f.name.toString}, $value)
+          $MethodModule.assign[$name, ${f.tpt}]($addr, ${f.name.toString}, $value)
       """
       if (!f.isMutable) accessor :: Nil
       else accessor :: assigner :: Nil
@@ -212,8 +212,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         def get      = $getBody
         ..${_ns}
 
-        def copy(..$copyArgs)(implicit $memory: $MemoryClass): $name =
-          $termName.apply(..$argNames)($memory)
+        def copy(..$copyArgs)(implicit $alloc: $AllocatorClass): $name =
+          $termName.apply(..$argNames)($alloc)
         override def toString(): $StringClass =
           $MethodModule.toString[$name](this)
 
@@ -231,8 +231,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         val empty: $name                       = null.asInstanceOf[$name]
         def fromAddr($addr: $AddrTpe): $name   = new $name($addr)
         def toAddr($instance: $name): $AddrTpe = $instance.$addr
-        def apply(..$args)(implicit $memory: $MemoryClass): $name =
-          $MethodModule.allocator[$name]($memory, ..$argNames)
+        def apply(..$args)(implicit $alloc: $AllocatorClass): $name =
+          $MethodModule.allocate[$name]($alloc, ..$argNames)
         def unapply(scrutinee: $AnyClass): $unapplyTpt =
           macro $internal.macros.WhiteboxMethod.unapply[$name]
 
@@ -356,7 +356,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         private val $addr: $AddrTpe
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
-        def $tag: $tagTpt         = $MethodModule.accessor[$name, $tagTpt]($addr, ${tag.toString})
+        def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt]($addr, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]
       }

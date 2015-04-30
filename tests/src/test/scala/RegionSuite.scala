@@ -9,41 +9,36 @@ class RegionSuite extends FunSuite {
   implicit val pool = Pool(Memory())
 
   test("allocate") {
+    println("a.1")
     Region { r =>
+      println("b.1")
       val d = Dummy(10)(r)
+      println("b.2")
       assert(d.nonEmpty)
+      println("b.3")
       assert(d.value == 10)
+      println("b.4")
     }
+    println("a.2")
   }
 
-  ignore("access after end") {
+  test("access after end") {
     var d = Dummy.empty
     Region { r =>
       d = Dummy(10)(r)
     }
-    intercept[InaccessibleRegionException] {
+    intercept[InaccessibleMemoryException] {
       d.value
     }
   }
 
-  ignore("allocate after end") {
+  test("allocate after end") {
     var rr: Region = null
     Region { r =>
       rr = r
     }
-    intercept[InaccessibleRegionException] {
+    intercept[IllegalArgumentException] {
       Dummy(10)(rr)
-    }
-  }
-
-  ignore("close before end") {
-    Region { r =>
-      assert(r.isOpen)
-      r.close
-      assert(r.isClosed)
-      intercept[InaccessibleRegionException] {
-        Dummy(10)(r)
-      }
     }
   }
 

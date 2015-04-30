@@ -14,7 +14,7 @@ class UnsafeMemory extends Memory {
   def allocate(size: Size): Addr = this.synchronized {
     val addr = UNSAFE.allocateMemory(size)
     alloc = new Alloc(addr, alloc)
-    addr
+    packIfChecked(addr)
   }
   def copy(from: Addr, to: Addr, size: Size): Unit = UNSAFE.copyMemory(from, to, size)
   def getChar(addr: Addr): Char                    = UNSAFE.getChar(addr)

@@ -9,7 +9,7 @@ final class Pool(
   private[this] var page: Page = null
   newChunk()
   private def newChunk(): Unit = {
-    val start = memory.allocate(chunkSize)
+    val start = Sanitizer.validate(memory.allocate(chunkSize))
     chunk = new Chunk(start, 0, chunk)
   }
   private def newPage(): Unit = {
@@ -38,8 +38,12 @@ object Pool {
   def apply(memory: Memory): Pool = new Pool(memory)
 }
 
-final class Chunk(val start: Addr, var offset: Size, var next: Chunk)
+final class Chunk(val start: Addr, var offset: Size, var next: Chunk) {
+  assert(java.lang.Long.toBinaryString(start).length <= 48)
+}
 
-final class Page(val start: Addr, var offset: Size, var next: Page)
+final class Page(val start: Addr, var offset: Size, var next: Page) {
+  assert(java.lang.Long.toBinaryString(start).length <= 48)
+}
 
 

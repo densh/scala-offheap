@@ -4,10 +4,10 @@ import pl.project13.scala.sbt.SbtJmh._
 object RegionsBuild extends Build {
   val paradiseVersion = "2.1.0-M5"
   val defaults = Defaults.defaultSettings ++ Seq(
-    scalaVersion := "2.11.4",
+    scalaVersion := "2.11.6",
     resolvers += Resolver.sonatypeRepo("snapshots"),
     resolvers += Resolver.sonatypeRepo("releases"),
-    initialCommands in console += "import offheap.x64._; implicit val memory = UnsafeMemory()",
+    initialCommands in console += "import offheap._; implicit val memory = UnsafeMemory()",
     addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)
   )
 
@@ -46,8 +46,7 @@ object RegionsBuild extends Build {
       incOptions := incOptions.value.withNameHashing(false),
       scalacOptions += "-Xprint:typer",
       fork in run := true,
-      javaOptions in run ++= Seq("-Xms256m", "-Xmx256m"),
-      javaOptions in run += "-agentpath:/Applications/YourKit.app/Contents/Resources/bin/mac/libyjpagent.jnilib"
+      javaOptions in run ++= Seq("-Xms256m", "-Xmx256m")
     ),
     dependencies = Seq(macros, core)
   )
@@ -56,7 +55,8 @@ object RegionsBuild extends Build {
     "tests",
     file("tests"),
     settings = defaults ++ Seq(
-      libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test",
+      libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.4" % "test",
+      libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.2" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false,
       fork in Test := true
