@@ -3,15 +3,15 @@ package offheap
 import offheap.internal.Sanitizer
 
 final class Pool(
-  val memory: Memory,
-  val pageSize: Size = 4096,
-  val chunkSize: Size = 1024 * 4096
+  val alloc: Allocator,
+  val pageSize: Size,
+  val chunkSize: Size
 ) {
   private[this] var chunk: Chunk = null
   private[this] var page: Page = null
   newChunk()
   private def newChunk(): Unit = {
-    val start = Sanitizer.validate(memory.allocate(chunkSize))
+    val start = Sanitizer.validate(alloc.allocate(chunkSize))
     chunk = new Chunk(start, 0, chunk)
   }
   private def newPage(): Unit = {
@@ -37,15 +37,10 @@ final class Pool(
   }
 }
 object Pool {
-  def apply(memory: Memory): Pool = new Pool(memory)
+  def apply(alloc: Allocator, pageSize: Size = 4096, chunkSize: Size = 1024 * 4096) =
+    new Pool(alloc, pageSize, chunkSize)
 }
 
-final class Chunk(val start: Addr, var offset: Size, var next: Chunk) {
-  assert(java.lang.Long.toBinaryString(start).length <= 48)
-}
+final class Chunk(val start: Addr, var offset: Size, var next: Chunk)
 
-final class Page(val start: Addr, var offset: Size, var next: Page) {
-  assert(java.lang.Long.toBinaryString(start).length <= 48)
-}
-
-
+final class Page(val start: Addr, var offset: Size, var next: Page)

@@ -7,7 +7,6 @@ final class Region(private[this] val pool: Pool) extends Allocator {
   private[this] val tail = pool.claim
   tail.offset = 0
   private[this] var page = tail
-  val memory = pool.memory
 
   def isOpen   = page != null
   def isClosed = page == null

@@ -15,5 +15,6 @@ trait Allocator {
     else addr
   }
 }
-
-
+object Allocator {
+  def apply() = new UnsafeAllocator()
+}

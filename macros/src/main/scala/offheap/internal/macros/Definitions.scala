@@ -19,7 +19,6 @@ trait Definitions {
   val IllegalArgumentExceptionClass = staticClass("java.lang.IllegalArgumentException")
 
   val RegionClass             = staticClass("offheap.Region")
-  val MemoryClass             = staticClass("offheap.Memory")
   val AllocatorClass          = staticClass("offheap.Allocator")
   val ArrayClass              = staticClass("offheap.Array")
   val LayoutClass             = staticClass("offheap.internal.Layout")
@@ -36,7 +35,6 @@ trait Definitions {
   val RegionModule    = staticModule("offheap.Region")
   val PoolModule      = staticModule("offheap.Pool")
   val ArrayModule     = staticModule("offheap.Array")
-  val MemoryModule    = staticModule("offheap.Memory")
   val SanitizerModule = staticModule("offheap.internal.Sanitizer")
   val FieldsModule    = staticModule("offheap.internal.Fields")
   val MethodModule    = staticModule("offheap.internal.Method")

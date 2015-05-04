@@ -22,7 +22,7 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, read(q"$addr + ${f.offset}", f.tpe, memory(addr)))
+        nullChecked(addr, read(q"$addr + ${f.offset}", f.tpe))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }
@@ -35,7 +35,7 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, write(q"$addr + ${f.offset}", f.tpe, value, memory(addr)))
+        nullChecked(addr, write(q"$addr + ${f.offset}", f.tpe, value))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }
@@ -52,7 +52,7 @@ class Method(val c: blackbox.Context) extends Common {
       if (fields.isEmpty) q"1"
       else q"$offheap.sizeOfData[$C]"
     val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
-      write(q"$addr + ${f.offset}", f.tpe, arg, memory(q"$addr"))
+      write(q"$addr + ${f.offset}", f.tpe, arg)
     }
     val newC = q"new $C($addr)"
     val instantiate = C.members.find(_.name == initialize).map { _ =>

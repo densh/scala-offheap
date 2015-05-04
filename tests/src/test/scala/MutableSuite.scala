@@ -11,7 +11,7 @@ import offheap._
 object C3 { var x = 0 }
 
 class MutableSuite extends FunSuite {
-  implicit val memory = Memory()
+  implicit val alloc = Allocator()
 
   test("mutable constructor argument") {
     val c1 = C1(10)

@@ -12,7 +12,7 @@ import offheap._
 @data class B(a: A)
 
 class DataSuite extends FunSuite {
-  implicit val memory = Memory()
+  implicit val alloc = Allocator()
 
   test("accessors") {
     val p = Point(10, 20)

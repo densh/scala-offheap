@@ -163,39 +163,39 @@ trait Common extends Definitions {
 
   def validate(addr: Tree) = q"$SanitizerModule.validate($addr)"
 
-  def read(addr: Tree, tpe: Type, memory: Tree): Tree = {
+  def read(addr: Tree, tpe: Type): Tree = {
     val vaddr = validate(addr)
     tpe match {
       case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
         val getT = TermName(s"get$tpe")
-        q"$memory.$getT($vaddr)"
+        q"$UNSAFE.$getT($vaddr)"
       case BooleanTpe =>
-        q"$memory.getByte($vaddr) != ${Literal(Constant(0.toByte))}"
+        q"$UNSAFE.getByte($vaddr) != ${Literal(Constant(0.toByte))}"
       case ArrayOf(tpe) =>
-        q"$ArrayModule.fromAddr[$tpe]($memory.getLong($vaddr))"
+        q"$ArrayModule.fromAddr[$tpe]($UNSAFE.getLong($vaddr))"
       case ClassOf(_, _, _) =>
         val companion = tpe.typeSymbol.companion
-        q"$companion.fromAddr($memory.getLong($vaddr))"
+        q"$companion.fromAddr($UNSAFE.getLong($vaddr))"
     }
   }
 
-  def write(addr: Tree, tpe: Type, value: Tree, memory: Tree): Tree = {
+  def write(addr: Tree, tpe: Type, value: Tree): Tree = {
     val vaddr = validate(addr)
     tpe match {
       case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
         val putT = TermName(s"put$tpe")
-        q"$memory.$putT($vaddr, $value)"
+        q"$UNSAFE.$putT($vaddr, $value)"
       case BooleanTpe =>
         q"""
-          $memory.putByte($vaddr,
+          $UNSAFE.putByte($vaddr,
                           if ($value) ${Literal(Constant(1.toByte))}
                           else ${Literal(Constant(0.toByte))})
         """
       case ArrayOf(_) =>
-        q"$memory.putLong($vaddr, $ArrayModule.toAddr($value))"
+        q"$UNSAFE.putLong($vaddr, $ArrayModule.toAddr($value))"
       case ClassOf(_, _, _) =>
         val companion = tpe.typeSymbol.companion
-        q"$memory.putLong($vaddr, $companion.toAddr($value))"
+        q"$UNSAFE.putLong($vaddr, $companion.toAddr($value))"
     }
   }
 
@@ -279,7 +279,6 @@ trait Common extends Definitions {
     q"$toCompanion.fromAddr($fromCompanion.toAddr($v))"
   }
 
-  def memory(addr: Tree)  = UNSAFE
   def isNull(addr: Tree)  = q"$addr == 0L"
   def notNull(addr: Tree) = q"$addr != 0L"
 }
