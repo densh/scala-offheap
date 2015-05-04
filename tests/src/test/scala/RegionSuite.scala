@@ -9,17 +9,11 @@ class RegionSuite extends FunSuite {
   implicit val pool = Pool(Memory())
 
   test("allocate") {
-    println("a.1")
     Region { r =>
-      println("b.1")
       val d = Dummy(10)(r)
-      println("b.2")
       assert(d.nonEmpty)
-      println("b.3")
       assert(d.value == 10)
-      println("b.4")
     }
-    println("a.2")
   }
 
   test("access after end") {

@@ -48,7 +48,7 @@ final class Region(private[this] val pool: Pool) extends Allocator {
         page = newpage
         0L
       }
-    packIfChecked(page.start + resOffset)
+    wrap(page.start + resOffset)
   }
 }
 object Region {

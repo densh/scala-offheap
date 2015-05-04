@@ -37,7 +37,7 @@ trait Definitions {
   val PoolModule      = staticModule("offheap.Pool")
   val ArrayModule     = staticModule("offheap.Array")
   val MemoryModule    = staticModule("offheap.Memory")
-  val SanitizerModule = staticModule("offheap.Sanitizer")
+  val SanitizerModule = staticModule("offheap.internal.Sanitizer")
   val FieldsModule    = staticModule("offheap.internal.Fields")
   val MethodModule    = staticModule("offheap.internal.Method")
 

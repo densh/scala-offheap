@@ -1,5 +1,7 @@
 package offheap
 
+import offheap.internal.Sanitizer
+
 final class Pool(
   val memory: Memory,
   val pageSize: Size = 4096,
