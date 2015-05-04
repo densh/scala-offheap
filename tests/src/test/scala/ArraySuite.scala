@@ -48,7 +48,7 @@ class ArraySuite extends FunSuite {
     intercept[IndexOutOfBoundsException] { arr(4)  }
   }
 
-  test("copy") {
+  ignore("copy") {
     val arr1 = Array(0, 0, 0, 0, 0, 0, 0, 0)
     val arr2 = Array(1, 1, 1, 1, 1, 1, 1, 1)
     Array.copy(arr2, 1, arr1, 2, 3)
