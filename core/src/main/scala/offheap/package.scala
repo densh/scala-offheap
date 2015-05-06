@@ -1,9 +1,7 @@
-package offheap
-
 import scala.language.experimental.{ macros => canMacro }
 import offheap.internal.macros
 
-package object x64 {
+package object offheap {
   type Addr = Long
   type Size = Long
 

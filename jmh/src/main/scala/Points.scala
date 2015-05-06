@@ -1,6 +1,6 @@
 package offheap.test.jmh
 
-import offheap.x64._
+import offheap._
 
 class Point(val x: Float, val y: Float)
 

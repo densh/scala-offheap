@@ -2,11 +2,11 @@ package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
 import java.util.concurrent.TimeUnit
-import offheap.x64._
+import offheap._
 
 @State(Scope.Thread)
 class OffheapAllocation {
-  implicit val pool: Pool = Pool(Memory())
+  implicit val pool: Pool = Pool(Allocator())
   var r: Region = _
 
   @Setup(Level.Iteration)

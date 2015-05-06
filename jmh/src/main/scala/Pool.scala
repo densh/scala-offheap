@@ -1,11 +1,11 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
-import offheap.x64._
+import offheap._
 
 @State(Scope.Thread)
 class PoolContention {
-  implicit val pool: Pool = Pool(Memory())
+  implicit val pool: Pool = Pool(Allocator())
 
   @Benchmark
   def contention = {

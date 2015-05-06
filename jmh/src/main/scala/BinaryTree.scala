@@ -1,11 +1,11 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
-import offheap.x64._
+import offheap._
 
 @State(Scope.Thread)
 class GCBinaryTree {
-  @Param(scala.Array("16", "17", "18", "19", "20", "21", "22"))
+  @Param(scala.Array("20"))
   var n: Int = _
 
   @Benchmark
@@ -14,7 +14,7 @@ class GCBinaryTree {
 
 @State(Scope.Thread)
 class OffheapBinaryTree {
-  @Param(scala.Array("16", "17", "18", "19", "20", "21", "22"))
+  @Param(scala.Array("20"))
   var n: Int = _
 
   @Benchmark
@@ -54,7 +54,7 @@ object GCHeap {
 
 @data class OhTree(i: Int, left: OhTree, right: OhTree)
 object Offheap {
-  implicit val pool = Pool(Memory())
+  implicit val pool = Pool(Allocator())
   def run(n: Int) = {
     val outer = Region.open
     val minDepth = 4

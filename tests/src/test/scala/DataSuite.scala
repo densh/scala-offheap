@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._, x64._
+import offheap._
 
 @data class Point(x: Double, y: Double) {
   def distanceTo(other: Point): Double =
@@ -12,7 +12,7 @@ import offheap._, x64._
 @data class B(a: A)
 
 class DataSuite extends FunSuite {
-  implicit val memory = Memory()
+  implicit val alloc = Allocator()
 
   test("accessors") {
     val p = Point(10, 20)

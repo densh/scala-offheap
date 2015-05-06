@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._, x64._
+import offheap._
 
 @data class L1(x: Byte, y: Byte)
 @data class L2(x: Byte, y: Short)
@@ -9,7 +9,7 @@ import offheap._, x64._
 @data class L4(x: Byte, y: Long)
 
 class LayoutSuite extends FunSuite {
-  implicit val memory = Memory()
+  implicit val alloc = Allocator()
 
   test("L1.x offset") { assert(offsetOf[L1]("x") == 0) }
   test("L2.x offset") { assert(offsetOf[L2]("x") == 0) }

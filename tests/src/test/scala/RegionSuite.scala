@@ -1,12 +1,12 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._, x64._
+import offheap._
 
 @data class Dummy(value: Int)
 
 class RegionSuite extends FunSuite {
-  implicit val pool = Pool(Memory())
+  implicit val pool = Pool(Allocator())
 
   test("allocate") {
     Region { r =>
@@ -21,7 +21,7 @@ class RegionSuite extends FunSuite {
     Region { r =>
       d = Dummy(10)(r)
     }
-    intercept[InaccessibleRegionException] {
+    intercept[InaccessibleMemoryException] {
       d.value
     }
   }
@@ -31,19 +31,8 @@ class RegionSuite extends FunSuite {
     Region { r =>
       rr = r
     }
-    intercept[InaccessibleRegionException] {
+    intercept[IllegalArgumentException] {
       Dummy(10)(rr)
-    }
-  }
-
-  test("close before end") {
-    Region { r =>
-      assert(r.isOpen)
-      r.close
-      assert(r.isClosed)
-      intercept[InaccessibleRegionException] {
-        Dummy(10)(r)
-      }
     }
   }
 

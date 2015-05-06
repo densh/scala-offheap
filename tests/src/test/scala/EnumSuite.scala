@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._, x64._
+import offheap._
 import E1._, E2._
 
 @enum class E1
@@ -16,7 +16,7 @@ object E1 {
 class C
 
 class EnumSuite extends FunSuite {
-  implicit val memory = Memory()
+  implicit val alloc = Allocator()
 
   test("D1 is D1") { assert(D1().is[D1]) }
   test("D2 is D2") { assert(D2().is[D2]) }

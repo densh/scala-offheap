@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._, x64._
+import offheap._
 
 @data class C1(var x: Int)
 
@@ -11,7 +11,7 @@ import offheap._, x64._
 object C3 { var x = 0 }
 
 class MutableSuite extends FunSuite {
-  implicit val memory = Memory()
+  implicit val alloc = Allocator()
 
   test("mutable constructor argument") {
     val c1 = C1(10)
