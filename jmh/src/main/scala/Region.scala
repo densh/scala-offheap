@@ -1,11 +1,12 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
+import org.openjdk.jmh.infra._
 import offheap._
 
 @State(Scope.Thread)
 class RegionClose {
-  implicit val pool: Pool = Pool(Memory())
+  implicit val pool: Pool = Pool(Allocator())
   var r: Region = _
 
   @Param(scala.Array("1024", "2048", "4096"))
@@ -24,7 +25,7 @@ class RegionClose {
 
 @State(Scope.Thread)
 class RegionOpen {
-  implicit val pool: Pool = Pool(Memory())
+  implicit val pool: Pool = Pool(Allocator())
   var r: Region = _
 
   @TearDown(Level.Invocation)
@@ -39,7 +40,7 @@ class RegionOpen {
 
 @State(Scope.Thread)
 class RegionAllocateCurrent {
-  implicit val pool: Pool = Pool(Memory())
+  implicit val pool: Pool = Pool(Allocator())
   var r: Region = _
 
   @Setup(Level.Invocation)
@@ -55,7 +56,7 @@ class RegionAllocateCurrent {
 
 @State(Scope.Thread)
 class RegionAllocateNext {
-  implicit val pool: Pool = Pool(Memory())
+  implicit val pool: Pool = Pool(Allocator())
   var r: Region = _
 
   @Setup(Level.Invocation)

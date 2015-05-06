@@ -6,6 +6,7 @@ import offheap._
 
 @State(Scope.Thread)
 class ArrayBench {
+  implicit val alloc = Allocator()
   val arr: offheap.Array[Int] = Array(1, 2, 3)
 
   @Benchmark
