@@ -34,7 +34,7 @@ class Layout(val c: blackbox.Context) extends Common {
 
   def perform[C: WeakTypeTag](pairs: Tree*) = {
     import c.internal._, decorators._
-    wt[C].typeSymbol.updateAttachment(IsClass(true))
+    wt[C].typeSymbol.updateAttachment(Clazz.Attachment(true))
     wrap(align(unwrap(pairs)))
   }
 }

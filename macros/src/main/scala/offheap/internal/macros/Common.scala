@@ -67,27 +67,45 @@ trait Common extends Definitions {
   object ExtractData               extends ExtractAnnotation(DataClass)
   object ExtractLayout             extends ExtractAnnotation(LayoutClass)
   object ExtractParent             extends ExtractAnnotation(ParentClass)
+  object ExtractPotentialChildren  extends ExtractAnnotation(PotentialChildrenClass)
   object ExtractClassTag           extends ExtractAnnotation(ClassTagClass)
   object ExtractClassTagRange      extends ExtractAnnotation(ClassTagRangeClass)
   object ExtractParentExtractor    extends ExtractAnnotation(ParentExtractorClass)
   object ExtractPrimaryExtractor   extends ExtractAnnotation(PrimaryExtractorClass)
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
 
-  final case class IsClass(value: Boolean)
-  object ClassOf {
+  final case class Tag(value: Tree, tpt: Tree)
+  final case class Clazz(sym: Symbol, fields: List[Field], parents: List[Type], tag: Option[Tag]) {
+    lazy val isData = ExtractData.unapply(sym).nonEmpty
+    lazy val isEnum = ExtractEnum.unapply(sym).nonEmpty
+    lazy val children: List[Clazz] =
+      ExtractPotentialChildren.unapply(sym).map {
+        case q"new $_(..${tpes: List[Type]})" :: Nil =>
+          tpes.map(Clazz.unapply).flatten
+      }.getOrElse(Nil)
+    lazy val dataSize: Long =
+      if (isData) {
+        val lastfield = fields.maxBy(_.offset)
+        lastfield.offset + sizeOf(lastfield.tpe)
+      } else if (isEnum) {
+        children.map(_.dataSize).max
+      } else unreachable
+  }
+  object Clazz {
+    final case class Attachment(value: Boolean)
     import c.internal._, decorators._
     def is(tpe: Type): Boolean =
       is(tpe.widen.typeSymbol)
     def is(sym: Symbol): Boolean = {
-      sym.attachments.get[IsClass].map { _.value }.getOrElse {
+      sym.attachments.get[Clazz.Attachment].map { _.value }.getOrElse {
         val value = ExtractLayout.unapply(sym).nonEmpty
-        sym.updateAttachment(IsClass(value))
+        sym.updateAttachment(Clazz.Attachment(value))
         value
       }
     }
-    def unapply(tpe: Type): Option[(List[Field], List[Type], Option[(Tree, Tree)])] =
+    def unapply(tpe: Type): Option[Clazz] =
       unapply(tpe.widen.typeSymbol)
-    def unapply(sym: Symbol): Option[(List[Field], List[Type], Option[(Tree, Tree)])] = {
+    def unapply(sym: Symbol): Option[Clazz] = {
       val fieldsOpt: Option[List[Field]] =
         ExtractLayout.unapply(sym).map { _.head match {
           case q"new $_((new $_(..${fields: List[Field]})): $_)" => fields
@@ -98,9 +116,9 @@ trait Common extends Definitions {
           case q"new $_(${tpe: Type})" => tpe
         }
         val tagOpt = ExtractClassTag.unapply(sym).map(_.head).map {
-          case q"new $_($value: $tpt)" => (value, tpt)
+          case q"new $_($value: $tpt)" => Tag(value, tpt)
         }
-        (fields, parents, tagOpt)
+        Clazz(sym, fields, parents, tagOpt)
       }
     }
   }
@@ -128,8 +146,8 @@ trait Common extends Definitions {
 
   object Allocatable {
     def unapply(tpe: Type): Boolean = tpe match {
-      case Primitive() | ClassOf(_, _, _) => true
-      case _                              => false
+      case Primitive() | Clazz(_) => true
+      case _                      => false
     }
   }
 
@@ -138,17 +156,14 @@ trait Common extends Definitions {
     case ShortTpe | CharTpe    => 2
     case IntTpe   | FloatTpe   => 4
     case LongTpe  | DoubleTpe  => 8
-    case _ if ClassOf.is(tpe)  ||
+    case _ if Clazz.is(tpe)    ||
               ArrayOf.is(tpe)  => 8
     case _                     => abort(s"can't compute size of $tpe")
   }
 
   def sizeOfData(tpe: Type): Long = tpe match {
-    case ClassOf(fields, _, _) =>
-      val lastfield = fields.maxBy(_.offset)
-      lastfield.offset + sizeOf(lastfield.tpe)
-    case _ =>
-      abort(s"$tpe is not a an offheap class")
+    case Clazz(clazz) => clazz.dataSize
+    case _            => abort(s"$tpe is not a an offheap class")
   }
 
   def alignmentOf(tpe: Type) = tpe match {
@@ -156,7 +171,7 @@ trait Common extends Definitions {
     case ShortTpe | CharTpe    => 2
     case IntTpe   | FloatTpe   => 4
     case LongTpe  | DoubleTpe  => 8
-    case _ if ClassOf.is(tpe)  ||
+    case _ if Clazz.is(tpe)    ||
               ArrayOf.is(tpe)  => 8
     case _                     => abort(s"can't comput alignment for $tpe")
   }
@@ -173,7 +188,7 @@ trait Common extends Definitions {
         q"$UNSAFE.getByte($vaddr) != ${Literal(Constant(0.toByte))}"
       case ArrayOf(tpe) =>
         q"$ArrayModule.fromAddr[$tpe]($UNSAFE.getLong($vaddr))"
-      case ClassOf(_, _, _) =>
+      case Clazz(_) =>
         val companion = tpe.typeSymbol.companion
         q"$companion.fromAddr($UNSAFE.getLong($vaddr))"
     }
@@ -193,7 +208,7 @@ trait Common extends Definitions {
         """
       case ArrayOf(_) =>
         q"$UNSAFE.putLong($vaddr, $ArrayModule.toAddr($value))"
-      case ClassOf(_, _, _) =>
+      case Clazz(_) =>
         val companion = tpe.typeSymbol.companion
         q"$UNSAFE.putLong($vaddr, $companion.toAddr($value))"
     }

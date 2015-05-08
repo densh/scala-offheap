@@ -18,9 +18,9 @@ class Method(val c: blackbox.Context) extends Common {
   def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
     val C = wt[C]
     assertAllocatable(C)
-    val ClassOf(fields, _, _) = C
+    val Clazz(clazz) = C
     val q"${nameStr: String}" = name
-    fields.collectFirst {
+    clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
         nullChecked(addr, read(q"$addr + ${f.offset}", f.tpe))
     }.getOrElse {
@@ -31,9 +31,9 @@ class Method(val c: blackbox.Context) extends Common {
   def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
     val C = wt[C]
     assertAllocatable(C)
-    val ClassOf(fields, _, _) = C
+    val Clazz(clazz) = C
     val q"${nameStr: String}" = name
-    fields.collectFirst {
+    clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
         nullChecked(addr, write(q"$addr + ${f.offset}", f.tpe, value))
     }.getOrElse {
@@ -45,13 +45,13 @@ class Method(val c: blackbox.Context) extends Common {
   // TODO: zero-size data structures should not allocate any memory
   def allocator[C: WeakTypeTag](alloc: Tree, args: Tree*): Tree = {
     val C = wt[C]
-    val ClassOf(fields, _, tagOpt) = C
-    val tagValueOpt = tagOpt.map { case (v, tpt) => v }
+    val Clazz(clazz) = C
+    val tagValueOpt = clazz.tag.map(_.value)
     val addr = fresh("addr")
     val size =
-      if (fields.isEmpty) q"1"
+      if (clazz.fields.isEmpty) q"1"
       else q"$offheap.sizeOfData[$C]"
-    val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
+    val writes = clazz.fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
       write(q"$addr + ${f.offset}", f.tpe, arg)
     }
     val newC = q"new $C($addr)"
@@ -72,15 +72,15 @@ class Method(val c: blackbox.Context) extends Common {
 
   def toString[C: WeakTypeTag](self: Tree): Tree = {
     val C = wt[C]
-    val ClassOf(fields, parents, tagOpt) = C
-    val actualFields = if (tagOpt.isEmpty) fields else fields.tail
+    val Clazz(clazz) = C
+    val actualFields = if (clazz.tag.isEmpty) clazz.fields else clazz.fields.tail
     val sb = fresh("sb")
     val appends =
       if (actualFields.isEmpty) Nil
       else actualFields.flatMap { f =>
         List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
       }.init
-    val path = (C :: parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
+    val path = (C :: clazz.parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
     val companion = C.typeSymbol.companion
     q"""
       val $sb = new $StringBuilderClass

@@ -27,6 +27,7 @@ trait Definitions {
   val EnumClass               = staticClass("offheap.internal.Enum")
   val ClassTagClass           = staticClass("offheap.internal.ClassTag")
   val ClassTagRangeClass      = staticClass("offheap.internal.ClassTagRange")
+  val PotentialChildrenClass  = staticClass("offheap.internal.PotentialChildren")
   val ParentClass             = staticClass("offheap.internal.Parent")
   val PrimaryExtractorClass   = staticClass("offheap.internal.PrimaryExtractor")
   val ParentExtractorClass    = staticClass("offheap.internal.ParentExractor")

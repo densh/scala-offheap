@@ -315,16 +315,18 @@ class Annotations(val c: whitebox.Context) extends Common {
       else
         q"$value: $IntClass"
 
-    var count: Int = 0
+    var count = 0
+    var children = List.empty[Tree]
     def parentAnnot =
       q"new $ParentClass($PredefModule.classOf[$name])"
     def classTagAnnot =
       q"new $ClassTagClass(${const(count)})"
     def classTagRangeAnnot(start: Int) =
       q"new $ClassTagRangeClass(${const(start)}, ${const(count)})"
-    def transformStats(stats: List[Tree]): List[Tree] = stats.map {
+    def transformStats(pre: Tree, stats: List[Tree]): List[Tree] = stats.map {
       case c: ClassDef =>
         count += 1
+        children ::= tq"$pre.${c.name}"
         val mods = c.mods.mapAnnotations { anns =>
           if (parentAnnots.nonEmpty) parentAnnot :: anns
           else parentAnnot :: classTagAnnot :: anns
@@ -333,7 +335,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       case m: ModuleDef =>
         val start = count
         val impl = treeCopy.Template(m.impl, m.impl.parents, m.impl.self,
-                                     transformStats(m.impl.body))
+                                     transformStats(q"$pre.${m.name}", m.impl.body))
         val mods = m.mods.mapAnnotations { anns =>
           if (parentAnnots.nonEmpty) parentAnnot :: anns
           else parentAnnot :: classTagRangeAnnot(start) :: anns
@@ -342,14 +344,17 @@ class Annotations(val c: whitebox.Context) extends Common {
       case other =>
         other
     }
-    val stats = transformStats(rawStats)
+    val stats = transformStats(q"$termName", rawStats)
 
+    val childrenTypes  = children.map { c => q"$PredefModule.classOf[$c]" }
+    val childrenAnnot  = q"new $PotentialChildrenClass(..$childrenTypes)"
     val rangeAnnot =
       if (parentAnnots.nonEmpty) rangeAnnotOpt.get
       else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
     val q"$_: $tagTpt" = const(0)
     val layoutAnnot    = performLayout(tq"$name", List(new SyntacticField(q"val $tag: $tagTpt")))
-    val annots         = q"new $EnumClass" :: rangeAnnot :: layoutAnnot :: parentAnnots
+    val annots         = q"new $EnumClass" :: rangeAnnot ::
+                         layoutAnnot :: childrenAnnot :: parentAnnots
 
     q"""
       @..$annots final class $name private(

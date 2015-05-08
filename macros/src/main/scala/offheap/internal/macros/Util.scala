@@ -11,8 +11,8 @@ class Util(val c: blackbox.Context) extends Common {
   def offsetOf[T: WeakTypeTag](field: Tree) = {
     val q"${value: String}" = field
     wt[T] match {
-      case tpe @ ClassOf(fields, _, _) =>
-        fields.collectFirst {
+      case tpe @ Clazz(clazz) =>
+        clazz.fields.collectFirst {
           case f if f.name.toString == value => q"${f.offset}"
         }.getOrElse {
           abort(s"$tpe does not have field $field")
