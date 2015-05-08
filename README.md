@@ -33,7 +33,7 @@ Once it ends, all of them are efficiently deallocated at once.
 * Efficient scoped region-based memory allocator
 * Optional low-overhead memory sanitizer for debugging and development
 * Offheap classes as a nice typed API for custom data layout
-* Supports offheap arrays that have direct sequential layout in memory
+* Offheap arrays with direct sequential layout in memory
 * Extensibility to accomodate custom memory allocators
 
 ## Installation
