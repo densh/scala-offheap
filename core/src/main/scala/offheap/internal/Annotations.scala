@@ -13,8 +13,9 @@ final class ClassTagRange(from: Any, to: Any) extends StaticAnnotation // > from
 final class ParentExractor(tag: Class[_], value: Any) extends StaticAnnotation
 final class PrimaryExtractor(value: Any) extends StaticAnnotation
 final class UniversalExtractor(value: Any) extends StaticAnnotation
-final class Layout(val fields: Fields) extends StaticAnnotation
-final class Fields(val fields: (String, Class[_], Size)*)
-object Fields {
-  def layout[C](pairs: (String, Class[_])*): Fields = macro macros.Layout.perform[C]
+final class Field(name: String, after: Any, tag: Class[_],
+                  annots: Class[_], offset: Size) extends StaticAnnotation
+object Field {
+  def offset(after: Any, tag: Class[_], annots: Class[_]): Size =
+    macro macros.Layout.fieldOffset
 }

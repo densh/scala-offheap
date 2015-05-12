@@ -9,14 +9,8 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe.definitions._
   import Flag._
 
-  def performLayout(C: Tree, fields: List[SyntacticField]): Tree = {
-    val tuples = fields.map { f =>
-      q"(${f.name.toString}, $PredefModule.classOf[${f.tpt}])"
-    }
-    q"new $LayoutClass($FieldsModule.layout[$C](..$tuples))"
-  }
-
   implicit class SyntacticField(vd: ValDef) {
+    def mods        = vd.mods
     def name        = vd.name
     def tpt         = vd.tpt
     def default     = vd.rhs
@@ -113,9 +107,19 @@ class Annotations(val c: whitebox.Context) extends Common {
     val types = rawStats.collect { case t: TypeDef => t }
 
     // Generate additional members
+    var prev = q""
     val accessors = fields.flatMap { f =>
+      val props =
+        prev :: classOf(f.tpt) ::
+        classOf(tq"$FieldClass @..${f.mods.annotations}") :: Nil
+      val annot: Tree =
+        q"""
+          new $FieldClass(${f.name.toString}, ..$props,
+                          $FieldModule.offset(..$props))
+        """
+      prev = q"this.${f.name}"
       val accessor = q"""
-        def ${f.name}: ${f.tpt} =
+        @$annot def ${f.name}: ${f.tpt} =
           $MethodModule.access[$name, ${f.tpt}]($addr, ${f.name.toString})
       """
       val assignerName = TermName(f.name.toString + "_$eq")
@@ -188,13 +192,12 @@ class Annotations(val c: whitebox.Context) extends Common {
       q"new $PrimaryExtractorClass($termName.${primaryExtractor.name})" ::
       q"new $UniversalExtractorClass($termName.${universalExtractor.name})" ::
       parents.zip(parentExtractors).map { case (p, u) =>
-        q"new $ParentExtractorClass($PredefModule.classOf[$p], $termName.${u.name})"
+        q"new $ParentExtractorClass(${classOf(p)}, $termName.${u.name})"
       }
-    val layoutAnnot = performLayout(tq"$name", fields)
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
-      q"new $DataClass" :: layoutAnnot ::
+      q"new $DataClass" ::
       extractorAnnots ::: rawMods.annotations
     )
 
@@ -204,8 +207,8 @@ class Annotations(val c: whitebox.Context) extends Common {
       ) extends $AnyValClass with ..$traits { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
 
-        ..$initializer
         ..$accessors
+        ..$initializer
 
         def isEmpty  = ${isNull(q"$addr")}
         def nonEmpty = ${notNull(q"$addr")}
@@ -318,7 +321,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     var count = 0
     var children = List.empty[Tree]
     def parentAnnot =
-      q"new $ParentClass($PredefModule.classOf[$name])"
+      q"new $ParentClass(${classOf(tq"$name")})"
     def classTagAnnot =
       q"new $ClassTagClass(${const(count)})"
     def classTagRangeAnnot(start: Int) =
@@ -352,15 +355,18 @@ class Annotations(val c: whitebox.Context) extends Common {
       if (parentAnnots.nonEmpty) rangeAnnotOpt.get
       else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
     val q"$_: $tagTpt" = const(0)
-    val layoutAnnot    = performLayout(tq"$name", List(new SyntacticField(q"val $tag: $tagTpt")))
     val annots         = q"new $EnumClass" :: rangeAnnot ::
-                         layoutAnnot :: childrenAnnot :: parentAnnots
+                         childrenAnnot :: parentAnnots
+
+    val tagprops = q"" :: classOf(tagTpt) :: classOf(tq"$FieldClass") :: Nil
 
     q"""
       @..$annots final class $name private(
         private val $addr: $AddrTpe
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
+
+        @$FieldClass(${tag.toString}, ..$tagprops, $FieldModule.offset(..$tagprops))
         def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt]($addr, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]

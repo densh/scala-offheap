@@ -44,17 +44,6 @@ trait Common extends Definitions {
     }
   }
 
-  case class Field(name: String, tpe: Type, offset: Long)
-  object Field {
-    implicit val lift: Liftable[Field] = Liftable { f =>
-      q"(${f.name}, $PredefModule.classOf[${f.tpe}], ${f.offset})"
-    }
-    implicit val unlift: Unliftable[Field] = Unliftable {
-      case q"(${s: String}, ${t: Type}, ${offset: Long})" =>
-        Field(s, t, offset)
-    }
-  }
-
   class ExtractAnnotation(annSym: Symbol) {
     def unapply(sym: Symbol): Option[List[Tree]] = {
       val trees = sym.annotations.collect {
@@ -65,7 +54,6 @@ trait Common extends Definitions {
   }
   object ExtractEnum               extends ExtractAnnotation(EnumClass)
   object ExtractData               extends ExtractAnnotation(DataClass)
-  object ExtractLayout             extends ExtractAnnotation(LayoutClass)
   object ExtractParent             extends ExtractAnnotation(ParentClass)
   object ExtractPotentialChildren  extends ExtractAnnotation(PotentialChildrenClass)
   object ExtractClassTag           extends ExtractAnnotation(ClassTagClass)
@@ -73,9 +61,48 @@ trait Common extends Definitions {
   object ExtractParentExtractor    extends ExtractAnnotation(ParentExtractorClass)
   object ExtractPrimaryExtractor   extends ExtractAnnotation(PrimaryExtractorClass)
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
+  object ExtractField              extends ExtractAnnotation(FieldClass)
 
   final case class Tag(value: Tree, tpt: Tree)
-  final case class Clazz(sym: Symbol, fields: List[Field], parents: List[Type], tag: Option[Tag]) {
+
+  case class Field(name: String, after: Tree, tpe: Type,
+                   annots: Type, offset: Long) {
+    val isData    = false
+    val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
+    val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
+  }
+  object Field {
+    implicit val lift: Liftable[Field] = Liftable { f =>
+      q"""
+        new $FieldClass(${f.name}, ${f.after}, $PredefModule.classOf[${f.tpe}],
+                        ${f.isData}, ${f.offset})
+      """
+    }
+    implicit val unlift: Unliftable[Field] = Unliftable {
+      case q"""
+        new $cls(${name: String}, $after, ${tpe: Type},
+                 ${annots: Type}, (${offset: Long}: $_))
+        """
+        if cls.symbol == FieldClass =>
+        Field(name, after, tpe, annots, offset)
+    }
+  }
+
+  final case class Clazz(sym: Symbol) {
+    lazy val fields =
+      sym.asType.toType.members.collect {
+        case ExtractField(t :: Nil) =>
+          val q"${f: Field}" = t
+          f
+      }.toList.sortBy(_.offset)
+    lazy val parents =
+      ExtractParent.unapply(sym).toList.flatten.map {
+        case q"new $_(${tpe: Type})" => tpe
+      }
+    lazy val tag =
+      ExtractClassTag.unapply(sym).map(_.head).map {
+        case q"new $_($value: $tpt)" => Tag(value, tpt)
+      }
     lazy val isData = ExtractData.unapply(sym).nonEmpty
     lazy val isEnum = ExtractEnum.unapply(sym).nonEmpty
     lazy val children: List[Clazz] =
@@ -98,29 +125,18 @@ trait Common extends Definitions {
       is(tpe.widen.typeSymbol)
     def is(sym: Symbol): Boolean = {
       sym.attachments.get[Clazz.Attachment].map { _.value }.getOrElse {
-        val value = ExtractLayout.unapply(sym).nonEmpty
+        val value =
+          ExtractData.unapply(sym).nonEmpty ||
+          ExtractEnum.unapply(sym).nonEmpty
         sym.updateAttachment(Clazz.Attachment(value))
         value
       }
     }
     def unapply(tpe: Type): Option[Clazz] =
       unapply(tpe.widen.typeSymbol)
-    def unapply(sym: Symbol): Option[Clazz] = {
-      val fieldsOpt: Option[List[Field]] =
-        ExtractLayout.unapply(sym).map { _.head match {
-          case q"new $_((new $_(..${fields: List[Field]})): $_)" => fields
-          case q"new $_((new $_): $_)"                           => Nil
-        }}
-      fieldsOpt.map { fields =>
-        val parents = ExtractParent.unapply(sym).toList.flatten.map {
-          case q"new $_(${tpe: Type})" => tpe
-        }
-        val tagOpt = ExtractClassTag.unapply(sym).map(_.head).map {
-          case q"new $_($value: $tpt)" => Tag(value, tpt)
-        }
-        Clazz(sym, fields, parents, tagOpt)
-      }
-    }
+    def unapply(sym: Symbol): Option[Clazz] =
+      if (is(sym)) Some(Clazz(sym))
+      else None
   }
 
   object ArrayOf {
@@ -174,6 +190,11 @@ trait Common extends Definitions {
     case _ if Clazz.is(tpe)    ||
               ArrayOf.is(tpe)  => 8
     case _                     => abort(s"can't comput alignment for $tpe")
+  }
+
+  def alignmentOfData(tpe: Type) = tpe match {
+    case Clazz(clazz) => clazz.dataSize
+    case _            => abort("$tpe is not an offheap class")
   }
 
   def validate(addr: Tree) = q"$SanitizerModule.validate($addr)"
@@ -296,4 +317,6 @@ trait Common extends Definitions {
 
   def isNull(addr: Tree)  = q"$addr == 0L"
   def notNull(addr: Tree) = q"$addr != 0L"
+
+  def classOf(tpt: Tree) = q"$PredefModule.classOf[$tpt]"
 }
