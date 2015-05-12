@@ -21,6 +21,7 @@ trait Definitions {
   val RegionClass             = staticClass("offheap.Region")
   val AllocatorClass          = staticClass("offheap.Allocator")
   val ArrayClass              = staticClass("offheap.Array")
+  val EmbedClass              = staticClass("offheap.embed")
   val DataClass               = staticClass("offheap.internal.Data")
   val EnumClass               = staticClass("offheap.internal.Enum")
   val ClassTagClass           = staticClass("offheap.internal.ClassTag")
@@ -31,6 +32,7 @@ trait Definitions {
   val ParentExtractorClass    = staticClass("offheap.internal.ParentExractor")
   val UniversalExtractorClass = staticClass("offheap.internal.UniversalExtractor")
   val FieldClass              = staticClass("offheap.internal.Field")
+  val AnnotsClass             = staticClass("offheap.internal.Annots")
 
   val RegionModule    = staticModule("offheap.Region")
   val PoolModule      = staticModule("offheap.Pool")

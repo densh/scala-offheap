@@ -6,8 +6,8 @@ import scala.reflect.macros.blackbox
 
 class Util(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
-  def sizeOf_[T: WeakTypeTag] = q"${sizeOf(wt[T]).toLong}"
-  def sizeOfData_[T: WeakTypeTag] = q"${sizeOfData(wt[T]).toLong}"
+  def sizeOf_[T: WeakTypeTag] = q"${sizeOf(wt[T])}"
+  def sizeOfData_[T: WeakTypeTag] = q"${sizeOfData(wt[T])}"
   def offsetOf[T: WeakTypeTag](field: Tree) = {
     val q"${value: String}" = field
     wt[T] match {
@@ -21,4 +21,7 @@ class Util(val c: blackbox.Context) extends Common {
         abort(s"$tpe is not an offheap class")
     }
   }
+
+  def alignmentOf_[T: WeakTypeTag] = q"${alignmentOf(wt[T])}"
+  def alignmentOfData_[T: WeakTypeTag] = q"${alignmentOfData(wt[T])}"
 }

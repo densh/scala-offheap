@@ -111,7 +111,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val accessors = fields.flatMap { f =>
       val props =
         prev :: classOf(f.tpt) ::
-        classOf(tq"$FieldClass @..${f.mods.annotations}") :: Nil
+        q"new $AnnotsClass(..${f.mods.annotations})" :: Nil
       val annot: Tree =
         q"""
           new $FieldClass(${f.name.toString}, ..$props,
@@ -358,7 +358,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val annots         = q"new $EnumClass" :: rangeAnnot ::
                          childrenAnnot :: parentAnnots
 
-    val tagprops = q"" :: classOf(tagTpt) :: classOf(tq"$FieldClass") :: Nil
+    val tagprops = q"" :: classOf(tagTpt) :: q"new $AnnotsClass()" :: Nil
 
     q"""
       @..$annots final class $name private(

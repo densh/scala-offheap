@@ -15,6 +15,13 @@ class Method(val c: blackbox.Context) extends Common {
       $ifOk
     """
 
+  def access(addr: Tree, f: Field) =
+    if (f.isData) {
+      val companion = f.tpe.typeSymbol.companion
+      q"$companion.fromAddr($addr + ${f.offset})"
+    } else
+      read(q"$addr + ${f.offset}", f.tpe)
+
   def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
     val C = wt[C]
     assertAllocatable(C)
@@ -22,11 +29,20 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, read(q"$addr + ${f.offset}", f.tpe))
+        nullChecked(addr, access(addr, f))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }
   }
+
+  def assign(addr: Tree, f: Field, value: Tree) =
+    if (f.isData) {
+      val companion = f.tpe.typeSymbol.companion
+      val from      = validate(q"$companion.toAddr($value)")
+      val to        = validate(q"$addr + ${f.offset}")
+      val size      = sizeOfData(f.tpe)
+      q"$UNSAFE.copyMemory($from, $to, $size)"
+    } else write(q"$addr + ${f.offset}", f.tpe, value)
 
   def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
     val C = wt[C]
@@ -35,7 +51,7 @@ class Method(val c: blackbox.Context) extends Common {
     val q"${nameStr: String}" = name
     clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, write(q"$addr + ${f.offset}", f.tpe, value))
+        nullChecked(addr, assign(addr, f, value))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }
@@ -52,7 +68,7 @@ class Method(val c: blackbox.Context) extends Common {
       if (clazz.fields.isEmpty) q"1"
       else q"$offheap.sizeOfData[$C]"
     val writes = clazz.fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
-      write(q"$addr + ${f.offset}", f.tpe, arg)
+      assign(q"$addr", f, arg)
     }
     val newC = q"new $C($addr)"
     val instantiate = C.members.find(_.name == initialize).map { _ =>

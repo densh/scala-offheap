@@ -14,8 +14,9 @@ final class ParentExractor(tag: Class[_], value: Any) extends StaticAnnotation
 final class PrimaryExtractor(value: Any) extends StaticAnnotation
 final class UniversalExtractor(value: Any) extends StaticAnnotation
 final class Field(name: String, after: Any, tag: Class[_],
-                  annots: Class[_], offset: Size) extends StaticAnnotation
+                  annots: Annots, offset: Size) extends StaticAnnotation
 object Field {
-  def offset(after: Any, tag: Class[_], annots: Class[_]): Size =
+  def offset(after: Any, tag: Class[_], annots: Annots): Size =
     macro macros.Layout.fieldOffset
 }
+final class Annots(annots: Any*) extends StaticAnnotation

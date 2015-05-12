@@ -21,8 +21,13 @@ class LayoutSuite extends FunSuite {
   test("L3.y offset") { assert(offsetOf[L3]("y") == 4) }
   test("L4.y offset") { assert(offsetOf[L4]("y") == 8) }
 
-  test("sizeOf[L1]") { assert(sizeOfData[L1] == 2 ) }
-  test("sizeOf[L2]") { assert(sizeOfData[L2] == 4 ) }
-  test("sizeOf[L3]") { assert(sizeOfData[L3] == 8 ) }
-  test("sizeOf[L4]") { assert(sizeOfData[L4] == 16) }
+  test("sizeOfData[L1]") { assert(sizeOfData[L1] == 2 ) }
+  test("sizeOfData[L2]") { assert(sizeOfData[L2] == 4 ) }
+  test("sizeOfData[L3]") { assert(sizeOfData[L3] == 8 ) }
+  test("sizeOfData[L4]") { assert(sizeOfData[L4] == 16) }
+
+  test("alignmentOfData[L1]") { assert(alignmentOfData[L1] == 1) }
+  test("alignmentOfData[L2]") { assert(alignmentOfData[L2] == 2) }
+  test("alignmentOfData[L3]") { assert(alignmentOfData[L3] == 4) }
+  test("alignmentOfData[L4]") { assert(alignmentOfData[L4] == 8) }
 }

@@ -66,8 +66,8 @@ trait Common extends Definitions {
   final case class Tag(value: Tree, tpt: Tree)
 
   case class Field(name: String, after: Tree, tpe: Type,
-                   annots: Type, offset: Long) {
-    val isData    = false
+                   annots: List[Tree], offset: Long) {
+    val isData    = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
     val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
     val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
   }
@@ -75,15 +75,19 @@ trait Common extends Definitions {
     implicit val lift: Liftable[Field] = Liftable { f =>
       q"""
         new $FieldClass(${f.name}, ${f.after}, $PredefModule.classOf[${f.tpe}],
-                        ${f.isData}, ${f.offset})
+                        new $AnnotsClass(..${f.annots}), (${f.offset}: $SizeTpe))
       """
     }
     implicit val unlift: Unliftable[Field] = Unliftable {
       case q"""
         new $cls(${name: String}, $after, ${tpe: Type},
-                 ${annots: Type}, (${offset: Long}: $_))
+                 $newAnnots, (${offset: Long}: $_))
         """
         if cls.symbol == FieldClass =>
+        val annots = newAnnots match {
+          case q"new $_(..$anns)" => anns
+          case q"new $_"          => Nil
+        }
         Field(name, after, tpe, annots, offset)
     }
   }
@@ -110,12 +114,18 @@ trait Common extends Definitions {
         case q"new $_(..${tpes: List[Type]})" :: Nil =>
           tpes.map(Clazz.unapply).flatten
       }.getOrElse(Nil)
-    lazy val dataSize: Long =
+    lazy val size: Long =
       if (isData) {
         val lastfield = fields.maxBy(_.offset)
-        lastfield.offset + sizeOf(lastfield.tpe)
+        lastfield.offset + lastfield.size
       } else if (isEnum) {
-        children.map(_.dataSize).max
+        children.map(_.size).max
+      } else unreachable
+    lazy val alignment: Long =
+      if (isData) {
+        fields.map(f => alignmentOf(f.tpe)).max
+      } else if (isEnum) {
+        children.map(_.alignment).max
       } else unreachable
   }
   object Clazz {
@@ -178,7 +188,7 @@ trait Common extends Definitions {
   }
 
   def sizeOfData(tpe: Type): Long = tpe match {
-    case Clazz(clazz) => clazz.dataSize
+    case Clazz(clazz) => clazz.size
     case _            => abort(s"$tpe is not a an offheap class")
   }
 
@@ -193,8 +203,8 @@ trait Common extends Definitions {
   }
 
   def alignmentOfData(tpe: Type) = tpe match {
-    case Clazz(clazz) => clazz.dataSize
-    case _            => abort("$tpe is not an offheap class")
+    case Clazz(clazz) => clazz.alignment
+    case _            => abort(s"$tpe is not an offheap class")
   }
 
   def validate(addr: Tree) = q"$SanitizerModule.validate($addr)"

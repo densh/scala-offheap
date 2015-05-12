@@ -16,7 +16,7 @@ class Layout(val c: blackbox.Context) extends Common {
         val q"${prev: Field}" = ExtractField.unapply(c.typecheck(after).symbol).get.head
         prev.offset + prev.size
     }
-    val isData: Boolean = false
+    val isData = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
     val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
     val padding =
       if (baseoffset % alignment == 0) 0
