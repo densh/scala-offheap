@@ -2,7 +2,6 @@ package offheap
 package internal
 
 import scala.annotation.StaticAnnotation
-import scala.language.experimental.{macros => CanMacro}
 
 final class Data extends StaticAnnotation
 final class Enum extends StaticAnnotation
@@ -15,8 +14,5 @@ final class PrimaryExtractor(value: Any) extends StaticAnnotation
 final class UniversalExtractor(value: Any) extends StaticAnnotation
 final class Field(name: String, after: Any, tag: Class[_],
                   annots: Annots, offset: Size) extends StaticAnnotation
-object Field {
-  def offset(after: Any, tag: Class[_], annots: Annots): Size =
-    macro macros.Layout.fieldOffset
-}
 final class Annots(annots: Any*) extends StaticAnnotation
+final class Complete(any: Any) extends StaticAnnotation

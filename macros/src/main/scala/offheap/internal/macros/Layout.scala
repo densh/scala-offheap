@@ -8,8 +8,16 @@ class Layout(val c: blackbox.Context) extends Common {
   import c.universe.{weakTypeOf => wt, _}
   import c.internal._, decorators._
 
-  def fieldOffset(after: Tree, tag: Tree, annots: Tree) = {
+  def inLayout(tpe: Type)(f: => Tree) = {
+    tpe.typeSymbol.updateAttachment(Clazz.InLayout())
+    val res = f
+    tpe.typeSymbol.removeAttachment[Clazz.InLayout]
+    f
+  }
+
+  def field[C: WeakTypeTag](after: Tree, tag: Tree, annots: Tree) = inLayout(wt[C]) {
     val q"${tpe: Type}" = tag
+    assertNotInLayout(tpe.typeSymbol, "illegal recursive embedding")
     val baseoffset = after match {
       case q"" => 0
       case _   =>
@@ -22,5 +30,10 @@ class Layout(val c: blackbox.Context) extends Common {
       if (baseoffset % alignment == 0) 0
       else alignment - baseoffset % alignment
     q"${baseoffset + padding}"
+  }
+
+  def markComplete[C: WeakTypeTag] = {
+    wt[C].typeSymbol.updateAttachment(Clazz.LayoutComplete())
+    q"()"
   }
 }

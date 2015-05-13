@@ -33,13 +33,14 @@ trait Definitions {
   val UniversalExtractorClass = staticClass("offheap.internal.UniversalExtractor")
   val FieldClass              = staticClass("offheap.internal.Field")
   val AnnotsClass             = staticClass("offheap.internal.Annots")
+  val CompleteClass           = staticClass("offheap.internal.Complete")
 
   val RegionModule    = staticModule("offheap.Region")
   val PoolModule      = staticModule("offheap.Pool")
   val ArrayModule     = staticModule("offheap.Array")
   val SanitizerModule = staticModule("offheap.internal.Sanitizer")
   val MethodModule    = staticModule("offheap.internal.Method")
-  val FieldModule     = staticModule("offheap.internal.Field")
+  val LayoutModule    = staticModule("offheap.internal.Layout")
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
@@ -49,6 +50,7 @@ trait Definitions {
   val tag          = TermName("$tag")
   val addr         = TermName("$addr")
   val canUseMacros = TermName("$canUseMacros")
+  val complete     = TermName("$complete")
 
   val UNSAFE  = q"$internal.UnsafeHolder.UNSAFE"
   val CHECKED = q"$internal.CheckedHolder.CHECKED"

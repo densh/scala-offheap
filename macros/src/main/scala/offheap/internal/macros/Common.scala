@@ -5,6 +5,7 @@ package macros
 trait Common extends Definitions {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
+  import c.internal._, decorators._
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
@@ -21,7 +22,6 @@ trait Common extends Definitions {
   def fresh(pre: String): TermName = TermName(c.freshName(pre))
 
   def freshVal(pre: String, tpe: Type, value: Tree): ValDef = {
-    import c.internal._, c.internal.decorators._
     val name = fresh(pre)
     val sym = enclosingOwner.newTermSymbol(name).setInfo(tpe)
     val vd = valDef(sym, value)
@@ -67,9 +67,9 @@ trait Common extends Definitions {
 
   case class Field(name: String, after: Tree, tpe: Type,
                    annots: List[Tree], offset: Long) {
-    val isData    = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
-    val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
-    val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
+    lazy val isData    = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
+    lazy val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
+    lazy val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
   }
   object Field {
     implicit val lift: Liftable[Field] = Liftable { f =>
@@ -114,23 +114,28 @@ trait Common extends Definitions {
         case q"new $_(..${tpes: List[Type]})" :: Nil =>
           tpes.map(Clazz.unapply).flatten
       }.getOrElse(Nil)
-    lazy val size: Long =
+    lazy val size: Long = {
+      assertLayoutComplete(sym, s"$sym must be defined before it's used")
       if (isData) {
         val lastfield = fields.maxBy(_.offset)
         lastfield.offset + lastfield.size
       } else if (isEnum) {
         children.map(_.size).max
       } else unreachable
-    lazy val alignment: Long =
+    }
+    lazy val alignment: Long = {
+      assertLayoutComplete(sym, s"$sym must be defined before it's used")
       if (isData) {
         fields.map(f => alignmentOf(f.tpe)).max
       } else if (isEnum) {
         children.map(_.alignment).max
       } else unreachable
+    }
   }
   object Clazz {
     final case class Attachment(value: Boolean)
-    import c.internal._, decorators._
+    final case class InLayout()
+    final case class LayoutComplete()
     def is(tpe: Type): Boolean =
       is(tpe.widen.typeSymbol)
     def is(sym: Symbol): Boolean = {
@@ -248,7 +253,6 @@ trait Common extends Definitions {
   // TODO: handle non-function literal cases
   def appSubs(f: Tree, argValue: Tree, subs: Tree => Tree) = f match {
     case q"($param => $body)" =>
-      import c.internal._, c.internal.decorators._
       val q"$_ val $_: $argTpt = $_" = param
       changeOwner(body, f.symbol, enclosingOwner)
       val (arg, argDef) = argValue match {
@@ -299,6 +303,15 @@ trait Common extends Definitions {
     T match {
       case Allocatable() => ()
       case _             => abort(if (msg.isEmpty) s"$T is not allocatable" else msg)
+    }
+
+  def assertNotInLayout(sym: Symbol, msg: String) =
+    if (sym.attachments.get[Clazz.InLayout].nonEmpty)
+      abort(msg)
+
+  def assertLayoutComplete(sym: Symbol, msg: String) =
+    if (sym.attachments.get[Clazz.LayoutComplete].isEmpty) {
+      abort(msg)
     }
 
   def isEnum(T: Type): Boolean = ExtractEnum.unapply(T.typeSymbol).nonEmpty

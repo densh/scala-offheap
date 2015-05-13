@@ -115,7 +115,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       val annot: Tree =
         q"""
           new $FieldClass(${f.name.toString}, ..$props,
-                          $FieldModule.offset(..$props))
+                          $LayoutModule.field[$name](..$props))
         """
       prev = q"this.${f.name}"
       val accessor = q"""
@@ -200,6 +200,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       q"new $DataClass" ::
       extractorAnnots ::: rawMods.annotations
     )
+    val completeAnnot = q"new $CompleteClass($LayoutModule.markComplete[$name])"
 
     q"""
       $mods class $name private (
@@ -209,6 +210,9 @@ class Annotations(val c: whitebox.Context) extends Common {
 
         ..$accessors
         ..$initializer
+
+        @$completeAnnot
+        def $complete: $UnitClass = ()
 
         def isEmpty  = ${isNull(q"$addr")}
         def nonEmpty = ${notNull(q"$addr")}
@@ -366,7 +370,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
 
-        @$FieldClass(${tag.toString}, ..$tagprops, $FieldModule.offset(..$tagprops))
+        @$FieldClass(${tag.toString}, ..$tagprops, $LayoutModule.field[$name](..$tagprops))
         def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt]($addr, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]
