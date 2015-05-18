@@ -45,7 +45,7 @@ trait Definitions {
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
 
-  val initialize   = TermName("$initialize")
+  val initializer  = TermName("$initializer")
   val layout       = TermName("$layout")
   val tag          = TermName("$tag")
   val addr         = TermName("$addr")

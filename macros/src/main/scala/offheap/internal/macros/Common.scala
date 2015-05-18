@@ -93,12 +93,15 @@ trait Common extends Definitions {
   }
 
   final case class Clazz(sym: Symbol) {
+    lazy val tpe = sym.asType.toType
+    lazy val companion = tpe.typeSymbol.companion
     lazy val fields =
       sym.asType.toType.members.collect {
         case ExtractField(t :: Nil) =>
           val q"${f: Field}" = t
           f
       }.toList.sortBy(_.offset)
+    lazy val actualFields = if (tag.isEmpty) fields else fields.tail
     lazy val parents =
       ExtractParent.unapply(sym).toList.flatten.map {
         case q"new $_(${tpe: Type})" => tpe

@@ -144,10 +144,12 @@ class Annotations(val c: whitebox.Context) extends Common {
     val copyArgs = fields.collect { case f if f.isCtorField =>
       q"val ${f.name}: ${f.tpt} = this.${f.name}"
     }
-    val initializer = if (init.isEmpty) q"" else q"def $initialize = { ..$init }"
-    val args = fields.collect { case f if f.isCtorField =>
-      q"val ${f.name}: ${f.tpt} = ${f.default}"
+    val initializr = if (init.isEmpty) q"" else q"def $initializer = { ..$init }"
+    val applyArgs = fields.zipWithIndex.collect { case (f, i) if f.isCtorField =>
+      val name = TermName("_" + (i + 1))
+      q"val $name: ${f.tpt} = ${f.default}"
     }
+    val applyName = TermName("apply" + applyArgs.length)
     val unapplyTpt = if (argNames.isEmpty) tq"$BooleanClass" else tq"$name"
     val unapplyEmpty = if (argNames.isEmpty) q"false" else q"$termName.empty"
 
@@ -209,7 +211,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         import scala.language.experimental.{macros => $canUseMacros}
 
         ..$accessors
-        ..$initializer
+        ..$initializr
 
         @$completeAnnot
         def $complete: $UnitClass = ()
@@ -238,8 +240,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         val empty: $name                       = null.asInstanceOf[$name]
         def fromAddr($addr: $AddrTpe): $name   = new $name($addr)
         def toAddr($instance: $name): $AddrTpe = $instance.$addr
-        def apply(..$args)(implicit $alloc: $AllocatorClass): $name =
-          $MethodModule.allocate[$name]($alloc, ..$argNames)
+        def apply(..$applyArgs)(implicit alloc: $AllocatorClass): $name =
+          macro $internal.macros.Allocate.$applyName[$name]
         def unapply(scrutinee: $AnyClass): $unapplyTpt =
           macro $internal.macros.WhiteboxMethod.unapply[$name]
 

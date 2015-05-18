@@ -7,6 +7,7 @@ import scala.reflect.macros.blackbox
 class Method(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
+  import c.internal._, decorators._
 
   def nullChecked(addr: Tree, ifOk: Tree) =
     q"""
@@ -57,42 +58,74 @@ class Method(val c: blackbox.Context) extends Common {
     }
   }
 
-  // TODO: zero fields by default
-  def allocator[C: WeakTypeTag](alloc: Tree, args: Tree*): Tree = {
-    val C = wt[C]
-    val Clazz(clazz) = C
-    val tagValueOpt = clazz.tag.map(_.value)
-    val addr = fresh("addr")
-    val size =
-      if (clazz.fields.isEmpty) q"1"
-      else q"$offheap.sizeOfData[$C]"
-    val writes = clazz.fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
-      assign(q"$addr", f, arg)
+  object Allocation {
+    final case class Attachment(clazz: Clazz, args: List[Tree], alloc: Tree)
+    def apply(clazz: Clazz, args: List[Tree], alloc: Tree, result: Tree): Tree =
+      result.updateAttachment(Attachment(clazz, args, alloc))
+    def unapply(tree: Tree): Option[(Clazz, List[Tree], Tree)] = tree match {
+      case q"$inner: $_" =>
+        inner.attachments.get[Attachment].map { a => (a.clazz, a.args, a.alloc) }
+      case _ =>
+        None
     }
-    val newC = q"new $C($addr)"
-    val instantiate = C.members.find(_.name == initialize).map { _ =>
-      val instance = fresh("instance")
+  }
+
+  // TODO: zero memory in case of initializer presence
+  def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree]): Tree = {
+    val instance = fresh("instance")
+    val values = clazz.tag.map(_.value) ++: args
+    val writes = clazz.fields.zip(values).map { case (f, v) =>
+      v match {
+        // TODO: check that falloc and alloc are the same
+        case Allocation(fclazz, fargs, falloc) if f.isData =>
+          val faddr = fresh("addr")
+          // TODO: deeply flatten this blocks
+          // TODO: discard fromAddr call
+          // TODO: +0L
+          q"""
+            val $faddr = $addr + ${f.offset}
+            ..${initialize(fclazz, faddr, fargs)}
+          """
+        case _ =>
+          assign(q"$addr", f, v)
+      }
+    }
+    val newC = q"${clazz.companion}.fromAddr($addr)"
+    val instantiated = clazz.tpe.members.find(_.name == initializer).map { _ =>
       q"""
         val $instance = $newC
-        $instance.$initialize
+        $instance.$initializer
         $instance
       """
     }.getOrElse(newC)
     q"""
-      val $addr = $alloc.allocate($size)
       ..$writes
-      ..$instantiate
+      ..$instantiated
     """
+  }
+
+  def allocate(anyC: Any, anyArgs: Any, anyAlloc: Any): Tree = {
+    val C = anyC.asInstanceOf[Type]
+    val args = anyArgs.asInstanceOf[List[Tree]]
+    val alloc = anyAlloc.asInstanceOf[Tree]
+    val Clazz(clazz) = C
+    val size =
+      if (clazz.fields.isEmpty) q"1"
+      else q"$offheap.sizeOfData[${clazz.tpe}]"
+    val addr = fresh("addr")
+    Allocation(clazz, args, alloc, q"""
+      val $addr = $alloc.allocate($size)
+      ..${initialize(clazz, addr, args)}
+    """)
   }
 
   def toString[C: WeakTypeTag](self: Tree): Tree = {
     val C = wt[C]
     val Clazz(clazz) = C
-    val actualFields = if (clazz.tag.isEmpty) clazz.fields else clazz.fields.tail
     val sb = fresh("sb")
     val appends =
-      if (actualFields.isEmpty) Nil
-      else actualFields.flatMap { f =>
+      if (clazz.actualFields.isEmpty) Nil
+      else clazz.actualFields.flatMap { f =>
         List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
       }.init
     val path = (C :: clazz.parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
