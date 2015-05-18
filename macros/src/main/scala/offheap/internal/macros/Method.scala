@@ -58,7 +58,6 @@ class Method(val c: blackbox.Context) extends Common {
   }
 
   // TODO: zero fields by default
-  // TODO: zero-size data structures should not allocate any memory
   def allocator[C: WeakTypeTag](alloc: Tree, args: Tree*): Tree = {
     val C = wt[C]
     val Clazz(clazz) = C
