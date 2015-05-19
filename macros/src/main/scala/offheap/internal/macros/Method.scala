@@ -73,15 +73,19 @@ class Method(val c: blackbox.Context) extends Common {
   def flatten(trees: List[Tree]) =
     trees.reduceOption { (l, r) => q"..$l; ..$r" }.getOrElse(q"")
 
-  // TODO: zero memory in case of initializer presence
+  // TODO: make sure that 0L is a valid pointer from sanitizer point of view
   def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
-                 discardResult: Boolean): Tree = {
+                 discardResult: Boolean, prezeroed: Boolean): Tree = {
+    val (preamble, zeroed) =
+      if (!clazz.hasInit) (q"", prezeroed)
+      else if (clazz.size == 0L || prezeroed) (q"", prezeroed)
+      else (q"$MemoryModule.set($addr, ${clazz.size}, 0)", true)
     val values = clazz.tag.map(_.value) ++: args
     val writes = clazz.fields.zip(values).map { case (f, v) =>
       v match {
         case Allocation(fclazz, fargs, _) if f.isData =>
           def init(faddr: TermName) =
-            initialize(fclazz, faddr, fargs, discardResult = true)
+            initialize(fclazz, faddr, fargs, discardResult = true, prezeroed = zeroed)
           if (f.offset == 0)
             init(addr)
           else {
@@ -96,18 +100,18 @@ class Method(val c: blackbox.Context) extends Common {
       }
     }
     val newC = q"${clazz.companion}.fromAddr($addr)"
-    val instantiated = clazz.tpe.members.find(_.name == initializer).map { _ =>
-      q"$newC.$initializer"
-    }.getOrElse {
-      if (discardResult) q"" else newC
-    }
+    val instantiated =
+      if (clazz.hasInit) q"$newC.$initializer"
+      else if (discardResult) q""
+      else newC
     q"""
+      ..$preamble
       ..${flatten(writes)}
       ..$instantiated
     """
   }
 
-  def allocate(anyC: Any, anyArgs: Any, anyAlloc: Any): Tree = {
+  def allocate(anyC: Any, anyArgs: Any, anyAlloc: Any): Tree = debug(s"allocate $anyC") {
     val C = anyC.asInstanceOf[Type]
     val args = anyArgs.asInstanceOf[List[Tree]]
     val alloc = anyAlloc.asInstanceOf[Tree]
@@ -118,7 +122,7 @@ class Method(val c: blackbox.Context) extends Common {
     val addr = fresh("addr")
     Allocation(clazz, args, alloc, q"""
       val $addr = $alloc.allocate($size)
-      ..${initialize(clazz, addr, args, discardResult = false)}
+      ..${initialize(clazz, addr, args, discardResult = false, prezeroed = false)}
     """)
   }
 

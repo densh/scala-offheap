@@ -94,6 +94,7 @@ trait Common extends Definitions {
 
   final case class Clazz(sym: Symbol) {
     lazy val tpe = sym.asType.toType
+    lazy val hasInit = tpe.members.find(_.name == initializer).nonEmpty
     lazy val companion = tpe.typeSymbol.companion
     lazy val fields =
       sym.asType.toType.members.collect {

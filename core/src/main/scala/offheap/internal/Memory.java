@@ -10,7 +10,9 @@ public class Memory {
     public static void copy(long from, long to, long size) {
         UNSAFE.copyMemory(validate(from), validate(to), size);
     }
-
+    public static void set(long from, long size, byte value) {
+        UNSAFE.setMemory(from, size, value);
+    }
     public static char getChar(long addr) {
         return UNSAFE.getChar(validate(addr));
     }
@@ -32,7 +34,6 @@ public class Memory {
     public static double getDouble(long addr) {
         return UNSAFE.getDouble(validate(addr));
     }
-
     public static void putChar(long addr, char value) {
         UNSAFE.putChar(validate(addr), value);
     }
