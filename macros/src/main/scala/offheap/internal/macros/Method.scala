@@ -73,7 +73,6 @@ class Method(val c: blackbox.Context) extends Common {
   def flatten(trees: List[Tree]) =
     trees.reduceOption { (l, r) => q"..$l; ..$r" }.getOrElse(q"")
 
-  // TODO: make sure that 0L is a valid pointer from sanitizer point of view
   def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
                  discardResult: Boolean, prezeroed: Boolean): Tree = {
     val (preamble, zeroed) =

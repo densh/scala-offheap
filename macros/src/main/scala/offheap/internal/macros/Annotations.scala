@@ -18,8 +18,10 @@ class Annotations(val c: whitebox.Context) extends Common {
     def isCtorField = vd.mods.hasFlag(PARAMACCESSOR)
   }
 
-  // TODO: modifiers propagation and checking
+  // TODO: improve modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
+  // TODO: validate that fields are not called _N
+  // TODO: validate that there is not more than 64 fields
   def dataTransform(clazz: Tree, companion: Tree) = {
     // Parse the input trees
     val q"""
