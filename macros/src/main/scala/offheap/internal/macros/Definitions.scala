@@ -41,17 +41,17 @@ trait Definitions {
   val SanitizerModule = staticModule("offheap.internal.Sanitizer")
   val MethodModule    = staticModule("offheap.internal.Method")
   val LayoutModule    = staticModule("offheap.internal.Layout")
+  val MemoryModule    = staticModule("offheap.internal.Memory")
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
 
-  val initializer  = TermName("$initializer")
+  val initializer  = TermName("$init")
   val layout       = TermName("$layout")
   val tag          = TermName("$tag")
   val addr         = TermName("$addr")
   val canUseMacros = TermName("$canUseMacros")
   val complete     = TermName("$complete")
 
-  val UNSAFE  = q"$internal.UnsafeHolder.UNSAFE"
   val CHECKED = q"$internal.CheckedHolder.CHECKED"
 }

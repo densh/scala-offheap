@@ -144,7 +144,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val copyArgs = fields.collect { case f if f.isCtorField =>
       q"val ${f.name}: ${f.tpt} = this.${f.name}"
     }
-    val initializr = if (init.isEmpty) q"" else q"def $initializer = { ..$init }"
+    val initializr = if (init.isEmpty) q"" else q"def $initializer = { ..$init; this }"
     val applyArgs = fields.zipWithIndex.collect { case (f, i) if f.isCtorField =>
       val name = TermName("_" + (i + 1))
       q"val $name: ${f.tpt} = ${f.default}"

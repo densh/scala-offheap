@@ -39,10 +39,10 @@ class Method(val c: blackbox.Context) extends Common {
   def assign(addr: Tree, f: Field, value: Tree) =
     if (f.isData) {
       val companion = f.tpe.typeSymbol.companion
-      val from      = validate(q"$companion.toAddr($value)")
-      val to        = validate(q"$addr + ${f.offset}")
+      val from      = q"$companion.toAddr($value)"
+      val to        = q"$addr + ${f.offset}"
       val size      = sizeOfData(f.tpe)
-      q"$UNSAFE.copyMemory($from, $to, $size)"
+      q"$MemoryModule.copy($from, $to, $size)"
     } else write(q"$addr + ${f.offset}", f.tpe, value)
 
   def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
@@ -70,36 +70,39 @@ class Method(val c: blackbox.Context) extends Common {
     }
   }
 
+  def flatten(trees: List[Tree]) =
+    trees.reduceOption { (l, r) => q"..$l; ..$r" }.getOrElse(q"")
+
   // TODO: zero memory in case of initializer presence
-  def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree]): Tree = {
-    val instance = fresh("instance")
+  def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
+                 discardResult: Boolean): Tree = {
     val values = clazz.tag.map(_.value) ++: args
     val writes = clazz.fields.zip(values).map { case (f, v) =>
       v match {
-        // TODO: check that falloc and alloc are the same
-        case Allocation(fclazz, fargs, falloc) if f.isData =>
-          val faddr = fresh("addr")
-          // TODO: deeply flatten this blocks
-          // TODO: discard fromAddr call
-          // TODO: +0L
-          q"""
-            val $faddr = $addr + ${f.offset}
-            ..${initialize(fclazz, faddr, fargs)}
-          """
+        case Allocation(fclazz, fargs, _) if f.isData =>
+          def init(faddr: TermName) =
+            initialize(fclazz, faddr, fargs, discardResult = true)
+          if (f.offset == 0)
+            init(addr)
+          else {
+            val faddr = fresh("addr")
+            q"""
+              val $faddr = $addr + ${f.offset}
+              ..${init(faddr)}
+            """
+          }
         case _ =>
           assign(q"$addr", f, v)
       }
     }
     val newC = q"${clazz.companion}.fromAddr($addr)"
     val instantiated = clazz.tpe.members.find(_.name == initializer).map { _ =>
-      q"""
-        val $instance = $newC
-        $instance.$initializer
-        $instance
-      """
-    }.getOrElse(newC)
+      q"$newC.$initializer"
+    }.getOrElse {
+      if (discardResult) q"" else newC
+    }
     q"""
-      ..$writes
+      ..${flatten(writes)}
       ..$instantiated
     """
   }
@@ -115,7 +118,7 @@ class Method(val c: blackbox.Context) extends Common {
     val addr = fresh("addr")
     Allocation(clazz, args, alloc, q"""
       val $addr = $alloc.allocate($size)
-      ..${initialize(clazz, addr, args)}
+      ..${initialize(clazz, addr, args, discardResult = false)}
     """)
   }
 

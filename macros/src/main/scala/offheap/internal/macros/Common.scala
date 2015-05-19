@@ -215,42 +215,34 @@ trait Common extends Definitions {
     case _            => abort(s"$tpe is not an offheap class")
   }
 
-  def validate(addr: Tree) = q"$SanitizerModule.validate($addr)"
-
-  def read(addr: Tree, tpe: Type): Tree = {
-    val vaddr = validate(addr)
-    tpe match {
-      case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-        val getT = TermName(s"get$tpe")
-        q"$UNSAFE.$getT($vaddr)"
-      case BooleanTpe =>
-        q"$UNSAFE.getByte($vaddr) != ${Literal(Constant(0.toByte))}"
-      case ArrayOf(tpe) =>
-        q"$ArrayModule.fromAddr[$tpe]($UNSAFE.getLong($vaddr))"
-      case Clazz(_) =>
-        val companion = tpe.typeSymbol.companion
-        q"$companion.fromAddr($UNSAFE.getLong($vaddr))"
-    }
+  def read(addr: Tree, tpe: Type): Tree = tpe match {
+    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+      val getT = TermName(s"get$tpe")
+      q"$MemoryModule.$getT($addr)"
+    case BooleanTpe =>
+      q"$MemoryModule.getByte($addr) != ${Literal(Constant(0.toByte))}"
+    case ArrayOf(tpe) =>
+      q"$ArrayModule.fromAddr[$tpe]($MemoryModule.getLong($addr))"
+    case Clazz(_) =>
+      val companion = tpe.typeSymbol.companion
+      q"$companion.fromAddr($MemoryModule.getLong($addr))"
   }
 
-  def write(addr: Tree, tpe: Type, value: Tree): Tree = {
-    val vaddr = validate(addr)
-    tpe match {
-      case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-        val putT = TermName(s"put$tpe")
-        q"$UNSAFE.$putT($vaddr, $value)"
-      case BooleanTpe =>
-        q"""
-          $UNSAFE.putByte($vaddr,
-                          if ($value) ${Literal(Constant(1.toByte))}
-                          else ${Literal(Constant(0.toByte))})
-        """
-      case ArrayOf(_) =>
-        q"$UNSAFE.putLong($vaddr, $ArrayModule.toAddr($value))"
-      case Clazz(_) =>
-        val companion = tpe.typeSymbol.companion
-        q"$UNSAFE.putLong($vaddr, $companion.toAddr($value))"
-    }
+  def write(addr: Tree, tpe: Type, value: Tree): Tree = tpe match {
+    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+      val putT = TermName(s"put$tpe")
+      q"$MemoryModule.$putT($addr, $value)"
+    case BooleanTpe =>
+      q"""
+        $MemoryModule.putByte($addr,
+                              if ($value) ${Literal(Constant(1.toByte))}
+                              else ${Literal(Constant(0.toByte))})
+      """
+    case ArrayOf(_) =>
+      q"$MemoryModule.putLong($addr, $ArrayModule.toAddr($value))"
+    case Clazz(_) =>
+      val companion = tpe.typeSymbol.companion
+      q"$MemoryModule.putLong($addr, $companion.toAddr($value))"
   }
 
   // TODO: handle non-function literal cases
