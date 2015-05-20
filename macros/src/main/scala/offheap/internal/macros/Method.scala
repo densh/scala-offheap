@@ -76,8 +76,7 @@ class Method(val c: blackbox.Context) extends Common {
   def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
                  discardResult: Boolean, prezeroed: Boolean): Tree = {
     val (preamble, zeroed) =
-      if (!clazz.hasInit) (q"", prezeroed)
-      else if (clazz.fields.filter(_.inBody).isEmpty || prezeroed) (q"", prezeroed)
+      if (clazz.fields.filter(_.inBody).isEmpty || prezeroed) (q"", prezeroed)
       else (q"$MemoryModule.zero($addr, ${clazz.size})", true)
     val values = clazz.tag.map(_.value) ++: args
     val writes = clazz.fields.zip(values).map { case (f, v) =>

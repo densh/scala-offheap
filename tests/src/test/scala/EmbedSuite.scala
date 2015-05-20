@@ -6,6 +6,9 @@ import offheap._
 @data class Inner(var v: Int)
 @data class Outer(@embed var inner: Inner)
 
+@data class Inner2(v: Long)
+@data class Outer2 { @embed var inner: Inner2 = _ }
+
 class EmbedSuite extends FunSuite {
   implicit val alloc = Allocator()
 
@@ -42,5 +45,9 @@ class EmbedSuite extends FunSuite {
     intercept[NullPointerException] {
       outer.inner = Inner.empty
     }
+  }
+
+  test("default init in-body var") {
+    assert(Outer2().inner.v == 0L)
   }
 }

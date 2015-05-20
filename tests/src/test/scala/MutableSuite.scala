@@ -20,6 +20,10 @@ object C4 {
   var after = 0
 }
 
+@data class C5 {
+  var x: Long = _
+}
+
 class MutableSuite extends FunSuite {
   implicit val alloc = Allocator()
 
@@ -47,5 +51,9 @@ class MutableSuite extends FunSuite {
     val c4 = C4()
     assert(C4.before == 0)
     assert(C4.after == 42)
+  }
+
+  test("default init var") {
+    assert(C5().x == 0L)
   }
 }

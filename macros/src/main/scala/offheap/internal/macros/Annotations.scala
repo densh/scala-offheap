@@ -102,9 +102,9 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       tagField ++ argFields ++ bodyFields
     }
-    val init = rawStats.collect {
-      case t if t.isTerm               => t
-      case ValDef(_, vname, tpt, value) =>
+    val initStats = rawStats.collect {
+      case t if t.isTerm => t
+      case ValDef(mods, vname, tpt, value) if !mods.hasFlag(DEFAULTINIT) =>
         q"$MethodModule.assign[$name, $tpt]($addr, ${vname.toString}, $value)"
     }
     val methods = rawStats.collect { case t: DefDef => t }
@@ -151,7 +151,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val copyArgs = fields.collect { case f if f.inCtor =>
       q"val ${f.name}: ${f.tpt} = this.${f.name}"
     }
-    val initializr = if (init.isEmpty) q"" else q"def $initializer = { ..$init; this }"
+    val init = if (initStats.isEmpty) q"" else q"def $initializer = { ..$initStats; this }"
     val applyArgs = fields.zipWithIndex.collect { case (f, i) if f.inCtor =>
       val name = TermName("_" + (i + 1))
       q"val $name: ${f.tpt} = ${f.default}"
@@ -218,7 +218,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         import scala.language.experimental.{macros => $canUseMacros}
 
         ..$accessors
-        ..$initializr
+        ..$init
 
         @$completeAnnot
         def $complete: $UnitClass = ()
