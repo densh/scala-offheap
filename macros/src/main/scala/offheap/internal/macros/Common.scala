@@ -299,11 +299,15 @@ trait Common extends Definitions {
   def paramTpe(tpe: Type): Type = tpe.typeArgs.head
   def paramTpe(t: Tree): Type   = paramTpe(t.tpe)
 
-  def assertAllocatable(T: Type, msg: String = ""): Unit =
-    T match {
-      case Allocatable() => ()
-      case _             => abort(if (msg.isEmpty) s"$T is not allocatable" else msg)
-    }
+  def assertAllocatable(T: Type, msg: String = ""): Unit = T match {
+    case Allocatable() => ()
+    case _             => abort(if (msg.isEmpty) s"$T is not allocatable" else msg)
+  }
+
+  def assertEmbeddable(T: Type): Unit = T match {
+    case Clazz(_) => ()
+    case _        => abort(s"$T can not be embedded as it is not an offheap class")
+  }
 
   def assertNotInLayout(sym: Symbol, msg: String) =
     if (sym.attachments.get[Clazz.InLayout].nonEmpty)

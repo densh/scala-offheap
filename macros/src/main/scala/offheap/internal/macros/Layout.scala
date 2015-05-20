@@ -25,7 +25,11 @@ class Layout(val c: blackbox.Context) extends Common {
         prev.offset + prev.size
     }
     val isData = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
-    val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
+    val alignment =
+      if (isData) {
+        assertEmbeddable(tpe)
+        alignmentOfData(tpe)
+      } else alignmentOf(tpe)
     val padding =
       if (baseoffset % alignment == 0) 0
       else alignment - baseoffset % alignment

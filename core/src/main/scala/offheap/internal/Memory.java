@@ -28,7 +28,7 @@ public class Memory {
         UNSAFE.copyMemory(validate(from), validate(to), size);
     }
     public static void zero(long addr, long size) {
-        UNSAFE.setMemory(addr, size, (byte) 0);
+        UNSAFE.setMemory(validate(addr), size, (byte) 0);
     }
     public static char getChar(long addr) {
         return UNSAFE.getChar(validate(addr));

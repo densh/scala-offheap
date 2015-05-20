@@ -22,7 +22,6 @@ class Annotations(val c: whitebox.Context) extends Common {
   // TODO: improve modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
   // TODO: validate that fields are not called _N
-  // TODO: validate that there is not more than 64 fields
   def dataTransform(clazz: Tree, companion: Tree) = {
     // Parse the input trees
     val q"""
@@ -49,6 +48,8 @@ class Annotations(val c: whitebox.Context) extends Common {
     if (rawRestArgs.nonEmpty)
       abort("data classes may not have more than one argument list",
             at = rawRestArgs.head.head.pos)
+    if (rawArgs.length > 64)
+      abort("data classes may not have more than 64 constructor arguments")
     rawArgs.headOption.foreach { arg =>
       if (arg.mods.hasFlag(IMPLICIT))
         abort("data classes may not have implicit arguments", at = arg.pos)
