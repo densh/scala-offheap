@@ -3,7 +3,7 @@ package internal
 
 import java.{lang => jl}
 import internal.CheckedHolder.CHECKED
-import internal.UnsafeHolder.UNSAFE
+import internal.Memory.UNSAFE
 
 // TODO: ensure that 0L is always a valid address
 // TODO: throw an exception once there is more than MAX allocators registered
