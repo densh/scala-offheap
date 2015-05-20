@@ -6,35 +6,38 @@ import scala.reflect.macros.blackbox
 
 class Layout(val c: blackbox.Context) extends Common {
   import c.universe.{weakTypeOf => wt, _}
+  import c.internal._, decorators._
 
-  def unwrap(pairs: Seq[Tree]): Seq[Field] =
-    try pairs.map {
-      case q"(${name: String}, ${Literal(Constant(tpe: Type))})" =>
-        Field(name, tpe, -1)
-    } catch {
-      case _: MatchError =>
-        abort(s"expected a static sequence of pairs but got $pairs")
-    }
-
-  def wrap(fields: Seq[Field]): Tree = q"new $FieldsClass(..$fields)"
-
-  def align(fields: Seq[Field]): Seq[Field] = {
-    var lastoffset = 0L
-    val offsetMap = fields.map { f =>
-      val tpealignment = alignmentOf(f.tpe)
-      val padding =
-        if (lastoffset % tpealignment == 0) 0
-        else tpealignment - lastoffset % tpealignment
-      val offset = lastoffset + padding
-      lastoffset = offset + sizeOf(f.tpe)
-      (f, offset)
-    }.toMap
-    fields.map { f => f.copy(offset = offsetMap(f)) }
+  def inLayout(tpe: Type)(f: => Tree) = {
+    tpe.typeSymbol.updateAttachment(Clazz.InLayout())
+    val res = f
+    tpe.typeSymbol.removeAttachment[Clazz.InLayout]
+    f
   }
 
-  def perform[C: WeakTypeTag](pairs: Tree*) = {
-    import c.internal._, decorators._
-    wt[C].typeSymbol.updateAttachment(IsClass(true))
-    wrap(align(unwrap(pairs)))
+  def field[C: WeakTypeTag](after: Tree, tag: Tree, annots: Tree) = inLayout(wt[C]) {
+    val q"${tpe: Type}" = tag
+    assertNotInLayout(tpe.typeSymbol, "illegal recursive embedding")
+    val baseoffset = after match {
+      case q"" => 0
+      case _   =>
+        val q"${prev: Field}" = ExtractField.unapply(c.typecheck(after).symbol).get.head
+        prev.offset + prev.size
+    }
+    val isData = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
+    val alignment =
+      if (isData) {
+        assertEmbeddable(tpe)
+        alignmentOfData(tpe)
+      } else alignmentOf(tpe)
+    val padding =
+      if (baseoffset % alignment == 0) 0
+      else alignment - baseoffset % alignment
+    q"${baseoffset + padding}"
+  }
+
+  def markComplete[C: WeakTypeTag] = {
+    wt[C].typeSymbol.updateAttachment(Clazz.LayoutComplete())
+    q"()"
   }
 }

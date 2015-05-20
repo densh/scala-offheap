@@ -9,23 +9,19 @@ class Annotations(val c: whitebox.Context) extends Common {
   import c.universe.definitions._
   import Flag._
 
-  def performLayout(C: Tree, fields: List[SyntacticField]): Tree = {
-    val tuples = fields.map { f =>
-      q"(${f.name.toString}, $PredefModule.classOf[${f.tpt}])"
-    }
-    q"new $LayoutClass($FieldsModule.layout[$C](..$tuples))"
-  }
-
   implicit class SyntacticField(vd: ValDef) {
-    def name        = vd.name
-    def tpt         = vd.tpt
-    def default     = vd.rhs
-    def isMutable   = vd.mods.hasFlag(MUTABLE)
-    def isCtorField = vd.mods.hasFlag(PARAMACCESSOR)
+    def mods      = vd.mods
+    def name      = vd.name
+    def tpt       = vd.tpt
+    def default   = vd.rhs
+    def isMutable = vd.mods.hasFlag(MUTABLE)
+    def inCtor    = vd.mods.hasFlag(PARAMACCESSOR)
+    def inBody    = !inCtor
   }
 
-  // TODO: modifiers propagation and checking
+  // TODO: improve modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
+  // TODO: validate that fields are not called _N
   def dataTransform(clazz: Tree, companion: Tree) = {
     // Parse the input trees
     val q"""
@@ -52,6 +48,8 @@ class Annotations(val c: whitebox.Context) extends Common {
     if (rawRestArgs.nonEmpty)
       abort("data classes may not have more than one argument list",
             at = rawRestArgs.head.head.pos)
+    if (rawArgs.length > 64)
+      abort("data classes may not have more than 64 constructor arguments")
     rawArgs.headOption.foreach { arg =>
       if (arg.mods.hasFlag(IMPLICIT))
         abort("data classes may not have implicit arguments", at = arg.pos)
@@ -104,18 +102,31 @@ class Annotations(val c: whitebox.Context) extends Common {
       }
       tagField ++ argFields ++ bodyFields
     }
-    val init = rawStats.collect {
-      case t if t.isTerm               => t
-      case ValDef(_, vname, tpt, value) =>
+    val initStats = rawStats.collect {
+      case t if t.isTerm => t
+      case ValDef(mods, vname, tpt, value) if !mods.hasFlag(DEFAULTINIT) =>
         q"$MethodModule.assign[$name, $tpt]($addr, ${vname.toString}, $value)"
     }
     val methods = rawStats.collect { case t: DefDef => t }
     val types = rawStats.collect { case t: TypeDef => t }
 
     // Generate additional members
+    var prev = q""
     val accessors = fields.flatMap { f =>
+      val ctorAnnot =
+        if (f.inCtor) q"new $CtorClass"
+        else q""
+      val props =
+        prev :: classOf(f.tpt) ::
+        q"new $AnnotsClass(..$ctorAnnot, ..${f.mods.annotations})" :: Nil
+      val annot: Tree =
+        q"""
+          new $FieldClass(${f.name.toString}, ..$props,
+                          $LayoutModule.field[$name](..$props))
+        """
+      prev = q"this.${f.name}"
       val accessor = q"""
-        def ${f.name}: ${f.tpt} =
+        @$annot def ${f.name}: ${f.tpt} =
           $MethodModule.access[$name, ${f.tpt}]($addr, ${f.name.toString})
       """
       val assignerName = TermName(f.name.toString + "_$eq")
@@ -126,7 +137,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       if (!f.isMutable) accessor :: Nil
       else accessor :: assigner :: Nil
     }
-    val argNames = fields.collect { case f if f.isCtorField => f.name }
+    val argNames = fields.collect { case f if f.inCtor => f.name }
     val _ns = argNames.zipWithIndex.map {
       case (argName, i) =>
         val _n = TermName("_" + (i + 1))
@@ -137,13 +148,15 @@ class Annotations(val c: whitebox.Context) extends Common {
       case head :: Nil  => q"this.$head"
       case head :: tail => q"this"
     }
-    val copyArgs = fields.collect { case f if f.isCtorField =>
+    val copyArgs = fields.collect { case f if f.inCtor =>
       q"val ${f.name}: ${f.tpt} = this.${f.name}"
     }
-    val initializer = if (init.isEmpty) q"" else q"def $initialize = { ..$init }"
-    val args = fields.collect { case f if f.isCtorField =>
-      q"val ${f.name}: ${f.tpt} = ${f.default}"
+    val init = if (initStats.isEmpty) q"" else q"def $initializer = { ..$initStats; this }"
+    val applyArgs = fields.zipWithIndex.collect { case (f, i) if f.inCtor =>
+      val name = TermName("_" + (i + 1))
+      q"val $name: ${f.tpt} = ${f.default}"
     }
+    val applyName = TermName("apply" + applyArgs.length)
     val unapplyTpt = if (argNames.isEmpty) tq"$BooleanClass" else tq"$name"
     val unapplyEmpty = if (argNames.isEmpty) q"false" else q"$termName.empty"
 
@@ -161,7 +174,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       val isC = q"$scrutinee.is[$name]"
       val asC = q"$scrutinee.as[$name]"
       val body =
-        if (fields.filter(_.isCtorField).isEmpty) isC
+        if (fields.filter(_.inCtor).isEmpty) isC
         else q"if ($isC) $termName.${primaryExtractor.name}.unapply($asC) else $termName.empty"
       q"""
         object $extractor {
@@ -188,15 +201,15 @@ class Annotations(val c: whitebox.Context) extends Common {
       q"new $PrimaryExtractorClass($termName.${primaryExtractor.name})" ::
       q"new $UniversalExtractorClass($termName.${universalExtractor.name})" ::
       parents.zip(parentExtractors).map { case (p, u) =>
-        q"new $ParentExtractorClass($PredefModule.classOf[$p], $termName.${u.name})"
+        q"new $ParentExtractorClass(${classOf(p)}, $termName.${u.name})"
       }
-    val layoutAnnot = performLayout(tq"$name", fields)
     val mods = Modifiers(
       (rawMods.flags.asInstanceOf[Long] & Flag.FINAL.asInstanceOf[Long]).asInstanceOf[FlagSet],
       rawMods.privateWithin,
-      q"new $DataClass" :: layoutAnnot ::
+      q"new $DataClass" ::
       extractorAnnots ::: rawMods.annotations
     )
+    val completeAnnot = q"new $CompleteClass($LayoutModule.markComplete[$name])"
 
     q"""
       $mods class $name private (
@@ -204,8 +217,11 @@ class Annotations(val c: whitebox.Context) extends Common {
       ) extends $AnyValClass with ..$traits { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
 
-        ..$initializer
         ..$accessors
+        ..$init
+
+        @$completeAnnot
+        def $complete: $UnitClass = ()
 
         def isEmpty  = ${isNull(q"$addr")}
         def nonEmpty = ${notNull(q"$addr")}
@@ -231,8 +247,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         val empty: $name                       = null.asInstanceOf[$name]
         def fromAddr($addr: $AddrTpe): $name   = new $name($addr)
         def toAddr($instance: $name): $AddrTpe = $instance.$addr
-        def apply(..$args)(implicit $alloc: $AllocatorClass): $name =
-          $MethodModule.allocate[$name]($alloc, ..$argNames)
+        def apply(..$applyArgs)(implicit alloc: $AllocatorClass): $name =
+          macro $internal.macros.Allocate.$applyName[$name]
         def unapply(scrutinee: $AnyClass): $unapplyTpt =
           macro $internal.macros.WhiteboxMethod.unapply[$name]
 
@@ -315,16 +331,18 @@ class Annotations(val c: whitebox.Context) extends Common {
       else
         q"$value: $IntClass"
 
-    var count: Int = 0
+    var count = 0
+    var children = List.empty[Tree]
     def parentAnnot =
-      q"new $ParentClass($PredefModule.classOf[$name])"
+      q"new $ParentClass(${classOf(tq"$name")})"
     def classTagAnnot =
       q"new $ClassTagClass(${const(count)})"
     def classTagRangeAnnot(start: Int) =
       q"new $ClassTagRangeClass(${const(start)}, ${const(count)})"
-    def transformStats(stats: List[Tree]): List[Tree] = stats.map {
+    def transformStats(pre: Tree, stats: List[Tree]): List[Tree] = stats.map {
       case c: ClassDef =>
         count += 1
+        children ::= tq"$pre.${c.name}"
         val mods = c.mods.mapAnnotations { anns =>
           if (parentAnnots.nonEmpty) parentAnnot :: anns
           else parentAnnot :: classTagAnnot :: anns
@@ -333,7 +351,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       case m: ModuleDef =>
         val start = count
         val impl = treeCopy.Template(m.impl, m.impl.parents, m.impl.self,
-                                     transformStats(m.impl.body))
+                                     transformStats(q"$pre.${m.name}", m.impl.body))
         val mods = m.mods.mapAnnotations { anns =>
           if (parentAnnots.nonEmpty) parentAnnot :: anns
           else parentAnnot :: classTagRangeAnnot(start) :: anns
@@ -342,20 +360,26 @@ class Annotations(val c: whitebox.Context) extends Common {
       case other =>
         other
     }
-    val stats = transformStats(rawStats)
+    val stats = transformStats(q"$termName", rawStats)
 
+    val childrenTypes  = children.map { c => q"$PredefModule.classOf[$c]" }
+    val childrenAnnot  = q"new $PotentialChildrenClass(..$childrenTypes)"
     val rangeAnnot =
       if (parentAnnots.nonEmpty) rangeAnnotOpt.get
       else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
     val q"$_: $tagTpt" = const(0)
-    val layoutAnnot    = performLayout(tq"$name", List(new SyntacticField(q"val $tag: $tagTpt")))
-    val annots         = q"new $EnumClass" :: rangeAnnot :: layoutAnnot :: parentAnnots
+    val annots         = q"new $EnumClass" :: rangeAnnot ::
+                         childrenAnnot :: parentAnnots
+
+    val tagprops = q"" :: classOf(tagTpt) :: q"new $AnnotsClass()" :: Nil
 
     q"""
       @..$annots final class $name private(
         private val $addr: $AddrTpe
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
+
+        @$FieldClass(${tag.toString}, ..$tagprops, $LayoutModule.field[$name](..$tagprops))
         def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt]($addr, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]

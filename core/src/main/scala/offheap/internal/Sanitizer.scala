@@ -3,8 +3,10 @@ package internal
 
 import java.{lang => jl}
 import internal.CheckedHolder.CHECKED
-import internal.UnsafeHolder.UNSAFE
+import internal.Memory.UNSAFE
 
+// TODO: ensure that 0L is always a valid address
+// TODO: throw an exception once there is more than MAX allocators registered
 object Sanitizer {
   private[this] final val UNPACKED_ID_MASK = 65535L
   private[this] final val ID_MASK = jl.Long.MAX_VALUE << 48

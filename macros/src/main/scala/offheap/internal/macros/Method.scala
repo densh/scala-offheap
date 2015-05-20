@@ -7,6 +7,7 @@ import scala.reflect.macros.blackbox
 class Method(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
+  import c.internal._, decorators._
 
   def nullChecked(addr: Tree, ifOk: Tree) =
     q"""
@@ -15,72 +16,121 @@ class Method(val c: blackbox.Context) extends Common {
       $ifOk
     """
 
+  def access(addr: Tree, f: Field) =
+    if (f.isData) {
+      val companion = f.tpe.typeSymbol.companion
+      q"$companion.fromAddr($addr + ${f.offset})"
+    } else
+      read(q"$addr + ${f.offset}", f.tpe)
+
   def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
     val C = wt[C]
     assertAllocatable(C)
-    val ClassOf(fields, _, _) = C
+    val Clazz(clazz) = C
     val q"${nameStr: String}" = name
-    fields.collectFirst {
+    clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, read(q"$addr + ${f.offset}", f.tpe))
+        nullChecked(addr, access(addr, f))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }
   }
+
+  def assign(addr: Tree, f: Field, value: Tree) =
+    if (f.isData) {
+      val companion = f.tpe.typeSymbol.companion
+      val from      = q"$companion.toAddr($value)"
+      val to        = q"$addr + ${f.offset}"
+      val size      = sizeOfData(f.tpe)
+      nullChecked(from, q"$MemoryModule.copy($from, $to, $size)")
+    } else write(q"$addr + ${f.offset}", f.tpe, value)
 
   def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
     val C = wt[C]
     assertAllocatable(C)
-    val ClassOf(fields, _, _) = C
+    val Clazz(clazz) = C
     val q"${nameStr: String}" = name
-    fields.collectFirst {
+    clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, write(q"$addr + ${f.offset}", f.tpe, value))
+        nullChecked(addr, assign(addr, f, value))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }
   }
 
-  // TODO: zero fields by default
-  // TODO: zero-size data structures should not allocate any memory
-  def allocator[C: WeakTypeTag](alloc: Tree, args: Tree*): Tree = {
-    val C = wt[C]
-    val ClassOf(fields, _, tagOpt) = C
-    val tagValueOpt = tagOpt.map { case (v, tpt) => v }
-    val addr = fresh("addr")
-    val size =
-      if (fields.isEmpty) q"1"
-      else q"$offheap.sizeOfData[$C]"
-    val writes = fields.zip(tagValueOpt ++: args).map { case (f, arg) =>
-      write(q"$addr + ${f.offset}", f.tpe, arg)
+  object Allocation {
+    final case class Attachment(clazz: Clazz, args: List[Tree], alloc: Tree)
+    def apply(clazz: Clazz, args: List[Tree], alloc: Tree, result: Tree): Tree =
+      result.updateAttachment(Attachment(clazz, args, alloc))
+    def unapply(tree: Tree): Option[(Clazz, List[Tree], Tree)] = tree match {
+      case q"$inner: $_" =>
+        inner.attachments.get[Attachment].map { a => (a.clazz, a.args, a.alloc) }
+      case _ =>
+        None
     }
-    val newC = q"new $C($addr)"
-    val instantiate = C.members.find(_.name == initialize).map { _ =>
-      val instance = fresh("instance")
-      q"""
-        val $instance = $newC
-        $instance.$initialize
-        $instance
-      """
-    }.getOrElse(newC)
+  }
+
+  def flatten(trees: List[Tree]) =
+    trees.reduceOption { (l, r) => q"..$l; ..$r" }.getOrElse(q"")
+
+  def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
+                 discardResult: Boolean, prezeroed: Boolean): Tree = {
+    val (preamble, zeroed) =
+      if (clazz.fields.filter(_.inBody).isEmpty || prezeroed) (q"", prezeroed)
+      else (q"$MemoryModule.zero($addr, ${clazz.size})", true)
+    val values = clazz.tag.map(_.value) ++: args
+    val writes = clazz.fields.zip(values).map { case (f, v) =>
+      v match {
+        case Allocation(fclazz, fargs, _) if f.isData =>
+          def init(faddr: TermName) =
+            initialize(fclazz, faddr, fargs, discardResult = true, prezeroed = zeroed)
+          if (f.offset == 0)
+            init(addr)
+          else {
+            val faddr = fresh("addr")
+            q"""
+              val $faddr = $addr + ${f.offset}
+              ..${init(faddr)}
+            """
+          }
+        case _ =>
+          assign(q"$addr", f, v)
+      }
+    }
+    val newC = q"${clazz.companion}.fromAddr($addr)"
+    val instantiated =
+      if (clazz.hasInit) q"$newC.$initializer"
+      else if (discardResult) q""
+      else newC
     q"""
-      val $addr = $alloc.allocate($size)
-      ..$writes
-      ..$instantiate
+      ..$preamble
+      ..${flatten(writes)}
+      ..$instantiated
     """
+  }
+
+  def allocate(anyC: Any, anyArgs: Any, anyAlloc: Any): Tree = {
+    val C = anyC.asInstanceOf[Type]
+    val args = anyArgs.asInstanceOf[List[Tree]]
+    val alloc = anyAlloc.asInstanceOf[Tree]
+    val Clazz(clazz) = C
+    val addr = fresh("addr")
+    Allocation(clazz, args, alloc, q"""
+      val $addr = $alloc.allocate(${clazz.size})
+      ..${initialize(clazz, addr, args, discardResult = false, prezeroed = false)}
+    """)
   }
 
   def toString[C: WeakTypeTag](self: Tree): Tree = {
     val C = wt[C]
-    val ClassOf(fields, parents, tagOpt) = C
-    val actualFields = if (tagOpt.isEmpty) fields else fields.tail
+    val Clazz(clazz) = C
     val sb = fresh("sb")
     val appends =
-      if (actualFields.isEmpty) Nil
-      else actualFields.flatMap { f =>
+      if (clazz.actualFields.isEmpty) Nil
+      else clazz.actualFields.flatMap { f =>
         List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
       }.init
-    val path = (C :: parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
+    val path = (C :: clazz.parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
     val companion = C.typeSymbol.companion
     q"""
       val $sb = new $StringBuilderClass

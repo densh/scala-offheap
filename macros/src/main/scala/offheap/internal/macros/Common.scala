@@ -5,6 +5,7 @@ package macros
 trait Common extends Definitions {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions._
+  import c.internal._, decorators._
 
   def abort(msg: String, at: Position = c.enclosingPosition): Nothing = c.abort(at, msg)
 
@@ -21,7 +22,6 @@ trait Common extends Definitions {
   def fresh(pre: String): TermName = TermName(c.freshName(pre))
 
   def freshVal(pre: String, tpe: Type, value: Tree): ValDef = {
-    import c.internal._, c.internal.decorators._
     val name = fresh(pre)
     val sym = enclosingOwner.newTermSymbol(name).setInfo(tpe)
     val vd = valDef(sym, value)
@@ -44,17 +44,6 @@ trait Common extends Definitions {
     }
   }
 
-  case class Field(name: String, tpe: Type, offset: Long)
-  object Field {
-    implicit val lift: Liftable[Field] = Liftable { f =>
-      q"(${f.name}, $PredefModule.classOf[${f.tpe}], ${f.offset})"
-    }
-    implicit val unlift: Unliftable[Field] = Unliftable {
-      case q"(${s: String}, ${t: Type}, ${offset: Long})" =>
-        Field(s, t, offset)
-    }
-  }
-
   class ExtractAnnotation(annSym: Symbol) {
     def unapply(sym: Symbol): Option[List[Tree]] = {
       val trees = sym.annotations.collect {
@@ -65,44 +54,112 @@ trait Common extends Definitions {
   }
   object ExtractEnum               extends ExtractAnnotation(EnumClass)
   object ExtractData               extends ExtractAnnotation(DataClass)
-  object ExtractLayout             extends ExtractAnnotation(LayoutClass)
   object ExtractParent             extends ExtractAnnotation(ParentClass)
+  object ExtractPotentialChildren  extends ExtractAnnotation(PotentialChildrenClass)
   object ExtractClassTag           extends ExtractAnnotation(ClassTagClass)
   object ExtractClassTagRange      extends ExtractAnnotation(ClassTagRangeClass)
   object ExtractParentExtractor    extends ExtractAnnotation(ParentExtractorClass)
   object ExtractPrimaryExtractor   extends ExtractAnnotation(PrimaryExtractorClass)
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
+  object ExtractField              extends ExtractAnnotation(FieldClass)
 
-  final case class IsClass(value: Boolean)
-  object ClassOf {
-    import c.internal._, decorators._
+  final case class Tag(value: Tree, tpt: Tree)
+
+  case class Field(name: String, after: Tree, tpe: Type,
+                   annots: List[Tree], offset: Long) {
+    lazy val isData    = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
+    lazy val inCtor    = annots.collect { case q"new $c" if c.symbol == CtorClass => c }.nonEmpty
+         val inBody    = !inCtor
+    lazy val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
+    lazy val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
+  }
+  object Field {
+    implicit val lift: Liftable[Field] = Liftable { f =>
+      q"""
+        new $FieldClass(${f.name}, ${f.after}, $PredefModule.classOf[${f.tpe}],
+                        new $AnnotsClass(..${f.annots}), (${f.offset}: $SizeTpe))
+      """
+    }
+    implicit val unlift: Unliftable[Field] = Unliftable {
+      case q"""
+        new $cls(${name: String}, $after, ${tpe: Type},
+                 $newAnnots, (${offset: Long}: $_))
+        """
+        if cls.symbol == FieldClass =>
+        val annots = newAnnots match {
+          case q"new $_(..$anns)" => anns
+          case q"new $_"          => Nil
+        }
+        Field(name, after, tpe, annots, offset)
+    }
+  }
+
+  final case class Clazz(sym: Symbol) {
+    lazy val tpe = sym.asType.toType
+    lazy val hasInit = tpe.members.find(_.name == initializer).nonEmpty
+    lazy val companion = tpe.typeSymbol.companion
+    lazy val fields =
+      sym.asType.toType.members.collect {
+        case ExtractField(t :: Nil) =>
+          val q"${f: Field}" = t
+          f
+      }.toList.sortBy(_.offset)
+    lazy val actualFields = if (tag.isEmpty) fields else fields.tail
+    lazy val parents =
+      ExtractParent.unapply(sym).toList.flatten.map {
+        case q"new $_(${tpe: Type})" => tpe
+      }
+    lazy val tag =
+      ExtractClassTag.unapply(sym).map(_.head).map {
+        case q"new $_($value: $tpt)" => Tag(value, tpt)
+      }
+    lazy val isData = ExtractData.unapply(sym).nonEmpty
+    lazy val isEnum = ExtractEnum.unapply(sym).nonEmpty
+    lazy val children: List[Clazz] =
+      ExtractPotentialChildren.unapply(sym).map {
+        case q"new $_(..${tpes: List[Type]})" :: Nil =>
+          tpes.map(Clazz.unapply).flatten
+      }.getOrElse(Nil)
+    lazy val size: Long = {
+      assertLayoutComplete(sym, s"$sym must be defined before it's used")
+      if (fields.isEmpty) 1L
+      else if (isData) {
+        val lastfield = fields.maxBy(_.offset)
+        lastfield.offset + lastfield.size
+      } else if (isEnum) {
+        children.map(_.size).max
+      } else unreachable
+    }
+    lazy val alignment: Long = {
+      assertLayoutComplete(sym, s"$sym must be defined before it's used")
+      if (fields.isEmpty) 1L
+      else if (isData) {
+        fields.map(f => alignmentOf(f.tpe)).max
+      } else if (isEnum) {
+        children.map(_.alignment).max
+      } else unreachable
+    }
+  }
+  object Clazz {
+    final case class Attachment(value: Boolean)
+    final case class InLayout()
+    final case class LayoutComplete()
     def is(tpe: Type): Boolean =
       is(tpe.widen.typeSymbol)
     def is(sym: Symbol): Boolean = {
-      sym.attachments.get[IsClass].map { _.value }.getOrElse {
-        val value = ExtractLayout.unapply(sym).nonEmpty
-        sym.updateAttachment(IsClass(value))
+      sym.attachments.get[Clazz.Attachment].map { _.value }.getOrElse {
+        val value =
+          ExtractData.unapply(sym).nonEmpty ||
+          ExtractEnum.unapply(sym).nonEmpty
+        sym.updateAttachment(Clazz.Attachment(value))
         value
       }
     }
-    def unapply(tpe: Type): Option[(List[Field], List[Type], Option[(Tree, Tree)])] =
+    def unapply(tpe: Type): Option[Clazz] =
       unapply(tpe.widen.typeSymbol)
-    def unapply(sym: Symbol): Option[(List[Field], List[Type], Option[(Tree, Tree)])] = {
-      val fieldsOpt: Option[List[Field]] =
-        ExtractLayout.unapply(sym).map { _.head match {
-          case q"new $_((new $_(..${fields: List[Field]})): $_)" => fields
-          case q"new $_((new $_): $_)"                           => Nil
-        }}
-      fieldsOpt.map { fields =>
-        val parents = ExtractParent.unapply(sym).toList.flatten.map {
-          case q"new $_(${tpe: Type})" => tpe
-        }
-        val tagOpt = ExtractClassTag.unapply(sym).map(_.head).map {
-          case q"new $_($value: $tpt)" => (value, tpt)
-        }
-        (fields, parents, tagOpt)
-      }
-    }
+    def unapply(sym: Symbol): Option[Clazz] =
+      if (is(sym)) Some(Clazz(sym))
+      else None
   }
 
   object ArrayOf {
@@ -128,8 +185,8 @@ trait Common extends Definitions {
 
   object Allocatable {
     def unapply(tpe: Type): Boolean = tpe match {
-      case Primitive() | ClassOf(_, _, _) => true
-      case _                              => false
+      case Primitive() | Clazz(_) => true
+      case _                      => false
     }
   }
 
@@ -138,17 +195,14 @@ trait Common extends Definitions {
     case ShortTpe | CharTpe    => 2
     case IntTpe   | FloatTpe   => 4
     case LongTpe  | DoubleTpe  => 8
-    case _ if ClassOf.is(tpe)  ||
+    case _ if Clazz.is(tpe)    ||
               ArrayOf.is(tpe)  => 8
     case _                     => abort(s"can't compute size of $tpe")
   }
 
   def sizeOfData(tpe: Type): Long = tpe match {
-    case ClassOf(fields, _, _) =>
-      val lastfield = fields.maxBy(_.offset)
-      lastfield.offset + sizeOf(lastfield.tpe)
-    case _ =>
-      abort(s"$tpe is not a an offheap class")
+    case Clazz(clazz) => clazz.size
+    case _            => abort(s"$tpe is not a an offheap class")
   }
 
   def alignmentOf(tpe: Type) = tpe match {
@@ -156,53 +210,49 @@ trait Common extends Definitions {
     case ShortTpe | CharTpe    => 2
     case IntTpe   | FloatTpe   => 4
     case LongTpe  | DoubleTpe  => 8
-    case _ if ClassOf.is(tpe)  ||
+    case _ if Clazz.is(tpe)    ||
               ArrayOf.is(tpe)  => 8
     case _                     => abort(s"can't comput alignment for $tpe")
   }
 
-  def validate(addr: Tree) = q"$SanitizerModule.validate($addr)"
-
-  def read(addr: Tree, tpe: Type): Tree = {
-    val vaddr = validate(addr)
-    tpe match {
-      case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-        val getT = TermName(s"get$tpe")
-        q"$UNSAFE.$getT($vaddr)"
-      case BooleanTpe =>
-        q"$UNSAFE.getByte($vaddr) != ${Literal(Constant(0.toByte))}"
-      case ArrayOf(tpe) =>
-        q"$ArrayModule.fromAddr[$tpe]($UNSAFE.getLong($vaddr))"
-      case ClassOf(_, _, _) =>
-        val companion = tpe.typeSymbol.companion
-        q"$companion.fromAddr($UNSAFE.getLong($vaddr))"
-    }
+  def alignmentOfData(tpe: Type) = tpe match {
+    case Clazz(clazz) => clazz.alignment
+    case _            => abort(s"$tpe is not an offheap class")
   }
 
-  def write(addr: Tree, tpe: Type, value: Tree): Tree = {
-    val vaddr = validate(addr)
-    tpe match {
-      case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
-        val putT = TermName(s"put$tpe")
-        q"$UNSAFE.$putT($vaddr, $value)"
-      case BooleanTpe =>
-        q"""
-          $UNSAFE.putByte($vaddr,
-                          if ($value) ${Literal(Constant(1.toByte))}
-                          else ${Literal(Constant(0.toByte))})
-        """
-      case ArrayOf(_) =>
-        q"$UNSAFE.putLong($vaddr, $ArrayModule.toAddr($value))"
-      case ClassOf(_, _, _) =>
-        val companion = tpe.typeSymbol.companion
-        q"$UNSAFE.putLong($vaddr, $companion.toAddr($value))"
-    }
+  def read(addr: Tree, tpe: Type): Tree = tpe match {
+    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+      val getT = TermName(s"get$tpe")
+      q"$MemoryModule.$getT($addr)"
+    case BooleanTpe =>
+      q"$MemoryModule.getByte($addr) != ${Literal(Constant(0.toByte))}"
+    case ArrayOf(tpe) =>
+      q"$ArrayModule.fromAddr[$tpe]($MemoryModule.getLong($addr))"
+    case Clazz(_) =>
+      val companion = tpe.typeSymbol.companion
+      q"$companion.fromAddr($MemoryModule.getLong($addr))"
+  }
+
+  def write(addr: Tree, tpe: Type, value: Tree): Tree = tpe match {
+    case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
+      val putT = TermName(s"put$tpe")
+      q"$MemoryModule.$putT($addr, $value)"
+    case BooleanTpe =>
+      q"""
+        $MemoryModule.putByte($addr,
+                              if ($value) ${Literal(Constant(1.toByte))}
+                              else ${Literal(Constant(0.toByte))})
+      """
+    case ArrayOf(_) =>
+      q"$MemoryModule.putLong($addr, $ArrayModule.toAddr($value))"
+    case Clazz(_) =>
+      val companion = tpe.typeSymbol.companion
+      q"$MemoryModule.putLong($addr, $companion.toAddr($value))"
   }
 
   // TODO: handle non-function literal cases
   def appSubs(f: Tree, argValue: Tree, subs: Tree => Tree) = f match {
     case q"($param => $body)" =>
-      import c.internal._, c.internal.decorators._
       val q"$_ val $_: $argTpt = $_" = param
       changeOwner(body, f.symbol, enclosingOwner)
       val (arg, argDef) = argValue match {
@@ -249,10 +299,23 @@ trait Common extends Definitions {
   def paramTpe(tpe: Type): Type = tpe.typeArgs.head
   def paramTpe(t: Tree): Type   = paramTpe(t.tpe)
 
-  def assertAllocatable(T: Type, msg: String = ""): Unit =
-    T match {
-      case Allocatable() => ()
-      case _             => abort(if (msg.isEmpty) s"$T is not allocatable" else msg)
+  def assertAllocatable(T: Type, msg: String = ""): Unit = T match {
+    case Allocatable() => ()
+    case _             => abort(if (msg.isEmpty) s"$T is not allocatable" else msg)
+  }
+
+  def assertEmbeddable(T: Type): Unit = T match {
+    case Clazz(_) => ()
+    case _        => abort(s"$T can not be embedded as it is not an offheap class")
+  }
+
+  def assertNotInLayout(sym: Symbol, msg: String) =
+    if (sym.attachments.get[Clazz.InLayout].nonEmpty)
+      abort(msg)
+
+  def assertLayoutComplete(sym: Symbol, msg: String) =
+    if (sym.attachments.get[Clazz.LayoutComplete].isEmpty) {
+      abort(msg)
     }
 
   def isEnum(T: Type): Boolean = ExtractEnum.unapply(T.typeSymbol).nonEmpty
@@ -281,4 +344,6 @@ trait Common extends Definitions {
 
   def isNull(addr: Tree)  = q"$addr == 0L"
   def notNull(addr: Tree) = q"$addr != 0L"
+
+  def classOf(tpt: Tree) = q"$PredefModule.classOf[$tpt]"
 }

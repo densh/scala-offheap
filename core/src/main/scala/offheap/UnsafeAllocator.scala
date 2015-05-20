@@ -1,6 +1,6 @@
 package offheap
 
-import offheap.internal.UnsafeHolder.UNSAFE
+import offheap.internal.Memory.UNSAFE
 
 class UnsafeAllocator extends Allocator {
   private class Alloc(val addr: Addr, val next: Alloc)

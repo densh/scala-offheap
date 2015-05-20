@@ -156,6 +156,7 @@ class Array(val c: blackbox.Context) extends Common {
     }
   }
 
+  // TODO: implement me
   def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree,
                            to: Tree, toIndex: Tree, size: Tree) = q"???"
 }

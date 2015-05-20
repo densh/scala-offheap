@@ -13,3 +13,5 @@ final class enum extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any =
     macro macros.Annotations.enum
 }
+
+final class embed extends StaticAnnotation

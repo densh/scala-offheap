@@ -10,9 +10,6 @@ object Method {
   def assign[C, T](addr: Any, name: String, value: T): Unit =
     macro macros.Method.assigner[C, T]
 
-  def allocate[C](alloc: Any, args: Any*): C =
-    macro macros.Method.allocator[C]
-
   def toString[C](self: C): String =
     macro macros.Method.toString[C]
 }
