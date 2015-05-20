@@ -13,6 +13,8 @@ import offheap._
 @data class L7(x: Int, y: Short)
 @data class L8(x: Byte, @embed emb: L7, y: Long)
 
+@data class L9
+
 class LayoutSuite extends FunSuite {
   implicit val alloc = Allocator()
 
@@ -44,6 +46,7 @@ class LayoutSuite extends FunSuite {
   test("sizeOfData[L6]") { assert(sizeOfData[L6] == 24) }
   test("sizeOfData[L7]") { assert(sizeOfData[L7] == 6) }
   test("sizeOfData[L8]") { assert(sizeOfData[L8] == 24) }
+  test("sizeOfData[L9]") { assert(sizeOfData[L9] == 1) }
 
   test("alignmentOfData[L1]") { assert(alignmentOfData[L1] == 1) }
   test("alignmentOfData[L2]") { assert(alignmentOfData[L2] == 2) }
@@ -53,11 +56,5 @@ class LayoutSuite extends FunSuite {
   test("alignmentOfData[L6]") { assert(alignmentOfData[L6] == 8) }
   test("alignmentOfData[L7]") { assert(alignmentOfData[L7] == 4) }
   test("alignmentOfData[L8]") { assert(alignmentOfData[L8] == 8) }
-
-
-
-
-
-
-
+  test("alignmentOfData[L9]") { assert(alignmentOfData[L9] == 1) }
 }

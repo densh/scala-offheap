@@ -68,6 +68,8 @@ trait Common extends Definitions {
   case class Field(name: String, after: Tree, tpe: Type,
                    annots: List[Tree], offset: Long) {
     lazy val isData    = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
+    lazy val inCtor    = annots.collect { case q"new $c" if c.symbol == CtorClass => c }.nonEmpty
+         val inBody    = !inCtor
     lazy val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
     lazy val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
   }
@@ -120,7 +122,8 @@ trait Common extends Definitions {
       }.getOrElse(Nil)
     lazy val size: Long = {
       assertLayoutComplete(sym, s"$sym must be defined before it's used")
-      if (isData) {
+      if (fields.isEmpty) 1L
+      else if (isData) {
         val lastfield = fields.maxBy(_.offset)
         lastfield.offset + lastfield.size
       } else if (isEnum) {
@@ -129,7 +132,8 @@ trait Common extends Definitions {
     }
     lazy val alignment: Long = {
       assertLayoutComplete(sym, s"$sym must be defined before it's used")
-      if (isData) {
+      if (fields.isEmpty) 1L
+      else if (isData) {
         fields.map(f => alignmentOf(f.tpe)).max
       } else if (isEnum) {
         children.map(_.alignment).max

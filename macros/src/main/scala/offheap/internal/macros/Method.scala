@@ -76,9 +76,10 @@ class Method(val c: blackbox.Context) extends Common {
   def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
                  discardResult: Boolean, prezeroed: Boolean): Tree = {
     val (preamble, zeroed) =
+      (q"", prezeroed)
       if (!clazz.hasInit) (q"", prezeroed)
-      else if (clazz.size == 0L || prezeroed) (q"", prezeroed)
-      else (q"$MemoryModule.set($addr, ${clazz.size}, 0)", true)
+      else if (clazz.fields.filter(_.inBody).isEmpty || prezeroed) (q"", prezeroed)
+      else (q"$MemoryModule.zero($addr, ${clazz.size})", true)
     val values = clazz.tag.map(_.value) ++: args
     val writes = clazz.fields.zip(values).map { case (f, v) =>
       v match {
@@ -110,17 +111,14 @@ class Method(val c: blackbox.Context) extends Common {
     """
   }
 
-  def allocate(anyC: Any, anyArgs: Any, anyAlloc: Any): Tree = debug(s"allocate $anyC") {
+  def allocate(anyC: Any, anyArgs: Any, anyAlloc: Any): Tree = {
     val C = anyC.asInstanceOf[Type]
     val args = anyArgs.asInstanceOf[List[Tree]]
     val alloc = anyAlloc.asInstanceOf[Tree]
     val Clazz(clazz) = C
-    val size =
-      if (clazz.fields.isEmpty) q"1"
-      else q"$offheap.sizeOfData[${clazz.tpe}]"
     val addr = fresh("addr")
     Allocation(clazz, args, alloc, q"""
-      val $addr = $alloc.allocate($size)
+      val $addr = $alloc.allocate(${clazz.size})
       ..${initialize(clazz, addr, args, discardResult = false, prezeroed = false)}
     """)
   }

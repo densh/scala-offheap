@@ -16,3 +16,4 @@ final class Field(name: String, after: Any, tag: Class[_],
                   annots: Annots, offset: Size) extends StaticAnnotation
 final class Annots(annots: Any*) extends StaticAnnotation
 final class Complete(any: Any) extends StaticAnnotation
+final class Ctor extends StaticAnnotation

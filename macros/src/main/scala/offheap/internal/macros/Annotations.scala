@@ -10,12 +10,13 @@ class Annotations(val c: whitebox.Context) extends Common {
   import Flag._
 
   implicit class SyntacticField(vd: ValDef) {
-    def mods        = vd.mods
-    def name        = vd.name
-    def tpt         = vd.tpt
-    def default     = vd.rhs
-    def isMutable   = vd.mods.hasFlag(MUTABLE)
-    def isCtorField = vd.mods.hasFlag(PARAMACCESSOR)
+    def mods      = vd.mods
+    def name      = vd.name
+    def tpt       = vd.tpt
+    def default   = vd.rhs
+    def isMutable = vd.mods.hasFlag(MUTABLE)
+    def inCtor    = vd.mods.hasFlag(PARAMACCESSOR)
+    def inBody    = !inCtor
   }
 
   // TODO: improve modifiers propagation and checking
@@ -111,9 +112,12 @@ class Annotations(val c: whitebox.Context) extends Common {
     // Generate additional members
     var prev = q""
     val accessors = fields.flatMap { f =>
+      val ctorAnnot =
+        if (f.inCtor) q"new $CtorClass"
+        else q""
       val props =
         prev :: classOf(f.tpt) ::
-        q"new $AnnotsClass(..${f.mods.annotations})" :: Nil
+        q"new $AnnotsClass(..$ctorAnnot, ..${f.mods.annotations})" :: Nil
       val annot: Tree =
         q"""
           new $FieldClass(${f.name.toString}, ..$props,
@@ -132,7 +136,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       if (!f.isMutable) accessor :: Nil
       else accessor :: assigner :: Nil
     }
-    val argNames = fields.collect { case f if f.isCtorField => f.name }
+    val argNames = fields.collect { case f if f.inCtor => f.name }
     val _ns = argNames.zipWithIndex.map {
       case (argName, i) =>
         val _n = TermName("_" + (i + 1))
@@ -143,11 +147,11 @@ class Annotations(val c: whitebox.Context) extends Common {
       case head :: Nil  => q"this.$head"
       case head :: tail => q"this"
     }
-    val copyArgs = fields.collect { case f if f.isCtorField =>
+    val copyArgs = fields.collect { case f if f.inCtor =>
       q"val ${f.name}: ${f.tpt} = this.${f.name}"
     }
     val initializr = if (init.isEmpty) q"" else q"def $initializer = { ..$init; this }"
-    val applyArgs = fields.zipWithIndex.collect { case (f, i) if f.isCtorField =>
+    val applyArgs = fields.zipWithIndex.collect { case (f, i) if f.inCtor =>
       val name = TermName("_" + (i + 1))
       q"val $name: ${f.tpt} = ${f.default}"
     }
@@ -169,7 +173,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       val isC = q"$scrutinee.is[$name]"
       val asC = q"$scrutinee.as[$name]"
       val body =
-        if (fields.filter(_.isCtorField).isEmpty) isC
+        if (fields.filter(_.inCtor).isEmpty) isC
         else q"if ($isC) $termName.${primaryExtractor.name}.unapply($asC) else $termName.empty"
       q"""
         object $extractor {

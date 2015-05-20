@@ -34,6 +34,7 @@ trait Definitions {
   val FieldClass              = staticClass("offheap.internal.Field")
   val AnnotsClass             = staticClass("offheap.internal.Annots")
   val CompleteClass           = staticClass("offheap.internal.Complete")
+  val CtorClass               = staticClass("offheap.internal.Ctor")
 
   val RegionModule    = staticModule("offheap.Region")
   val PoolModule      = staticModule("offheap.Pool")
