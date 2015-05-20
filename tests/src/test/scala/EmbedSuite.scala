@@ -36,4 +36,11 @@ class EmbedSuite extends FunSuite {
     assert(inner.v == 44)
     assert(outer.inner.v == 43)
   }
+
+  test("assign embeded null") {
+    val outer = Outer(Inner(42))
+    intercept[NullPointerException] {
+      outer.inner = Inner.empty
+    }
+  }
 }

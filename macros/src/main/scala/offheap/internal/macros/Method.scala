@@ -42,7 +42,7 @@ class Method(val c: blackbox.Context) extends Common {
       val from      = q"$companion.toAddr($value)"
       val to        = q"$addr + ${f.offset}"
       val size      = sizeOfData(f.tpe)
-      q"$MemoryModule.copy($from, $to, $size)"
+      nullChecked(from, q"$MemoryModule.copy($from, $to, $size)")
     } else write(q"$addr + ${f.offset}", f.tpe, value)
 
   def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
