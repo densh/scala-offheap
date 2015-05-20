@@ -2,7 +2,7 @@ language: scala
 scala:
   - 2.11.6
 script:
-  - sbt "tests/test"
+  - sbt "tests/test" "jmh/compile"
 jdk:
   - oraclejdk7
   - openjdk7

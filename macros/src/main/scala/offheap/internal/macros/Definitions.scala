@@ -43,6 +43,7 @@ trait Definitions {
   val MethodModule    = staticModule("offheap.internal.Method")
   val LayoutModule    = staticModule("offheap.internal.Layout")
   val MemoryModule    = staticModule("offheap.internal.Memory")
+  val CheckedModule   = staticModule("offheap.internal.Checked")
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
@@ -53,6 +54,4 @@ trait Definitions {
   val addr         = TermName("$addr")
   val canUseMacros = TermName("$canUseMacros")
   val complete     = TermName("$complete")
-
-  val CHECKED = q"$internal.CheckedHolder.CHECKED"
 }

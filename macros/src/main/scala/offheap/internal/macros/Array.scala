@@ -24,7 +24,7 @@ class Array(val c: blackbox.Context) extends Common {
         val size = fresh("size")
         val happy = ifOk(pre)(idx)
         q"""
-          if ($CHECKED) {
+          if ($CheckedModule.BOUNDS) {
             val $size: $SizeTpe = ${read(q"$pre.$addr", AddrTpe)}
             if ($idx >= 0 && $idx < $size) $happy
             else throw new _root_.java.lang.IndexOutOfBoundsException($index.toString)

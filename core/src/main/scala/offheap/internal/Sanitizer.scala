@@ -2,7 +2,6 @@ package offheap
 package internal
 
 import java.{lang => jl}
-import internal.CheckedHolder.CHECKED
 import internal.Memory.UNSAFE
 
 // TODO: ensure that 0L is always a valid address
@@ -40,7 +39,7 @@ object Sanitizer {
   }
 
   def validate(addr: Addr): Addr =
-    if (CHECKED) {
+    if (Checked.MEMORY) {
       if (UNSAFE.getByte(arr + unpackId(addr)) != 1)
         throw new InaccessibleMemoryException
       unpackAddr(addr)
