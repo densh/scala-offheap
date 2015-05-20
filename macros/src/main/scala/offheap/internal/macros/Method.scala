@@ -11,7 +11,7 @@ class Method(val c: blackbox.Context) extends Common {
 
   def nullChecked(addr: Tree, ifOk: Tree) =
     q"""
-      if ($CHECKED)
+      if ($CheckedModule.NULL)
         if ($addr == 0L) throw new $NullPointerExceptionClass
       $ifOk
     """
