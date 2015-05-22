@@ -11,9 +11,6 @@ trait Definitions {
   import c.universe.definitions._
   import c.universe.rootMirror._
 
-  val AddrTpe = LongClass.toType
-  val SizeTpe = LongClass.toType
-
   val StringBuilderClass            = staticClass("scala.collection.mutable.StringBuilder")
   val NullPointerExceptionClass     = staticClass("java.lang.NullPointerException")
   val IllegalArgumentExceptionClass = staticClass("java.lang.IllegalArgumentException")
@@ -47,6 +44,11 @@ trait Definitions {
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")
+
+  val AddrTpe      = LongTpe
+  val SizeTpe      = LongTpe
+  val ArrayTpe     = ArrayClass.toType
+  val ArraySizeTpe = IntTpe
 
   val initializer  = TermName("$init")
   val layout       = TermName("$layout")

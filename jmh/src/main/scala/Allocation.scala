@@ -4,9 +4,9 @@ import org.openjdk.jmh.annotations._
 import java.util.concurrent.TimeUnit
 import offheap._
 
-class Point(val x: Float, val y: Float)
+class Point(val x: Int, val y: Int)
 
-@data class OffheapPoint(val x: Float, val y: Float)
+@data class OffheapPoint(val x: Int, val y: Int)
 
 @State(Scope.Thread)
 class OffheapAllocation {

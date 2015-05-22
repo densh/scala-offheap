@@ -21,12 +21,18 @@ trait Common extends Definitions {
 
   def fresh(pre: String): TermName = TermName(c.freshName(pre))
 
-  def freshVal(pre: String, tpe: Type, value: Tree): ValDef = {
+  class SemiStable
+
+  def freshVal(pre: String, tpe: Type, value: Tree, flags: FlagSet = NoFlags): ValDef = {
     val name = fresh(pre)
-    val sym = enclosingOwner.newTermSymbol(name).setInfo(tpe)
+    val sym = enclosingOwner.newTermSymbol(name).setFlag(flags).setInfo(tpe)
+    sym.updateAttachment(new SemiStable)
     val vd = valDef(sym, value)
     vd
   }
+
+  def freshVar(pre: String, tpe: Type, value: Tree): ValDef =
+    freshVal(pre, tpe, value, flags = Flag.MUTABLE)
 
   /** Extension to default type unlifting that also handles
    *  literal constant types produced after typechecking of classOf.
@@ -250,16 +256,17 @@ trait Common extends Definitions {
       q"$MemoryModule.putLong($addr, $companion.toAddr($value))"
   }
 
+  def isSemiStable(sym: Symbol) =
+    (sym.isTerm && sym.asTerm.isStable) || sym.attachments.get[SemiStable].nonEmpty
+
   // TODO: handle non-function literal cases
   def appSubs(f: Tree, argValue: Tree, subs: Tree => Tree) = f match {
     case q"($param => $body)" =>
       val q"$_ val $_: $argTpt = $_" = param
       changeOwner(body, f.symbol, enclosingOwner)
       val (arg, argDef) = argValue match {
-        case refTree: RefTree
-          if refTree.symbol.isTerm
-          && refTree.symbol.asTerm.isStable =>
-          (refTree, q"")
+        case rt: RefTree if isSemiStable(rt.symbol) =>
+          (rt, q"")
         case _ =>
           val vd = freshVal("arg", argTpt.tpe, argValue)
           (q"${vd.symbol}", vd)
@@ -281,9 +288,7 @@ trait Common extends Definitions {
     appSubs(f, argValue, identity)
 
   def stabilized(tree: Tree)(f: Tree => Tree) = tree match {
-    case q"${refTree: RefTree}"
-      if refTree.symbol.isTerm
-      && refTree.symbol.asTerm.isStable =>
+    case q"${refTree: RefTree}" if isSemiStable(refTree.symbol) =>
       f(refTree)
     case _ =>
       if (tree.tpe == null) {

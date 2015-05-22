@@ -1,14 +1,94 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
+import org.openjdk.jmh.infra._
 import java.util.concurrent.TimeUnit
-import offheap._
+import offheap._, internal.Memory.UNSAFE
 
 @State(Scope.Thread)
 class ArrayBench {
   implicit val alloc = Allocator()
-  val arr: offheap.Array[Int] = Array(1, 2, 3)
+  implicit val pool  = Pool(alloc, pageSize = 81920, chunkSize = 81920)
+  val jarr: scala.Array[Long] = (0 to 9999).toArray.map(_.toLong)
+  val arr: offheap.Array[Long] = {
+    val arr = offheap.Array.uninit[Long](10000)
+    for (i <- 0 to 9999) arr(i) = i
+    arr
+  }
+  val uarr: Long = {
+    val addr = UNSAFE.allocateMemory(10000 * 8)
+    var i = 0
+    while (i <= 10000) {
+      UNSAFE.putLong(addr + i * 8, i)
+      i += 1
+    }
+    addr
+  }
 
   @Benchmark
-  def access = arr(0)
+  def offheapAccess = arr(0)
+
+  @Benchmark
+  def onheapAccess = jarr(0)
+
+  @Benchmark
+  def unsafeAccess = UNSAFE.getLong(uarr)
+
+  @Benchmark
+  def offheapUpdate = arr(0) = 42
+
+  @Benchmark
+  def onheapUpdate = jarr(0) = 42
+
+  @Benchmark
+  def unsafeUpdate = UNSAFE.putLong(uarr, 42)
+
+  @Benchmark
+  def offheapSum = {
+    val len = arr.length
+    var sum = 0L
+    var i = 0
+    while (i < len) {
+      sum += arr(i)
+      i += 1
+    }
+    sum
+  }
+
+  @Benchmark
+  def unsafeSum = {
+    val len = arr.length
+    var sum = 0
+    var i = 0
+    while (i < len) {
+      sum += UNSAFE.getInt(uarr + 4 * i)
+      i += 1
+    }
+    sum
+  }
+
+  @Benchmark
+  def onheapSum = {
+    val len = jarr.length
+    var sum = 0L
+    var i = 0
+    while (i < len) {
+      sum += jarr(i)
+      i += 1
+    }
+    sum
+  }
+
+  @Benchmark
+  def offheapForeach(bh: Blackhole) = arr.foreach { v => bh.consume(v) }
+
+  @Benchmark
+  def onheapForeach(bh: Blackhole) = jarr.foreach { v => bh.consume(v) }
+
+  @Benchmark
+  def offheapMap = Region { r => arr.map(_ * 2) }
+
+  @Benchmark
+  def onheapMap = jarr.map(_ * 2)
+
 }
