@@ -12,8 +12,9 @@ trait Definitions {
   import c.universe.rootMirror._
 
   val StringBuilderClass            = staticClass("scala.collection.mutable.StringBuilder")
-  val NullPointerExceptionClass     = staticClass("java.lang.NullPointerException")
-  val IllegalArgumentExceptionClass = staticClass("java.lang.IllegalArgumentException")
+  val NullPointerExceptionClass      = staticClass("java.lang.NullPointerException")
+  val IllegalArgumentExceptionClass  = staticClass("java.lang.IllegalArgumentException")
+  val IndexOutOfBoundsExceptionClass = staticClass("java.lang.IndexOutOfBoundsException")
 
   val RegionClass             = staticClass("offheap.Region")
   val AllocatorClass          = staticClass("offheap.Allocator")

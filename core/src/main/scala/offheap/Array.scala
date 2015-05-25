@@ -13,6 +13,7 @@ final class Array[A] private (val $addr: Addr) extends AnyVal {
   def foreach(f: A => Unit): Unit                        = macro macros.Array.foreach
   def map[B](f: A => B)(implicit a: Allocator): Array[B] = macro macros.Array.map[B]
   def toArray: scala.Array[A]                            = macro macros.Array.toArray
+  def clone: Array[A]                                    = macro macros.Array.clone_
 
   override def toString =
     if ($addr == 0L) s"offheap.x64.Array.empty"

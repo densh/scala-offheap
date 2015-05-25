@@ -6,7 +6,7 @@ import scala.reflect.macros.blackbox
 
 class Array(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
-  import c.universe.definitions.{ ArrayClass => JArrayClass, _ }
+  import c.universe.definitions.{ ArrayClass => JArrayClass, ArrayModule => JArrayModule, _ }
 
   lazy val A = c.prefix.tree.tpe.baseType(ArrayClass).typeArgs.head
 
@@ -20,8 +20,11 @@ class Array(val c: blackbox.Context) extends Common {
 
   def sizeOfArraySize = q"$offheap.sizeOf[$ArraySizeTpe]"
 
+  def throwIllegalArgument(v: Tree) =
+    q"throw new $IllegalArgumentExceptionClass($v.toString)"
+
   def throwOutOfBounds(idx: Tree) =
-    q"throw new _root_.java.lang.IndexOutOfBoundsException($idx.toString)"
+    q"throw new $IndexOutOfBoundsExceptionClass($idx.toString)"
 
   def boundsChecked(index: Tree)(ifOk: Tree => Tree => Tree) =
     stabilized(c.prefix.tree) { pre =>
@@ -98,16 +101,34 @@ class Array(val c: blackbox.Context) extends Common {
     stabilized(c.prefix.tree) { pre =>
       val size = fresh("size")
       val jarr = fresh("jarr")
-      val i = fresh("i")
+      val i    = fresh("i")
       q"""
-        val $size = ${read(q"$pre.$addr", ArraySizeTpe)}
-        val $jarr = new $JArrayClass[$A]($size)
-        var $i = 0
-        while ($i < $size) {
-          $jarr($i) = $pre($i)
-          $i += 1
+        if ($pre.isEmpty) $JArrayModule.empty[$A]
+        else {
+          val $size = ${read(q"$pre.$addr", ArraySizeTpe)}
+          val $jarr = new $JArrayClass[$A]($size)
+          var $i    = 0
+          while ($i < $size) {
+            $jarr($i) = $pre($i)
+            $i += 1
+          }
+          $jarr
         }
-        $jarr
+      """
+    }
+
+  def clone_ =
+    stabilized(c.prefix.tree) { pre =>
+      val size = fresh("size")
+      val narr = fresh("narr")
+      q"""
+        if ($pre.isEmpty) $ArrayModule.empty[$A]
+        else {
+          val $size = ${read(q"$pre.$addr", ArraySizeTpe)}
+          val $narr = $ArrayModule.uninit[$A]($size)
+          $ArrayModule.copy($pre, 0, $narr, 0, $size)
+          $narr
+        }
       """
     }
 
@@ -116,7 +137,7 @@ class Array(val c: blackbox.Context) extends Common {
     assertAllocatable(T)
     stabilized(n) { len =>
       stabilized(a) { alloc =>
-        val size = q"$sizeOfArraySize + $len * $offheap.sizeOf[$T]"
+        val size  = q"$sizeOfArraySize + $len * $offheap.sizeOf[$T]"
         val naddr = freshVal("addr", AddrTpe, q"$alloc.allocate($size)")
         q"""
           if ($len < 0) throw new $IllegalArgumentExceptionClass
@@ -159,9 +180,12 @@ class Array(val c: blackbox.Context) extends Common {
         val T   = wt[T]
         val arr = fresh("arr")
         q"""
-          val $arr = $ArrayModule.uninit[$T]($len)($alloc)
-          ${iterate(T, q"$arr", _ => p => write(p, T, elem))}
-          $arr
+          if ($len == 0) $ArrayModule.empty[$T]
+          else {
+            val $arr = $ArrayModule.uninit[$T]($len)($alloc)
+            ${iterate(T, q"$arr", _ => p => write(p, T, elem))}
+            $arr
+          }
         """
       }
     }
@@ -184,13 +208,19 @@ class Array(val c: blackbox.Context) extends Common {
         stabilized(to) { toArr =>
           stabilized(toIndex) { toIdx =>
             stabilized(size) { count =>
-              val fromChecks = checks(fromArr, fromIdx, q"$fromIdx + $count")
-              val toChecks = checks(toArr, toIdx, q"$toIdx + $count")
-              val stride = q"$offheap.sizeOf[${wt[T]}]"
-              val fromAddr = q"$fromArr.$addr + $sizeOfArraySize + $fromIdx * $stride"
-              val toAddr = q"$toArr.$addr + $sizeOfArraySize + $toIdx * $stride"
-              val sizeBytes = q"$count * $stride"
+              val fromChecks = checks(fromArr, fromIdx, q"$fromIdx + $count - 1")
+              val toChecks   = checks(toArr, toIdx, q"$toIdx + $count - 1")
+              val stride     = q"$offheap.sizeOf[${wt[T]}]"
+              val fromAddr   = q"$fromArr.$addr + $sizeOfArraySize + $fromIdx * $stride"
+              val toAddr     = q"$toArr.$addr + $sizeOfArraySize + $toIdx * $stride"
+              val sizeBytes  = q"$count * $stride"
               q"""
+                if ($count <= 0)
+                  ${throwIllegalArgument(count)}
+                if ($fromArr.isEmpty)
+                  ${throwIllegalArgument(fromArr)}
+                if ($toArr.isEmpty)
+                  ${throwIllegalArgument(toArr)}
                 if ($CheckedModule.BOUNDS) {
                   ..$fromChecks
                   ..$toChecks
@@ -207,15 +237,18 @@ class Array(val c: blackbox.Context) extends Common {
   def fromArray[T: WeakTypeTag](arr: Tree) =
     stabilized(arr) { jarr =>
       val arr = fresh("arr")
-      val i = fresh("i")
+      val i   = fresh("i")
       q"""
-        val $arr = $ArrayModule.uninit[${wt[T]}]($jarr.length)
-        var $i = 0
-        while ($i < $jarr.length) {
-          $arr($i) = $jarr($i)
-          $i += 1
+        if ($jarr.isEmpty) $ArrayModule.empty[${wt[T]}]
+        else {
+          val $arr = $ArrayModule.uninit[${wt[T]}]($jarr.length)
+          var $i = 0
+          while ($i < $jarr.length) {
+            $arr($i) = $jarr($i)
+            $i += 1
+          }
+          $arr
         }
-        $arr
       """
     }
 
