@@ -117,19 +117,21 @@ class Array(val c: blackbox.Context) extends Common {
       """
     }
 
-  def clone_ =
+  def clone_(a: Tree) =
     stabilized(c.prefix.tree) { pre =>
-      val size = fresh("size")
-      val narr = fresh("narr")
-      q"""
-        if ($pre.isEmpty) $ArrayModule.empty[$A]
-        else {
-          val $size = ${read(q"$pre.$addr", ArraySizeTpe)}
-          val $narr = $ArrayModule.uninit[$A]($size)
-          $ArrayModule.copy($pre, 0, $narr, 0, $size)
-          $narr
-        }
-      """
+      stabilized(a) { alloc =>
+        val size = fresh("size")
+        val narr = fresh("narr")
+        q"""
+          if ($pre.isEmpty) $ArrayModule.empty[$A]
+          else {
+            val $size = ${read(q"$pre.$addr", ArraySizeTpe)}
+            val $narr = $ArrayModule.uninit[$A]($size)($alloc)
+            $ArrayModule.copy($pre, 0, $narr, 0, $size)
+            $narr
+          }
+        """
+      }
     }
 
   def uninit[T: WeakTypeTag](n: Tree)(a: Tree) = {
@@ -234,22 +236,24 @@ class Array(val c: blackbox.Context) extends Common {
     }
   }
 
-  def fromArray[T: WeakTypeTag](arr: Tree) =
+  def fromArray[T: WeakTypeTag](arr: Tree)(a: Tree) =
     stabilized(arr) { jarr =>
-      val arr = fresh("arr")
-      val i   = fresh("i")
-      q"""
-        if ($jarr.isEmpty) $ArrayModule.empty[${wt[T]}]
-        else {
-          val $arr = $ArrayModule.uninit[${wt[T]}]($jarr.length)
-          var $i = 0
-          while ($i < $jarr.length) {
-            $arr($i) = $jarr($i)
-            $i += 1
+      stabilized(a) { alloc =>
+        val arr = fresh("arr")
+        val i   = fresh("i")
+        q"""
+          if ($jarr.isEmpty) $ArrayModule.empty[${wt[T]}]
+          else {
+            val $arr = $ArrayModule.uninit[${wt[T]}]($jarr.length)($alloc)
+            var $i = 0
+            while ($i < $jarr.length) {
+              $arr($i) = $jarr($i)
+              $i += 1
+            }
+            $arr
           }
-          $arr
-        }
-      """
+        """
+      }
     }
 
 }
