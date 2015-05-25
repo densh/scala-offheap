@@ -9,14 +9,14 @@ class Region(val c: whitebox.Context) extends Common {
   import c.universe.definitions._
 
   def apply(f: Tree)(pool: Tree) = {
-    val r = fresh("r")
-    val res = fresh("res")
-    val body = app(f, q"$r")
+    val r    = freshVal("r", RegionClass.toType, q"$RegionModule.open($pool)")
+    val res  = fresh("res")
+    val body = app(f, q"${r.symbol}")
     q"""
-      val $r = $RegionModule.open($pool)
+      $r
       val $res =
         try $body
-        finally $r.close()
+        finally ${r.symbol}.close()
       $res
     """
   }
