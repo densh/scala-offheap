@@ -83,4 +83,20 @@ class ArraySuite extends FunSuite {
     assert(Array(1).nonEmpty)
     assert(!Array(1).isEmpty)
   }
+
+  test("offheap to onheap") {
+    val arr = Array(1, 2, 3, 4, 5)
+    val jarr = arr.toArray
+    val jarr2 = scala.Array(1, 2, 3, 4, 5)
+    for (i <- 0 to 4)
+      assert(jarr(i) == jarr2(i))
+  }
+
+  test("onheap to offheap") {
+    val jarr = scala.Array(1, 2, 3, 4, 5)
+    val arr = Array.fromArray(jarr)
+    val arr2 = Array(1, 2, 3, 4, 5)
+    for (i <- 0 to 4)
+      assert(arr(i) == arr2(i))
+  }
 }

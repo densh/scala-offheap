@@ -12,6 +12,7 @@ final class Array[A] private (val $addr: Addr) extends AnyVal {
   def update(index: Addr, value: A): Unit                = macro macros.Array.update
   def foreach(f: A => Unit): Unit                        = macro macros.Array.foreach
   def map[B](f: A => B)(implicit a: Allocator): Array[B] = macro macros.Array.map[B]
+  def toArray: scala.Array[A]                            = macro macros.Array.toArray
 
   override def toString =
     if ($addr == 0L) s"offheap.x64.Array.empty"
@@ -28,4 +29,5 @@ object Array {
   def empty[T]: Array[T]                                     = new Array[T](0L)
   def fromAddr[T](addr: Addr): Array[T]                      = new Array[T](addr)
   def toAddr[T](arr: Array[T]): Addr                         = arr.$addr
+  def fromArray[T](arr: scala.Array[T]): Array[T]            = macro macros.Array.fromArray[T]
 }

@@ -6,7 +6,7 @@ import scala.reflect.macros.blackbox
 
 class Array(val c: blackbox.Context) extends Common {
   import c.universe.{ weakTypeOf => wt, _ }
-  import c.universe.definitions._
+  import c.universe.definitions.{ ArrayClass => JArrayClass, _ }
 
   lazy val A = c.prefix.tree.tpe.baseType(ArrayClass).typeArgs.head
 
@@ -68,7 +68,7 @@ class Array(val c: blackbox.Context) extends Common {
     """
   }
 
-  def map[B: WeakTypeTag](f: Tree)(a: Tree) = debug("map") {
+  def map[B: WeakTypeTag](f: Tree)(a: Tree) = {
     val B = wt[B]
     assertAllocatable(B)
     stabilized(c.prefix.tree) { pre =>
@@ -93,6 +93,23 @@ class Array(val c: blackbox.Context) extends Common {
       }
     }
   }
+
+  def toArray =
+    stabilized(c.prefix.tree) { pre =>
+      val size = fresh("size")
+      val jarr = fresh("jarr")
+      val i = fresh("i")
+      q"""
+        val $size = ${read(q"$pre.$addr", ArraySizeTpe)}
+        val $jarr = new $JArrayClass[$A]($size)
+        var $i = 0
+        while ($i < $size) {
+          $jarr($i) = $pre($i)
+          $i += 1
+        }
+        $jarr
+      """
+    }
 
   def uninit[T: WeakTypeTag](n: Tree)(a: Tree) = {
     val T = wt[T]
@@ -151,7 +168,7 @@ class Array(val c: blackbox.Context) extends Common {
   }
 
   def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree,
-                           to: Tree, toIndex: Tree, size: Tree) = debug("copy") {
+                           to: Tree, toIndex: Tree, size: Tree) = {
     def checks(arr: Tree, indexes: Tree*) = {
       val size = fresh("size")
       val checks = indexes.map { idx =>
@@ -186,4 +203,20 @@ class Array(val c: blackbox.Context) extends Common {
       }
     }
   }
+
+  def fromArray[T: WeakTypeTag](arr: Tree) =
+    stabilized(arr) { jarr =>
+      val arr = fresh("arr")
+      val i = fresh("i")
+      q"""
+        val $arr = $ArrayModule.uninit[${wt[T]}]($jarr.length)
+        var $i = 0
+        while ($i < $jarr.length) {
+          $arr($i) = $jarr($i)
+          $i += 1
+        }
+        $arr
+      """
+    }
+
 }
