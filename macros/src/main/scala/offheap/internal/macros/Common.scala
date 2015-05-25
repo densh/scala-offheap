@@ -288,6 +288,8 @@ trait Common extends Definitions {
     appSubs(f, argValue, identity)
 
   def stabilized(tree: Tree)(f: Tree => Tree) = tree match {
+    case q"${const: Literal}" =>
+      f(const)
     case q"${refTree: RefTree}" if isSemiStable(refTree.symbol) =>
       f(refTree)
     case _ =>

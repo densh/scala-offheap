@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import offheap._, internal.Memory.UNSAFE
 
 @State(Scope.Thread)
-class ArrayBench {
+class Array {
   implicit val alloc = Allocator()
   implicit val pool  = Pool(alloc, pageSize = 81920, chunkSize = 81920)
   val jarr: scala.Array[Long] = (0 to 9999).toArray.map(_.toLong)
@@ -86,7 +86,7 @@ class ArrayBench {
   def onheapForeach(bh: Blackhole) = jarr.foreach { v => bh.consume(v) }
 
   @Benchmark
-  def offheapMap = Region { r => arr.map(_ * 2) }
+  def offheapMap = Region { r => arr.map(_ * 2)(r) }
 
   @Benchmark
   def onheapMap = jarr.map(_ * 2)

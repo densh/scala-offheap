@@ -48,13 +48,21 @@ class ArraySuite extends FunSuite {
     intercept[IndexOutOfBoundsException] { arr(4)  }
   }
 
-  ignore("copy") {
+  test("copy") {
     val arr1 = Array(0, 0, 0, 0, 0, 0, 0, 0)
     val arr2 = Array(1, 1, 1, 1, 1, 1, 1, 1)
     Array.copy(arr2, 1, arr1, 2, 3)
     val arr3 = Array(0, 0, 1, 1, 1, 0, 0, 0)
     for (i <- 0 to 7)
       assert(arr1(i) == arr3(i))
+  }
+
+  test("copy out of bounds") {
+    val arr1 = Array(0, 0, 0)
+    val arr2 = Array(1, 1, 1, 1, 1, 1, 1, 1)
+    intercept[IndexOutOfBoundsException] {
+      Array.copy(arr2, 1, arr1, 2, 3)
+    }
   }
 
   test("arrays can be fields in data classes") {

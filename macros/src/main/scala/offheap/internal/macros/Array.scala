@@ -20,13 +20,16 @@ class Array(val c: blackbox.Context) extends Common {
 
   def sizeOfArraySize = q"$offheap.sizeOf[$ArraySizeTpe]"
 
+  def throwOutOfBounds(idx: Tree) =
+    q"throw new _root_.java.lang.IndexOutOfBoundsException($idx.toString)"
+
   def boundsChecked(index: Tree)(ifOk: Tree => Tree => Tree) =
     stabilized(c.prefix.tree) { pre =>
       stabilized(index) { idx =>
         q"""
           if ($CheckedModule.BOUNDS)
             if ($idx < 0 || $idx >= ${read(q"$pre.$addr", ArraySizeTpe)})
-              throw new _root_.java.lang.IndexOutOfBoundsException($idx.toString)
+              ${throwOutOfBounds(idx)}
           ${ifOk(pre)(idx)}
         """
       }
@@ -42,14 +45,13 @@ class Array(val c: blackbox.Context) extends Common {
       write(q"$pre.$addr + $sizeOfArraySize + $i * $offheap.sizeOf[$A]", A, value)
     }
 
-  def foreach(f: Tree) = debug("foreach") {
+  def foreach(f: Tree) =
     stabilized(c.prefix.tree) { pre =>
       q"""
         if ($pre.nonEmpty)
           ${iterate(A, pre, _ => p => app(f, read(p, A)))}
       """
     }
-  }
 
   def iterate(T: Type, pre: Tree, f: Tree => Tree => Tree) = {
     val i = freshVar("i", IntTpe, q"0")
@@ -148,7 +150,40 @@ class Array(val c: blackbox.Context) extends Common {
     }
   }
 
-  // TODO: implement me
   def copy[T: WeakTypeTag](from: Tree, fromIndex: Tree,
-                           to: Tree, toIndex: Tree, size: Tree) = q"???"
+                           to: Tree, toIndex: Tree, size: Tree) = debug("copy") {
+    def checks(arr: Tree, indexes: Tree*) = {
+      val size = fresh("size")
+      val checks = indexes.map { idx =>
+        q"if ($idx < 0 || $idx >= $size) ${throwOutOfBounds(idx)}"
+      }
+      q"""
+        val $size = ${read(q"$arr.$addr", ArraySizeTpe)}
+        ..$checks
+      """
+    }
+    stabilized(from) { fromArr =>
+      stabilized(fromIndex) { fromIdx =>
+        stabilized(to) { toArr =>
+          stabilized(toIndex) { toIdx =>
+            stabilized(size) { count =>
+              val fromChecks = checks(fromArr, fromIdx, q"$fromIdx + $count")
+              val toChecks = checks(toArr, toIdx, q"$toIdx + $count")
+              val stride = q"$offheap.sizeOf[${wt[T]}]"
+              val fromAddr = q"$fromArr.$addr + $sizeOfArraySize + $fromIdx * $stride"
+              val toAddr = q"$toArr.$addr + $sizeOfArraySize + $toIdx * $stride"
+              val sizeBytes = q"$count * $stride"
+              q"""
+                if ($CheckedModule.BOUNDS) {
+                  ..$fromChecks
+                  ..$toChecks
+                }
+                $MemoryModule.copy($fromAddr, $toAddr, $sizeBytes)
+              """
+            }
+          }
+        }
+      }
+    }
+  }
 }
