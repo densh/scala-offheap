@@ -21,8 +21,8 @@ class Util(val c: blackbox.Context) extends Common {
     }
   }
 
-  def alignmentOf_[T: WeakTypeTag]     = q"${alignmentOf(wt[T])}"
-  def alignmentOfData_[T: WeakTypeTag] = q"${alignmentOfData(wt[T])}"
-  def sizeOf_[T: WeakTypeTag]          = q"${sizeOf(wt[T])}"
-  def sizeOfData_[T: WeakTypeTag]      = q"${sizeOfData(wt[T])}"
+  def alignmentOf_[T: WeakTypeTag]      = q"${alignmentOf(wt[T])}"
+  def alignmentOfEmbed_[T: WeakTypeTag] = q"${alignmentOfEmbed(wt[T])}"
+  def sizeOf_[T: WeakTypeTag]           = q"${sizeOf(wt[T])}"
+  def sizeOfEmbed_[T: WeakTypeTag]      = q"${sizeOfEmbed(wt[T])}"
 }

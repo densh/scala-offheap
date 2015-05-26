@@ -17,7 +17,7 @@ class Method(val c: blackbox.Context) extends Common {
     """
 
   def access(addr: Tree, f: Field) =
-    if (f.isData) {
+    if (f.isEmbed) {
       val companion = f.tpe.typeSymbol.companion
       q"$companion.fromAddr($addr + ${f.offset})"
     } else
@@ -37,11 +37,11 @@ class Method(val c: blackbox.Context) extends Common {
   }
 
   def assign(addr: Tree, f: Field, value: Tree) =
-    if (f.isData) {
+    if (f.isEmbed) {
       val companion = f.tpe.typeSymbol.companion
       val from      = q"$companion.toAddr($value)"
       val to        = q"$addr + ${f.offset}"
-      val size      = sizeOfData(f.tpe)
+      val size      = sizeOfEmbed(f.tpe)
       nullChecked(from, q"$MemoryModule.copy($from, $to, $size)")
     } else write(q"$addr + ${f.offset}", f.tpe, value)
 
@@ -81,7 +81,7 @@ class Method(val c: blackbox.Context) extends Common {
     val values = clazz.tag.map(_.value) ++: args
     val writes = clazz.fields.zip(values).map { case (f, v) =>
       v match {
-        case Allocation(fclazz, fargs, _) if f.isData =>
+        case Allocation(fclazz, fargs, _) if f.isEmbed =>
           def init(faddr: TermName) =
             initialize(fclazz, faddr, fargs, discardResult = true, prezeroed = zeroed)
           if (f.offset == 0)

@@ -6,8 +6,8 @@ package object offheap {
   type Size = Long
 
   def alignmentOf[T]: Size             = macro macros.Util.alignmentOf_[T]
-  def alignmentOfData[T]: Size         = macro macros.Util.alignmentOfData_[T]
+  def alignmentOfEmbed[T]: Size        = macro macros.Util.alignmentOfEmbed_[T]
   def sizeOf[T]: Size                  = macro macros.Util.sizeOf_[T]
-  def sizeOfData[T]: Size              = macro macros.Util.sizeOfData_[T]
+  def sizeOfEmbed[T]: Size             = macro macros.Util.sizeOfEmbed_[T]
   def offsetOf[T](field: String): Size = macro macros.Util.offsetOf[T]
 }

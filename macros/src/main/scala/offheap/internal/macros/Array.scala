@@ -76,10 +76,10 @@ class Array(val c: blackbox.Context) extends Common {
     assertAllocatable(B)
     stabilized(c.prefix.tree) { pre =>
       stabilized(a) { alloc =>
-        val narr   = freshVal("narr", appliedType(ArrayTpe, B),
-                       q"$ArrayModule.uninit[$B]($pre.length)($alloc)")
-        val base   = freshVal("base", AddrTpe,
-                       q"${narr.symbol}.$addr + $sizeOfArraySize")
+        val narr = freshVal("narr", appliedType(ArrayTpe, B),
+                            q"$ArrayModule.uninit[$B]($pre.length)($alloc)")
+        val base = freshVal("base", AddrTpe,
+                            q"${narr.symbol}.$addr + $sizeOfArraySize")
         val body =
           iterate(A, pre, i => p => q"""
             ..${write(q"${base.symbol} + ${i.symbol} * ${sizeOf(B)}", B, app(f, read(p, A)))}

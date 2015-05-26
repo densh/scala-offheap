@@ -73,11 +73,11 @@ trait Common extends Definitions {
 
   case class Field(name: String, after: Tree, tpe: Type,
                    annots: List[Tree], offset: Long) {
-    lazy val isData    = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
+    lazy val isEmbed   = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
     lazy val inCtor    = annots.collect { case q"new $c" if c.symbol == CtorClass => c }.nonEmpty
          val inBody    = !inCtor
-    lazy val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
-    lazy val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
+    lazy val size      = if (isEmbed) sizeOfEmbed(tpe) else sizeOf(tpe)
+    lazy val alignment = if (isEmbed) alignmentOfEmbed(tpe) else alignmentOf(tpe)
   }
   object Field {
     implicit val lift: Liftable[Field] = Liftable { f =>
@@ -206,7 +206,7 @@ trait Common extends Definitions {
     case _                     => abort(s"can't compute size of $tpe")
   }
 
-  def sizeOfData(tpe: Type): Long = tpe match {
+  def sizeOfEmbed(tpe: Type): Long = tpe match {
     case Clazz(clazz) => clazz.size
     case _            => abort(s"$tpe is not a an offheap class")
   }
@@ -221,7 +221,7 @@ trait Common extends Definitions {
     case _                     => abort(s"can't comput alignment for $tpe")
   }
 
-  def alignmentOfData(tpe: Type) = tpe match {
+  def alignmentOfEmbed(tpe: Type) = tpe match {
     case Clazz(clazz) => clazz.alignment
     case _            => abort(s"$tpe is not an offheap class")
   }

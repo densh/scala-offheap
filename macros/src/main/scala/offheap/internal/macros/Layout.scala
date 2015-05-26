@@ -17,12 +17,12 @@ class Layout(val c: blackbox.Context) extends Common {
 
   def field[C: WeakTypeTag](after: Tree, tag: Tree, annots: Tree) = inLayout(wt[C]) {
     val q"${tpe: Type}" = tag
-    val isData = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
+    val isEmbed = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
     val alignment =
-      if (isData) {
+      if (isEmbed) {
         assertEmbeddable(tpe)
         assertNotInLayout(tpe.typeSymbol, "illegal recursive embedding")
-        alignmentOfData(tpe)
+        alignmentOfEmbed(tpe)
       } else alignmentOf(tpe)
     val baseoffset = after match {
       case q"" => 0
