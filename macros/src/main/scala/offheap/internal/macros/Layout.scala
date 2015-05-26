@@ -30,10 +30,7 @@ class Layout(val c: blackbox.Context) extends Common {
         val q"${prev: Field}" = ExtractField.unapply(c.typecheck(after).symbol).get.head
         prev.offset + prev.size
     }
-    val padding =
-      if (baseoffset % alignment == 0) 0
-      else alignment - baseoffset % alignment
-    q"${baseoffset + padding}"
+    q"${padded(baseoffset, alignment)}"
   }
 
   def markComplete[C: WeakTypeTag] = {

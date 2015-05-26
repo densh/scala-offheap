@@ -239,6 +239,11 @@ trait Common extends Definitions {
       q"$companion.fromAddr($MemoryModule.getLong($addr))"
   }
 
+  def readEmbed(addr: Tree, tpe: Type): Tree = {
+    val companion = tpe.typeSymbol.companion
+    q"$companion.fromAddr($addr)"
+  }
+
   def write(addr: Tree, tpe: Type, value: Tree): Tree = tpe match {
     case ByteTpe | ShortTpe  | IntTpe | LongTpe | FloatTpe | DoubleTpe | CharTpe =>
       val putT = TermName(s"put$tpe")
@@ -254,6 +259,19 @@ trait Common extends Definitions {
     case Clazz(_) =>
       val companion = tpe.typeSymbol.companion
       q"$MemoryModule.putLong($addr, $companion.toAddr($value))"
+  }
+
+  def writeEmbed(addr: Tree, tpe: Type, value: Tree) = value match {
+    case Allocation(clazz, args, _) =>
+      val naddr = fresh("naddr")
+      q"""
+        val $naddr = $addr
+        ..${initialize(clazz, naddr, args, discardResult = true, prezeroed = false)}
+      """
+    case _ =>
+      val from = q"${tpe.typeSymbol.companion}.toAddr($value)"
+      val size = sizeOfEmbed(tpe)
+      nullChecked(from, q"$MemoryModule.copy($from, $addr, $size)")
   }
 
   def isSemiStable(sym: Symbol) =
@@ -353,4 +371,59 @@ trait Common extends Definitions {
   def notNull(addr: Tree) = q"$addr != 0L"
 
   def classOf(tpt: Tree) = q"$PredefModule.classOf[$tpt]"
+
+  def padded(base: Long, alignment: Long) =
+    if (base % alignment == 0) base
+    else base + (alignment - base % alignment)
+
+  def nullChecked(addr: Tree, ifOk: Tree) =
+    q"""
+      if ($CheckedModule.NULL)
+        if ($addr == 0L) throw new $NullPointerExceptionClass
+      $ifOk
+    """
+
+  object Allocation {
+    final case class Attachment(clazz: Clazz, args: List[Tree], alloc: Tree)
+    def apply(clazz: Clazz, args: List[Tree], alloc: Tree, result: Tree): Tree =
+      result.updateAttachment(Attachment(clazz, args, alloc))
+    def unapply(tree: Tree): Option[(Clazz, List[Tree], Tree)] = tree match {
+      case q"$inner: $_" =>
+        inner.attachments.get[Attachment].map { a => (a.clazz, a.args, a.alloc) }
+      case _ =>
+        None
+    }
+  }
+
+  def flatten(trees: List[Tree]) =
+    trees.reduceOption { (l, r) => q"..$l; ..$r" }.getOrElse(q"")
+
+  def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
+                 discardResult: Boolean, prezeroed: Boolean): Tree = {
+    val (preamble, zeroed) =
+      if (clazz.fields.filter(_.inBody).isEmpty || prezeroed) (q"", prezeroed)
+      else (q"$MemoryModule.zero($addr, ${clazz.size})", true)
+    val values = clazz.tag.map(_.value) ++: args
+    val writes = clazz.fields.zip(values).map { case (f, v) =>
+      assign(q"$addr", f, v)
+    }
+    val newC = q"${clazz.companion}.fromAddr($addr)"
+    val instantiated =
+      if (clazz.hasInit) q"$newC.$initializer"
+      else if (discardResult) q""
+      else newC
+    q"""
+      ..$preamble
+      ..${flatten(writes)}
+      ..$instantiated
+    """
+  }
+
+  def access(addr: Tree, f: Field) =
+    if (f.isEmbed) readEmbed(q"$addr + ${f.offset}", f.tpe)
+    else read(q"$addr + ${f.offset}", f.tpe)
+
+  def assign(addr: Tree, f: Field, value: Tree) =
+    if (f.isEmbed) writeEmbed(q"$addr + ${f.offset}", f.tpe, value)
+    else write(q"$addr + ${f.offset}", f.tpe, value)
 }
