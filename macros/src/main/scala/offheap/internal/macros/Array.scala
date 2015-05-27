@@ -11,6 +11,7 @@ trait ArrayCommon extends Common {
 
   def isEmbed: Boolean
   def MyArrayClass  = if (isEmbed) EmbedArrayClass else ArrayClass
+  def MyArrayTpe    = MyArrayClass.asType.toType
   def MyArrayModule = if (isEmbed) EmbedArrayModule else ArrayModule
 
   def throwIllegalArgument(v: Tree) =
@@ -103,7 +104,7 @@ trait ArrayApiCommon extends ArrayCommon {
     assertAllocatable(B)
     stabilized(c.prefix.tree) { pre =>
       stabilized(a) { alloc =>
-        val narr = freshVal("narr", appliedType(ArrayTpe, B),
+        val narr = freshVal("narr", appliedType(MyArrayTpe, B),
                             q"$MyArrayModule.uninit[$B]($pre.length)($alloc)")
         val base = freshVal("base", AddrTpe,
                             q"${narr.symbol}.$addr + $sizeOfHeader")

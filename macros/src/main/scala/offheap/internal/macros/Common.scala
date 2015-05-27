@@ -269,9 +269,12 @@ trait Common extends Definitions {
         ..${initialize(clazz, naddr, args, discardResult = true, prezeroed = false)}
       """
     case _ =>
-      val from = q"${tpe.typeSymbol.companion}.toAddr($value)"
+      val from = fresh("from")
       val size = sizeOfEmbed(tpe)
-      nullChecked(from, q"$MemoryModule.copy($from, $addr, $size)")
+      q"""
+        val $from = ${tpe.typeSymbol.companion}.toAddr($value)
+        ${nullChecked(q"$from", q"$MemoryModule.copy($from, $addr, $size)")}
+      """
   }
 
   def isSemiStable(sym: Symbol) =
