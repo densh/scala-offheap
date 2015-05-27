@@ -73,11 +73,11 @@ trait Common extends Definitions {
 
   case class Field(name: String, after: Tree, tpe: Type,
                    annots: List[Tree], offset: Long) {
-    lazy val isData    = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
+    lazy val isEmbed   = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
     lazy val inCtor    = annots.collect { case q"new $c" if c.symbol == CtorClass => c }.nonEmpty
          val inBody    = !inCtor
-    lazy val size      = if (isData) sizeOfData(tpe) else sizeOf(tpe)
-    lazy val alignment = if (isData) alignmentOfData(tpe) else alignmentOf(tpe)
+    lazy val size      = if (isEmbed) sizeOfEmbed(tpe) else sizeOf(tpe)
+    lazy val alignment = if (isEmbed) alignmentOfEmbed(tpe) else alignmentOf(tpe)
   }
   object Field {
     implicit val lift: Liftable[Field] = Liftable { f =>
@@ -169,11 +169,13 @@ trait Common extends Definitions {
   }
 
   object ArrayOf {
-    def is(tpe: Type): Boolean =
-      tpe.typeSymbol == ArrayClass
-    def unapply(tpe: Type): Option[Type] =
-      if (!is(tpe)) None
-      else Some(paramTpe(tpe))
+    def is(tpe: Type) = isEmbed(tpe) || isNonEmbed(tpe)
+    def isNonEmbed(tpe: Type) = tpe.typeSymbol == ArrayClass
+    def isEmbed(tpe: Type) = tpe.typeSymbol == EmbedArrayClass
+    def unapply(tpe: Type): Option[(Type, Boolean)] =
+      if (isEmbed(tpe)) Some((paramTpe(tpe), true))
+      else if (isNonEmbed(tpe)) Some((paramTpe(tpe), false))
+      else None
   }
 
   object TupleOf {
@@ -206,7 +208,7 @@ trait Common extends Definitions {
     case _                     => abort(s"can't compute size of $tpe")
   }
 
-  def sizeOfData(tpe: Type): Long = tpe match {
+  def sizeOfEmbed(tpe: Type): Long = tpe match {
     case Clazz(clazz) => clazz.size
     case _            => abort(s"$tpe is not a an offheap class")
   }
@@ -221,7 +223,7 @@ trait Common extends Definitions {
     case _                     => abort(s"can't comput alignment for $tpe")
   }
 
-  def alignmentOfData(tpe: Type) = tpe match {
+  def alignmentOfEmbed(tpe: Type) = tpe match {
     case Clazz(clazz) => clazz.alignment
     case _            => abort(s"$tpe is not an offheap class")
   }
@@ -232,11 +234,17 @@ trait Common extends Definitions {
       q"$MemoryModule.$getT($addr)"
     case BooleanTpe =>
       q"$MemoryModule.getByte($addr) != ${Literal(Constant(0.toByte))}"
-    case ArrayOf(tpe) =>
-      q"$ArrayModule.fromAddr[$tpe]($MemoryModule.getLong($addr))"
+    case ArrayOf(tpe, isEmbed) =>
+      val module = if (isEmbed) EmbedArrayModule else ArrayModule
+      q"$module.fromAddr[$tpe]($MemoryModule.getLong($addr))"
     case Clazz(_) =>
       val companion = tpe.typeSymbol.companion
       q"$companion.fromAddr($MemoryModule.getLong($addr))"
+  }
+
+  def readEmbed(addr: Tree, tpe: Type): Tree = {
+    val companion = tpe.typeSymbol.companion
+    q"$companion.fromAddr($addr)"
   }
 
   def write(addr: Tree, tpe: Type, value: Tree): Tree = tpe match {
@@ -249,11 +257,28 @@ trait Common extends Definitions {
                               if ($value) ${Literal(Constant(1.toByte))}
                               else ${Literal(Constant(0.toByte))})
       """
-    case ArrayOf(_) =>
-      q"$MemoryModule.putLong($addr, $ArrayModule.toAddr($value))"
+    case ArrayOf(_, isEmbed) =>
+      val module = if (isEmbed) EmbedArrayModule else ArrayModule
+      q"$MemoryModule.putLong($addr, $module.toAddr($value))"
     case Clazz(_) =>
       val companion = tpe.typeSymbol.companion
       q"$MemoryModule.putLong($addr, $companion.toAddr($value))"
+  }
+
+  def writeEmbed(addr: Tree, tpe: Type, value: Tree) = value match {
+    case Allocation(clazz, args, _) =>
+      val naddr = fresh("naddr")
+      q"""
+        val $naddr = $addr
+        ..${initialize(clazz, naddr, args, discardResult = true, prezeroed = false)}
+      """
+    case _ =>
+      val from = fresh("from")
+      val size = sizeOfEmbed(tpe)
+      q"""
+        val $from = ${tpe.typeSymbol.companion}.toAddr($value)
+        ${nullChecked(q"$from", q"$MemoryModule.copy($from, $addr, $size)")}
+      """
   }
 
   def isSemiStable(sym: Symbol) =
@@ -353,4 +378,63 @@ trait Common extends Definitions {
   def notNull(addr: Tree) = q"$addr != 0L"
 
   def classOf(tpt: Tree) = q"$PredefModule.classOf[$tpt]"
+
+  def padded(base: Long, alignment: Long) =
+    if (base % alignment == 0) base
+    else base + (alignment - base % alignment)
+
+  def nullChecked(addr: Tree, ifOk: Tree) =
+    q"""
+      if ($CheckedModule.NULL)
+        if ($addr == 0L) throw new $NullPointerExceptionClass
+      $ifOk
+    """
+
+  object Allocation {
+    final case class Attachment(clazz: Clazz, args: List[Tree], alloc: Tree)
+    def apply(clazz: Clazz, args: List[Tree], alloc: Tree, result: Tree): Tree =
+      result.updateAttachment(Attachment(clazz, args, alloc))
+    def unapply(tree: Tree): Option[(Clazz, List[Tree], Tree)] = tree match {
+      case q"$inner: $_" =>
+        inner.attachments.get[Attachment].map { a => (a.clazz, a.args, a.alloc) }
+      case _ =>
+        None
+    }
+  }
+
+  def flatten(trees: List[Tree]) =
+    trees.reduceOption { (l, r) => q"..$l; ..$r" }.getOrElse(q"")
+
+  def initialize(clazz: Clazz, addr: TermName, args: Seq[Tree],
+                 discardResult: Boolean, prezeroed: Boolean): Tree = {
+    val (preamble, zeroed) =
+      if (clazz.fields.filter(_.inBody).isEmpty || prezeroed) (q"", prezeroed)
+      else (q"$MemoryModule.zero($addr, ${clazz.size})", true)
+    val values = clazz.tag.map(_.value) ++: args
+    val writes = clazz.fields.zip(values).map { case (f, v) =>
+      assign(q"$addr", f, v)
+    }
+    val newC = q"${clazz.companion}.fromAddr($addr)"
+    val instantiated =
+      if (clazz.hasInit) q"$newC.$initializer"
+      else if (discardResult) q""
+      else newC
+    q"""
+      ..$preamble
+      ..${flatten(writes)}
+      ..$instantiated
+    """
+  }
+
+  def access(addr: Tree, f: Field) =
+    if (f.isEmbed) readEmbed(q"$addr + ${f.offset}", f.tpe)
+    else read(q"$addr + ${f.offset}", f.tpe)
+
+  def assign(addr: Tree, f: Field, value: Tree) =
+    if (f.isEmbed) writeEmbed(q"$addr + ${f.offset}", f.tpe, value)
+    else write(q"$addr + ${f.offset}", f.tpe, value)
+
+  def strideOf(T: Type, isEmbed: Boolean): Long =
+    if (!isEmbed) sizeOf(T)
+    else padded(sizeOfEmbed(T), alignmentOfEmbed(T))
 }

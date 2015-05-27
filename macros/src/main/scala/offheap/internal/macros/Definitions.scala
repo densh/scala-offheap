@@ -11,7 +11,7 @@ trait Definitions {
   import c.universe.definitions._
   import c.universe.rootMirror._
 
-  val StringBuilderClass            = staticClass("scala.collection.mutable.StringBuilder")
+  val StringBuilderClass             = staticClass("scala.collection.mutable.StringBuilder")
   val NullPointerExceptionClass      = staticClass("java.lang.NullPointerException")
   val IllegalArgumentExceptionClass  = staticClass("java.lang.IllegalArgumentException")
   val IndexOutOfBoundsExceptionClass = staticClass("java.lang.IndexOutOfBoundsException")
@@ -19,6 +19,7 @@ trait Definitions {
   val RegionClass             = staticClass("offheap.Region")
   val AllocatorClass          = staticClass("offheap.Allocator")
   val ArrayClass              = staticClass("offheap.Array")
+  val EmbedArrayClass         = staticClass("offheap.EmbedArray")
   val EmbedClass              = staticClass("offheap.embed")
   val DataClass               = staticClass("offheap.internal.Data")
   val EnumClass               = staticClass("offheap.internal.Enum")
@@ -34,14 +35,15 @@ trait Definitions {
   val CompleteClass           = staticClass("offheap.internal.Complete")
   val CtorClass               = staticClass("offheap.internal.Ctor")
 
-  val RegionModule    = staticModule("offheap.Region")
-  val PoolModule      = staticModule("offheap.Pool")
-  val ArrayModule     = staticModule("offheap.Array")
-  val SanitizerModule = staticModule("offheap.internal.Sanitizer")
-  val MethodModule    = staticModule("offheap.internal.Method")
-  val LayoutModule    = staticModule("offheap.internal.Layout")
-  val MemoryModule    = staticModule("offheap.internal.Memory")
-  val CheckedModule   = staticModule("offheap.internal.Checked")
+  val RegionModule     = staticModule("offheap.Region")
+  val PoolModule       = staticModule("offheap.Pool")
+  val ArrayModule      = staticModule("offheap.Array")
+  val EmbedArrayModule = staticModule("offheap.EmbedArray")
+  val SanitizerModule  = staticModule("offheap.internal.Sanitizer")
+  val MethodModule     = staticModule("offheap.internal.Method")
+  val LayoutModule     = staticModule("offheap.internal.Layout")
+  val MemoryModule     = staticModule("offheap.internal.Memory")
+  val CheckedModule    = staticModule("offheap.internal.Checked")
 
   val offheap  = staticPackage("offheap")
   val internal = staticPackage("offheap.internal")

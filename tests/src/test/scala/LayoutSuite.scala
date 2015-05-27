@@ -38,23 +38,23 @@ class LayoutSuite extends FunSuite {
   test("L6.emb offset") { assert(offsetOf[L6]("emb") == 8) }
   test("L8.emb offset") { assert(offsetOf[L8]("emb") == 4) }
 
-  test("sizeOfData[L1]") { assert(sizeOfData[L1] == 2 ) }
-  test("sizeOfData[L2]") { assert(sizeOfData[L2] == 4 ) }
-  test("sizeOfData[L3]") { assert(sizeOfData[L3] == 8 ) }
-  test("sizeOfData[L4]") { assert(sizeOfData[L4] == 16) }
-  test("sizeOfData[L5]") { assert(sizeOfData[L5] == 16) }
-  test("sizeOfData[L6]") { assert(sizeOfData[L6] == 24) }
-  test("sizeOfData[L7]") { assert(sizeOfData[L7] == 6) }
-  test("sizeOfData[L8]") { assert(sizeOfData[L8] == 24) }
-  test("sizeOfData[L9]") { assert(sizeOfData[L9] == 1) }
+  test("sizeOfEmbed[L1]") { assert(sizeOfEmbed[L1] == 2 ) }
+  test("sizeOfEmbed[L2]") { assert(sizeOfEmbed[L2] == 4 ) }
+  test("sizeOfEmbed[L3]") { assert(sizeOfEmbed[L3] == 8 ) }
+  test("sizeOfEmbed[L4]") { assert(sizeOfEmbed[L4] == 16) }
+  test("sizeOfEmbed[L5]") { assert(sizeOfEmbed[L5] == 16) }
+  test("sizeOfEmbed[L6]") { assert(sizeOfEmbed[L6] == 24) }
+  test("sizeOfEmbed[L7]") { assert(sizeOfEmbed[L7] == 6) }
+  test("sizeOfEmbed[L8]") { assert(sizeOfEmbed[L8] == 24) }
+  test("sizeOfEmbed[L9]") { assert(sizeOfEmbed[L9] == 1) }
 
-  test("alignmentOfData[L1]") { assert(alignmentOfData[L1] == 1) }
-  test("alignmentOfData[L2]") { assert(alignmentOfData[L2] == 2) }
-  test("alignmentOfData[L3]") { assert(alignmentOfData[L3] == 4) }
-  test("alignmentOfData[L4]") { assert(alignmentOfData[L4] == 8) }
-  test("alignmentOfData[L5]") { assert(alignmentOfData[L5] == 8) }
-  test("alignmentOfData[L6]") { assert(alignmentOfData[L6] == 8) }
-  test("alignmentOfData[L7]") { assert(alignmentOfData[L7] == 4) }
-  test("alignmentOfData[L8]") { assert(alignmentOfData[L8] == 8) }
-  test("alignmentOfData[L9]") { assert(alignmentOfData[L9] == 1) }
+  test("alignmentOfEmbed[L1]") { assert(alignmentOfEmbed[L1] == 1) }
+  test("alignmentOfEmbed[L2]") { assert(alignmentOfEmbed[L2] == 2) }
+  test("alignmentOfEmbed[L3]") { assert(alignmentOfEmbed[L3] == 4) }
+  test("alignmentOfEmbed[L4]") { assert(alignmentOfEmbed[L4] == 8) }
+  test("alignmentOfEmbed[L5]") { assert(alignmentOfEmbed[L5] == 8) }
+  test("alignmentOfEmbed[L6]") { assert(alignmentOfEmbed[L6] == 8) }
+  test("alignmentOfEmbed[L7]") { assert(alignmentOfEmbed[L7] == 4) }
+  test("alignmentOfEmbed[L8]") { assert(alignmentOfEmbed[L8] == 8) }
+  test("alignmentOfEmbed[L9]") { assert(alignmentOfEmbed[L9] == 1) }
 }
