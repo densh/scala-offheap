@@ -169,11 +169,13 @@ trait Common extends Definitions {
   }
 
   object ArrayOf {
-    def is(tpe: Type): Boolean =
-      tpe.typeSymbol == ArrayClass
-    def unapply(tpe: Type): Option[Type] =
-      if (!is(tpe)) None
-      else Some(paramTpe(tpe))
+    def is(tpe: Type) = isEmbed(tpe) || isNonEmbed(tpe)
+    def isNonEmbed(tpe: Type) = tpe.typeSymbol == ArrayClass
+    def isEmbed(tpe: Type) = tpe.typeSymbol == EmbedArrayClass
+    def unapply(tpe: Type): Option[(Type, Boolean)] =
+      if (isEmbed(tpe)) Some((paramTpe(tpe), true))
+      else if (isNonEmbed(tpe)) Some((paramTpe(tpe), false))
+      else None
   }
 
   object TupleOf {
@@ -232,8 +234,9 @@ trait Common extends Definitions {
       q"$MemoryModule.$getT($addr)"
     case BooleanTpe =>
       q"$MemoryModule.getByte($addr) != ${Literal(Constant(0.toByte))}"
-    case ArrayOf(tpe) =>
-      q"$ArrayModule.fromAddr[$tpe]($MemoryModule.getLong($addr))"
+    case ArrayOf(tpe, isEmbed) =>
+      val module = if (isEmbed) EmbedArrayModule else ArrayModule
+      q"$module.fromAddr[$tpe]($MemoryModule.getLong($addr))"
     case Clazz(_) =>
       val companion = tpe.typeSymbol.companion
       q"$companion.fromAddr($MemoryModule.getLong($addr))"
@@ -254,8 +257,9 @@ trait Common extends Definitions {
                               if ($value) ${Literal(Constant(1.toByte))}
                               else ${Literal(Constant(0.toByte))})
       """
-    case ArrayOf(_) =>
-      q"$MemoryModule.putLong($addr, $ArrayModule.toAddr($value))"
+    case ArrayOf(_, isEmbed) =>
+      val module = if (isEmbed) EmbedArrayModule else ArrayModule
+      q"$MemoryModule.putLong($addr, $module.toAddr($value))"
     case Clazz(_) =>
       val companion = tpe.typeSymbol.companion
       q"$MemoryModule.putLong($addr, $companion.toAddr($value))"

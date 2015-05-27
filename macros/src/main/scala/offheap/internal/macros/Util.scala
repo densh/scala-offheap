@@ -21,6 +21,11 @@ class Util(val c: blackbox.Context) extends Common {
     }
   }
 
+  def strideOf[T: WeakTypeTag] = {
+    val T = wt[T]
+    q"???"
+  }
+
   def alignmentOf_[T: WeakTypeTag]      = q"${alignmentOf(wt[T])}"
   def alignmentOfEmbed_[T: WeakTypeTag] = q"${alignmentOfEmbed(wt[T])}"
   def sizeOf_[T: WeakTypeTag]           = q"${sizeOf(wt[T])}"

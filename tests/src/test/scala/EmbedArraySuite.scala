@@ -4,6 +4,7 @@ import org.scalatest.FunSuite
 import offheap._
 
 @data class EPoint(x: Int, y: Int)
+@data class EContainer(arr: EmbedArray[EPoint])
 
 class EmbedArraySuite extends FunSuite {
   implicit val alloc = Allocator()
@@ -64,5 +65,12 @@ class EmbedArraySuite extends FunSuite {
 
   test("empty is empty") {
     EmbedArray.empty[EPoint].isEmpty
+  }
+
+  test("embed array as a field") {
+    val container = EContainer(EmbedArray(EPoint(10, 20)))
+    assert(container.arr.nonEmpty)
+    assert(container.arr(0).x == 10)
+    assert(container.arr(0).y == 20)
   }
 }
