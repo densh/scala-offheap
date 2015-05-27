@@ -10,5 +10,5 @@ package object offheap {
   def sizeOf[T]: Size                  = macro macros.Util.sizeOf_[T]
   def sizeOfEmbed[T]: Size             = macro macros.Util.sizeOfEmbed_[T]
   def offsetOf[T](field: String): Size = macro macros.Util.offsetOf[T]
-  def strideOf[T]: Size                = macro macros.Util.strideOf[T]
+  def strideOf[T]: Size                = macro macros.Util.strideOf_[T]
 }

@@ -433,4 +433,8 @@ trait Common extends Definitions {
   def assign(addr: Tree, f: Field, value: Tree) =
     if (f.isEmbed) writeEmbed(q"$addr + ${f.offset}", f.tpe, value)
     else write(q"$addr + ${f.offset}", f.tpe, value)
+
+  def strideOf(T: Type, isEmbed: Boolean): Long =
+    if (!isEmbed) sizeOf(T)
+    else padded(sizeOfEmbed(T), alignmentOfEmbed(T))
 }

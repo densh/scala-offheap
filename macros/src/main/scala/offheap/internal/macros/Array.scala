@@ -20,9 +20,7 @@ trait ArrayCommon extends Common {
   def throwOutOfBounds(idx: Tree) =
     q"throw new $IndexOutOfBoundsExceptionClass($idx.toString)"
 
-  def strideOf(T: Type) =
-    if (!isEmbed) sizeOf(T)
-    else padded(sizeOfEmbed(T), alignmentOfEmbed(T))
+  def strideOf(T: Type): Long = strideOf(T, isEmbed)
 
   def sizeOfHeader =
     q"$offheap.sizeOf[$LongTpe]"

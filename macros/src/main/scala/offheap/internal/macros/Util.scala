@@ -21,9 +21,11 @@ class Util(val c: blackbox.Context) extends Common {
     }
   }
 
-  def strideOf[T: WeakTypeTag] = {
-    val T = wt[T]
-    q"???"
+  def strideOf_[T: WeakTypeTag] = wt[T] match {
+    case ArrayOf(tpe, isEmbed) =>
+      q"${strideOf(tpe, isEmbed)}"
+    case _ =>
+      abort("given type must be an an offheap array.")
   }
 
   def alignmentOf_[T: WeakTypeTag]      = q"${alignmentOf(wt[T])}"
