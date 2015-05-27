@@ -7,7 +7,7 @@ import offheap._, internal.Memory.UNSAFE
 
 @State(Scope.Thread)
 class Array {
-  implicit val alloc = Allocator()
+  implicit val alloc = SystemAllocator
   implicit val pool  = Pool(alloc, pageSize = 81920, chunkSize = 81920)
   val jarr: scala.Array[Long] = (0 to 9999).toArray.map(_.toLong)
   val arr: offheap.Array[Long] = {

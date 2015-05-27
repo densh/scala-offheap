@@ -19,6 +19,16 @@ final class Pool(
     page = new Page(chunk.start + chunk.offset, 0, page)
     chunk.offset += pageSize
   }
+  protected override def finalize: Unit = {
+    while (chunk != null) {
+      try alloc.free(chunk.start)
+      catch {
+        case _: UnsupportedOperationException =>
+          return
+      }
+      chunk = chunk.next
+    }
+  }
   def claim(): Page = this.synchronized {
     if (page == null) newPage()
     val res = page

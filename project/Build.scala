@@ -7,7 +7,7 @@ object RegionsBuild extends Build {
     scalaVersion := "2.11.6",
     resolvers += Resolver.sonatypeRepo("snapshots"),
     resolvers += Resolver.sonatypeRepo("releases"),
-    initialCommands in console += "import offheap._; implicit val alloc = Allocator()",
+    initialCommands in console += "import offheap._; implicit val alloc = SystemAllocator",
     addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)
   )
 

@@ -4,8 +4,6 @@ package internal
 import java.{lang => jl}
 import internal.Memory.UNSAFE
 
-// TODO: ensure that 0L is always a valid address
-// TODO: throw an exception once there is more than MAX allocators registered
 object Sanitizer {
   private[this] final val UNPACKED_ID_MASK = 65535L
   private[this] final val ID_MASK = jl.Long.MAX_VALUE << 48
@@ -16,32 +14,39 @@ object Sanitizer {
   def unpackAddr(addr: Addr): Addr = addr & ADDR_MASK
 
   private[this] final val MAX = 65536
-  private[this] val arr = UNSAFE.allocateMemory(MAX)
-  private[this] var last: Long = 0
-  private[this] var count: Int = 0
-  private def advance(last: Long): Long = {
+  private[this] val valid = new scala.Array[Boolean](MAX)
+  private[this] var last  = 1
+
+  private def advance(last: Int): Int = {
     val inc = last + 1
     if (inc < MAX) inc
-    else 0
+    else 1
   }
 
   def register(): Long = this.synchronized {
-    while (UNSAFE.getByte(arr + last) != 0) last = advance(last)
-    val res = last
-    UNSAFE.putByte(arr + last, 1)
-    last = advance(last)
-    count += 1
-    res
+    val prev = last
+    var res = advance(last)
+    while (valid(res) && res != prev) {
+      res = advance(res)
+    }
+    if (res == prev)
+      throw new IllegalArgumentException(
+        s"can't open more than ${MAX-1} regions in checked memory mode")
+    valid(res) = true
+    last = res
+    res.toLong
   }
+
   def unregister(id: Long): Unit = this.synchronized {
-    count -= 1
-    UNSAFE.putByte(arr + id, 0)
+    valid(id.toInt) = false
   }
 
   def validate(addr: Addr): Addr =
     if (Checked.MEMORY) {
-      if (UNSAFE.getByte(arr + unpackId(addr)) != 1)
+      val id = unpackId(addr).toInt
+      if (id != 0 && !valid(id)) {
         throw new InaccessibleMemoryException
+      }
       unpackAddr(addr)
     } else {
       addr

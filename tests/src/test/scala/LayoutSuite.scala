@@ -16,7 +16,7 @@ import offheap._
 @data class L9
 
 class LayoutSuite extends FunSuite {
-  implicit val alloc = Allocator()
+  implicit val alloc = SystemAllocator
 
   test("L1.x offset") { assert(offsetOf[L1]("x") == 0) }
   test("L2.x offset") { assert(offsetOf[L2]("x") == 0) }

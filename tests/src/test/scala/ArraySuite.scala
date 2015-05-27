@@ -6,7 +6,7 @@ import offheap._
 @data class ArrayContainer(var arr: Array[Int])
 
 class ArraySuite extends FunSuite {
-  implicit val alloc = Allocator()
+  implicit val alloc = SystemAllocator
 
   test("uninit") {
     val arr = Array.uninit[Int](10)

@@ -2,11 +2,16 @@ package offheap
 
 import scala.language.experimental.{macros => canMacro}
 import offheap.internal.macros
+import offheap.internal.Sanitizer
+import offheap.internal.Checked
 
 final class Region(private[this] val pool: Pool) extends Allocator {
   private[this] val tail = pool.claim
   tail.offset = 0
   private[this] var page = tail
+  private[this] val id: Long =
+    if (Checked.MEMORY) Sanitizer.register()
+    else 0L
 
   def isOpen   = page != null
   def isClosed = page == null
@@ -23,11 +28,16 @@ final class Region(private[this] val pool: Pool) extends Allocator {
     addr + padding
   }
 
-  override def close(): Unit = this.synchronized {
+  private def wrap(addr: Addr): Addr = {
+    if (Checked.MEMORY) Sanitizer.pack(this.id, addr)
+    else addr
+  }
+
+  def close(): Unit = this.synchronized {
     checkOpen
     pool.reclaim(page, tail)
     page = null
-    super.close
+    if (Checked.MEMORY) Sanitizer.unregister(id)
   }
 
   def allocate(size: Size): Addr = this.synchronized {
@@ -49,6 +59,12 @@ final class Region(private[this] val pool: Pool) extends Allocator {
       }
     wrap(page.start + resOffset)
   }
+
+  def reallocate(addr: Addr, size: Size): Addr =
+    throw new UnsupportedOperationException
+
+  def free(addr: Addr): Unit =
+    throw new UnsupportedOperationException
 }
 object Region {
   def open(implicit pool: Pool) = new Region(pool)
