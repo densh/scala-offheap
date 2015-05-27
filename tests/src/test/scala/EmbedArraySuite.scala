@@ -5,6 +5,7 @@ import offheap._
 
 @data class EPoint(x: Int, y: Int)
 @data class EContainer(arr: EmbedArray[EPoint])
+@data class ECell(var v: Int)
 
 class EmbedArraySuite extends FunSuite {
   implicit val alloc = Allocator()
@@ -72,5 +73,15 @@ class EmbedArraySuite extends FunSuite {
     assert(container.arr.nonEmpty)
     assert(container.arr(0).x == 10)
     assert(container.arr(0).y == 20)
+  }
+
+  test("new data is copied over") {
+    val cell = ECell(3)
+    val arr = EmbedArray(cell)
+    assert(arr(0).v == 3)
+    cell.v = 4
+    assert(arr(0).v == 3)
+    arr(0) = cell
+    assert(arr(0).v == 4)
   }
 }
