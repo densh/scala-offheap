@@ -8,15 +8,16 @@ import offheap._
 @data class AS3(a: Byte, b: Short)
 
 class ArrayStrideSuite extends FunSuite {
-  test("strideOf[Array[Byte]]")   { assert(strideOf[Array[Byte]]   == 1) }
-  test("strideOf[Array[Char]]")   { assert(strideOf[Array[Char]]   == 2) }
-  test("strideOf[Array[Short]]")  { assert(strideOf[Array[Short]]  == 2) }
-  test("strideOf[Array[Int]]")    { assert(strideOf[Array[Int]]    == 4) }
-  test("strideOf[Array[Long]]")   { assert(strideOf[Array[Long]]   == 8) }
-  test("strideOf[Array[Float]]")  { assert(strideOf[Array[Float]]  == 4) }
-  test("strideOf[Array[Double]]") { assert(strideOf[Array[Double]] == 8) }
+  test("strideOf[Byte]")   { assert(strideOf[Byte]   == 1) }
+  test("strideOf[Char]")   { assert(strideOf[Char]   == 2) }
+  test("strideOf[Short]")  { assert(strideOf[Short]  == 2) }
+  test("strideOf[Int]")    { assert(strideOf[Int]    == 4) }
+  test("strideOf[Long]")   { assert(strideOf[Long]   == 8) }
+  test("strideOf[Float]")  { assert(strideOf[Float]  == 4) }
+  test("strideOf[Double]") { assert(strideOf[Double] == 8) }
+  test("strideOf[AS1]")    { assert(strideOf[AS1]    == 8) }
 
-  test("strideOf[EmbedArray[AS1]]") { assert(strideOf[EmbedArray[AS1]] == 16) }
-  test("strideOf[EmbedArray[AS2]]") { assert(strideOf[EmbedArray[AS2]] == 8)  }
-  test("strideOf[EmbedArray[AS3]]") { assert(strideOf[EmbedArray[AS3]] == 4)  }
+  test("strideOfEmbed[AS1]") { assert(strideOfEmbed[AS1] == 16) }
+  test("strideOfEmbed[AS2]") { assert(strideOfEmbed[AS2] == 8)  }
+  test("strideOfEmbed[AS3]") { assert(strideOfEmbed[AS3] == 4)  }
 }

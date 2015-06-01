@@ -105,7 +105,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val initStats = rawStats.collect {
       case t if t.isTerm => t
       case ValDef(mods, vname, tpt, value) if !mods.hasFlag(DEFAULTINIT) =>
-        q"$MethodModule.assign[$name, $tpt]($addr, ${vname.toString}, $value)"
+        q"$MethodModule.assign[$name, $tpt](this, ${vname.toString}, $value)"
     }
     val methods = rawStats.collect { case t: DefDef => t }
     val types = rawStats.collect { case t: TypeDef => t }
@@ -127,12 +127,12 @@ class Annotations(val c: whitebox.Context) extends Common {
       prev = q"this.${f.name}"
       val accessor = q"""
         @$annot def ${f.name}: ${f.tpt} =
-          $MethodModule.access[$name, ${f.tpt}]($addr, ${f.name.toString})
+          $MethodModule.access[$name, ${f.tpt}](this, ${f.name.toString})
       """
       val assignerName = TermName(f.name.toString + "_$eq")
       val assigner = q"""
         def $assignerName($value: ${f.tpt}): Unit =
-          $MethodModule.assign[$name, ${f.tpt}]($addr, ${f.name.toString}, $value)
+          $MethodModule.assign[$name, ${f.tpt}](this, ${f.name.toString}, $value)
       """
       if (!f.isMutable) accessor :: Nil
       else accessor :: assigner :: Nil
@@ -213,7 +213,7 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     q"""
       $mods class $name private (
-        private val $addr: $AddrTpe
+        val addr: $AddrTpe
       ) extends $AnyValClass with ..$traits { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
 
@@ -223,8 +223,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         @$completeAnnot
         def $complete: $UnitClass = ()
 
-        def isEmpty  = ${isNull(q"$addr")}
-        def nonEmpty = ${notNull(q"$addr")}
+        def isEmpty  = ${isNull(q"this.addr")}
+        def nonEmpty = ${notNull(q"this.addr")}
         def get      = $getBody
         ..${_ns}
 
@@ -245,8 +245,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         import scala.language.experimental.{macros => $canUseMacros}
 
         val empty: $name                       = null.asInstanceOf[$name]
-        def fromAddr($addr: $AddrTpe): $name   = new $name($addr)
-        def toAddr($instance: $name): $AddrTpe = $instance.$addr
+        def fromAddr(addr: $AddrTpe): $name    = new $name(addr)
         def apply(..$applyArgs)(implicit alloc: $AllocatorClass): $name =
           macro $internal.macros.Allocate.$applyName[$name]
         def unapply(scrutinee: $AnyClass): $unapplyTpt =
@@ -375,20 +374,19 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     q"""
       @..$annots final class $name private(
-        private val $addr: $AddrTpe
+        val addr: $AddrTpe
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
 
         @$FieldClass(${tag.toString}, ..$tagprops, $LayoutModule.field[$name](..$tagprops))
-        def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt]($addr, ${tag.toString})
+        def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt](this, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]
       }
       $moduleMods object $termName extends { ..$rawEarly } with ..$rawParents { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
-        val empty: $name                       = null.asInstanceOf[$name]
-        def fromAddr($addr: $AddrTpe): $name   = new $name($addr)
-        def toAddr($instance: $name): $AddrTpe = $instance.$addr
+        val empty: $name                     = null.asInstanceOf[$name]
+        def fromAddr(addr: $AddrTpe): $name  = new $name(addr)
         implicit def $coerce[T](t: T): $name =
           macro $internal.macros.WhiteboxMethod.coerce[$name, T]
         ..$stats

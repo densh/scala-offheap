@@ -15,7 +15,7 @@ class EmbedSuite extends FunSuite {
   test("inner pointer") {
     val inner = Inner(42)
     val outer = Outer(inner)
-    assert(Outer.toAddr(outer) == Inner.toAddr(outer.inner))
+    assert(outer.addr == outer.inner.addr)
   }
 
   test("modify after copy") {

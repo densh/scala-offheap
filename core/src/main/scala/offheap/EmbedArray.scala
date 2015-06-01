@@ -3,7 +3,11 @@ package offheap
 import scala.language.experimental.{macros => CanMacro}
 import offheap.internal.macros
 
-final class EmbedArray[A] private (val $addr: Addr) extends AnyVal {
+/** An alternative implemenation of an array that inlines
+ *  allocation of given offheap class into the array layout.
+ *  This effectively makes it an array of structs in C sense.
+ */
+final class EmbedArray[A] private (val addr: Addr) extends AnyVal {
   def isEmpty: Boolean                                        = macro macros.EmbedArrayApi.isEmpty
   def nonEmpty: Boolean                                       = macro macros.EmbedArrayApi.nonEmpty
   def size: EmbedArray.Size                                   = macro macros.EmbedArrayApi.size
@@ -16,7 +20,7 @@ final class EmbedArray[A] private (val $addr: Addr) extends AnyVal {
   def clone(implicit a: Allocator): EmbedArray[A]             = macro macros.EmbedArrayApi.clone_
 
   override def toString =
-    if ($addr == 0L) s"offheap.x64.EmbedArray.empty"
+    if (addr == 0L) s"offheap.x64.EmbedArray.empty"
     else super.toString
 }
 object EmbedArray {
@@ -32,5 +36,4 @@ object EmbedArray {
 
   def empty[T]: EmbedArray[T]                                     = new EmbedArray[T](0L)
   def fromAddr[T](addr: Addr): EmbedArray[T]                      = new EmbedArray[T](addr)
-  def toAddr[T](arr: EmbedArray[T]): Addr                         = arr.$addr
 }

@@ -56,7 +56,6 @@ trait Definitions {
   val initializer  = TermName("$init")
   val layout       = TermName("$layout")
   val tag          = TermName("$tag")
-  val addr         = TermName("$addr")
   val canUseMacros = TermName("$canUseMacros")
   val complete     = TermName("$complete")
 }

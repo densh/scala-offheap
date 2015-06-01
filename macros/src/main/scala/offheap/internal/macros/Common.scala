@@ -257,12 +257,8 @@ trait Common extends Definitions {
                               if ($value) ${Literal(Constant(1.toByte))}
                               else ${Literal(Constant(0.toByte))})
       """
-    case ArrayOf(_, isEmbed) =>
-      val module = if (isEmbed) EmbedArrayModule else ArrayModule
-      q"$MemoryModule.putLong($addr, $module.toAddr($value))"
-    case Clazz(_) =>
-      val companion = tpe.typeSymbol.companion
-      q"$MemoryModule.putLong($addr, $companion.toAddr($value))"
+    case Clazz(_) | ArrayOf(_, _) =>
+      q"$MemoryModule.putLong($addr, $value.addr)"
   }
 
   def writeEmbed(addr: Tree, tpe: Type, value: Tree) = value match {
@@ -276,7 +272,7 @@ trait Common extends Definitions {
       val from = fresh("from")
       val size = sizeOfEmbed(tpe)
       q"""
-        val $from = ${tpe.typeSymbol.companion}.toAddr($value)
+        val $from = $value.addr
         ${nullChecked(q"$from", q"$MemoryModule.copy($from, $addr, $size)")}
       """
   }
@@ -369,9 +365,8 @@ trait Common extends Definitions {
     }
 
   def cast(v: Tree, from: Type, to: Type) = {
-    val fromCompanion = from.typeSymbol.companion
     val toCompanion = to.typeSymbol.companion
-    q"$toCompanion.fromAddr($fromCompanion.toAddr($v))"
+    q"$toCompanion.fromAddr($v.addr)"
   }
 
   def isNull(addr: Tree)  = q"$addr == 0L"

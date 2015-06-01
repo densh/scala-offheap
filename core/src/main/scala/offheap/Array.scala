@@ -3,7 +3,15 @@ package offheap
 import scala.language.experimental.{macros => CanMacro}
 import offheap.internal.macros
 
-final class Array[A] private (val $addr: Addr) extends AnyVal {
+/** Off-heap equivalent of `scala.Array`. Can only be used
+ *  with statically known values of type parameter which also
+ *  has to be off-heap allocatable.
+ *
+ *  All combinator methods are implemented through macros and
+ *  attempt to eliminate closures that are passed to them whenever
+ *  possible.
+ */
+final class Array[A] private (val addr: Addr) extends AnyVal {
   def isEmpty: Boolean                                   = macro macros.ArrayApi.isEmpty
   def nonEmpty: Boolean                                  = macro macros.ArrayApi.nonEmpty
   def size: Array.Size                                   = macro macros.ArrayApi.size
@@ -16,7 +24,7 @@ final class Array[A] private (val $addr: Addr) extends AnyVal {
   def clone(implicit a: Allocator): Array[A]             = macro macros.ArrayApi.clone_
 
   override def toString =
-    if ($addr == 0L) s"offheap.x64.Array.empty"
+    if (addr == 0L) s"offheap.x64.Array.empty"
     else super.toString
 }
 object Array {
@@ -32,5 +40,4 @@ object Array {
 
   def empty[T]: Array[T]                                     = new Array[T](0L)
   def fromAddr[T](addr: Addr): Array[T]                      = new Array[T](addr)
-  def toAddr[T](arr: Array[T]): Addr                         = arr.$addr
 }
