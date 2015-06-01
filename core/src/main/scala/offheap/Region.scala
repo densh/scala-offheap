@@ -6,7 +6,7 @@ import offheap.internal.Sanitizer
 import offheap.internal.Checked
 
 /** Scoped region-based allocator. Supports allocations up to
- *  the size of page in memory pool. Memory is reclaimed back
+ *  the size of a page in memory pool. Memory is reclaimed back
  *  to the pool in constant-time once the region is closed.
  */
 final class Region(private[this] val pool: Pool) extends Allocator {
