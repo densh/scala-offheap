@@ -220,7 +220,7 @@ trait Common extends Definitions {
     case LongTpe  | DoubleTpe  => 8
     case _ if Clazz.is(tpe)    ||
               ArrayOf.is(tpe)  => 8
-    case _                     => abort(s"can't comput alignment for $tpe")
+    case _                     => abort(s"can't compute alignment for $tpe")
   }
 
   def alignmentOfEmbed(tpe: Type) = tpe match {

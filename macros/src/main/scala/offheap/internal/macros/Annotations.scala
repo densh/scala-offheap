@@ -267,7 +267,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     case (clazz: ClassDef) :: (companion: ModuleDef) :: Nil =>
       dataTransform(clazz, companion)
     case _ =>
-      abort("@data anottation only works on classes")
+      abort("@data annotation only works on classes")
   }
 
   def countClasses(stats: List[Tree]): Int = stats.map {
@@ -404,6 +404,6 @@ class Annotations(val c: whitebox.Context) extends Common {
     case (module: ModuleDef) :: Nil =>
       enumTransform(q"class ${module.name.toTypeName}", module)
     case _ =>
-      abort("@enum anottation only works on objects and classes")
+      abort("@enum annotation only works on objects and classes")
   }
 }
