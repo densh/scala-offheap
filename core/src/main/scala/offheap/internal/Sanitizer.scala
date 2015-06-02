@@ -14,37 +14,44 @@ object Sanitizer {
   def unpackAddr(addr: Addr): Addr = addr & ADDR_MASK
 
   private[this] final val MAX = 65536
-  private[this] val valid = new scala.Array[Boolean](MAX)
-  private[this] var last  = 1
+  private[this] val valid = new java.util.concurrent.atomic.AtomicIntegerArray(MAX)
+  private[this] val trans = new java.util.concurrent.atomic.AtomicLong(0L)
 
-  private def advance(last: Int): Int = {
-    val inc = last + 1
+  private def truncate(v: Int): Int =
+    if (v == 0) 1 else v
+  private def advance(prev: Int): Int = {
+    val inc = prev + 1
     if (inc < MAX) inc
     else 1
   }
 
-  def register(): Long = this.synchronized {
-    val prev = last
-    var res = advance(last)
-    while (valid(res) && res != prev) {
-      res = advance(res)
-    }
-    if (res == prev)
-      throw new IllegalArgumentException(
-        s"can't open more than ${MAX-1} regions in checked memory mode")
-    valid(res) = true
-    last = res
+  def register(): Long = {
+    var commit = false
+    var res = 0
+    do {
+      val prevtrans = trans.get
+      val start = truncate((prevtrans % MAX).toInt)
+      res = advance(start)
+      while (valid.get(res) == 1 && res != start)
+        res = advance(res)
+      if (res == start && trans.get == prevtrans)
+        throw new IllegalArgumentException(
+          s"can't have more than ${MAX-1} regions open in checked memory mode")
+      commit = valid.compareAndSet(res, 0, 1)
+      trans.incrementAndGet
+    } while (!commit)
     res.toLong
   }
 
-  def unregister(id: Long): Unit = this.synchronized {
-    valid(id.toInt) = false
+  def unregister(id: Long): Unit = {
+    valid.compareAndSet(id.toInt, 1, 0)
+    trans.incrementAndGet
   }
 
   def validate(addr: Addr): Addr =
     if (Checked.MEMORY) {
       val id = unpackId(addr).toInt
-      if (id != 0 && !valid(id)) {
+      if (id != 0 && valid.get(id) != 1) {
         throw new InaccessibleMemoryException
       }
       unpackAddr(addr)
