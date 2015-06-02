@@ -8,7 +8,7 @@ public class Checked {
         boolean all = hasKey("offheap.unchecked.all");
         NULL        = !all && !hasKey("offheap.unchecked.null");
         BOUNDS      = !all && !hasKey("offheap.unchecked.bounds");
-        MEMORY      = !all && !hasKey("offheap.unchecked.memory");
+        MEMORY      = hasKey("offheap.checked.memory");
     }
     private static boolean hasKey(String key) {
         return System.getProperties().containsKey(key);

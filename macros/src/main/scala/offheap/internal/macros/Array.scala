@@ -26,27 +26,27 @@ trait ArrayCommon extends Common {
     q"$offheap.sizeOf[$LongTpe]"
 
   def readSize(pre: Tree) =
-    read(q"$pre.$addr", ArraySizeTpe)
+    read(q"$pre.addr", ArraySizeTpe)
 
   def writeSize(pre: Tree, value: Tree) =
-    write(q"$pre.$addr", ArraySizeTpe, value)
+    write(q"$pre.addr", ArraySizeTpe, value)
 
   def readElem(pre: Tree, T: Type, idx: Tree) = {
-    val elemAddr = q"$pre.$addr + $sizeOfHeader + $idx * ${strideOf(T)}"
+    val elemAddr = q"$pre.addr + $sizeOfHeader + $idx * ${strideOf(T)}"
     if (isEmbed) readEmbed(elemAddr, T)
     else read(elemAddr, T)
   }
 
   def writeElem(pre: Tree, T: Type, idx: Tree, value: Tree) = {
-    val elemAddr = q"$pre.$addr + $sizeOfHeader + $idx * ${strideOf(T)}"
+    val elemAddr = q"$pre.addr + $sizeOfHeader + $idx * ${strideOf(T)}"
     if (isEmbed) writeEmbed(elemAddr, T, value)
     else write(elemAddr, T, value)
   }
 
   def iterate(pre: Tree, T: Type, f: Tree => Tree) = {
     val i = freshVar("i", IntTpe, q"0")
-    val len = freshVal("len", ArraySizeTpe, read(q"$pre.$addr", ArraySizeTpe))
-    val base = freshVal("base", AddrTpe, q"$pre.$addr + $sizeOfHeader")
+    val len = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+    val base = freshVal("base", AddrTpe, q"$pre.addr + $sizeOfHeader")
     q"""
       $len
       $base
@@ -65,9 +65,9 @@ trait ArrayApiCommon extends ArrayCommon {
 
   lazy val A = c.prefix.tree.tpe.baseType(MyArrayClass).typeArgs.head
 
-  def isEmpty = q"${c.prefix.tree}.$addr == 0L"
+  def isEmpty = q"${c.prefix.tree}.addr == 0L"
 
-  def nonEmpty = q"${c.prefix.tree}.$addr != 0L"
+  def nonEmpty = q"${c.prefix.tree}.addr != 0L"
 
   def size = stabilized(c.prefix.tree)(readSize)
 
@@ -105,7 +105,7 @@ trait ArrayApiCommon extends ArrayCommon {
         val narr = freshVal("narr", appliedType(MyArrayTpe, B),
                             q"$MyArrayModule.uninit[$B]($pre.length)($alloc)")
         val base = freshVal("base", AddrTpe,
-                            q"${narr.symbol}.$addr + $sizeOfHeader")
+                            q"${narr.symbol}.addr + $sizeOfHeader")
         val body =
           iterate(pre, A, idx =>
             writeElem(q"${narr.symbol}", B, idx, app(f, readElem(pre, A, idx))))
@@ -198,7 +198,7 @@ trait ArrayModuleCommon extends ArrayCommon {
       }.toList
       q"""
         val $arr   = $MyArrayModule.uninit[$T](${values.length})($alloc)
-        val $naddr = $arr.$addr + $sizeOfHeader
+        val $naddr = $arr.addr + $sizeOfHeader
         ..${flatten(writes)}
         $arr
       """
@@ -242,8 +242,8 @@ trait ArrayModuleCommon extends ArrayCommon {
               val fromChecks = checks(fromArr, fromIdx, q"$fromIdx + $count - 1")
               val toChecks   = checks(toArr, toIdx, q"$toIdx + $count - 1")
               val stride     = strideOf(wt[T])
-              val fromAddr   = q"$fromArr.$addr + $sizeOfHeader + $fromIdx * $stride"
-              val toAddr     = q"$toArr.$addr + $sizeOfHeader + $toIdx * $stride"
+              val fromAddr   = q"$fromArr.addr + $sizeOfHeader + $fromIdx * $stride"
+              val toAddr     = q"$toArr.addr + $sizeOfHeader + $toIdx * $stride"
               val sizeBytes  = q"$count * $stride"
               q"""
                 if ($count <= 0)

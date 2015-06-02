@@ -25,7 +25,7 @@ object C4 {
 }
 
 class MutableSuite extends FunSuite {
-  implicit val alloc = Allocator()
+  implicit val alloc = malloc
 
   test("mutable constructor argument") {
     val c1 = C1(10)

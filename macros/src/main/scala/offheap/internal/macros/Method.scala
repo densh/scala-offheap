@@ -9,27 +9,27 @@ class Method(val c: blackbox.Context) extends Common {
   import c.universe.definitions._
   import c.internal._, decorators._
 
-  def accessor[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree): Tree = {
+  def accessor[C: WeakTypeTag, T: WeakTypeTag](self: Tree, name: Tree): Tree = {
     val C = wt[C]
     assertAllocatable(C)
     val Clazz(clazz) = C
     val q"${nameStr: String}" = name
     clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, access(addr, f))
+        nullChecked(q"$self.addr", access(q"$self.addr", f))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }
   }
 
-  def assigner[C: WeakTypeTag, T: WeakTypeTag](addr: Tree, name: Tree, value: Tree) = {
+  def assigner[C: WeakTypeTag, T: WeakTypeTag](self: Tree, name: Tree, value: Tree) = {
     val C = wt[C]
     assertAllocatable(C)
     val Clazz(clazz) = C
     val q"${nameStr: String}" = name
     clazz.fields.collectFirst {
       case f if f.name.toString == nameStr =>
-        nullChecked(addr, assign(addr, f, value))
+        nullChecked(q"$self.addr", assign(q"$self.addr", f, value))
     }.getOrElse {
       abort(s"$C doesn't have field `$nameStr`")
     }

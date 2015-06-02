@@ -10,12 +10,12 @@ import offheap._
 @data class Outer2 { @embed var inner: Inner2 = _ }
 
 class EmbedSuite extends FunSuite {
-  implicit val alloc = Allocator()
+  implicit val alloc = malloc
 
   test("inner pointer") {
     val inner = Inner(42)
     val outer = Outer(inner)
-    assert(Outer.toAddr(outer) == Inner.toAddr(outer.inner))
+    assert(outer.addr == outer.inner.addr)
   }
 
   test("modify after copy") {
