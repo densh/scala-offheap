@@ -6,7 +6,7 @@ import offheap._
 @data class Dummy(value: Int)
 
 class RegionSuite extends FunSuite {
-  implicit val pool = Pool(SystemAllocator)
+  implicit val pool = Pool()
 
   test("allocate") {
     Region { r =>
@@ -16,7 +16,7 @@ class RegionSuite extends FunSuite {
     }
   }
 
-  test("access after end") {
+  ignore("access after end") {
     var d = Dummy.empty
     Region { r =>
       d = Dummy(10)(r)

@@ -5,7 +5,7 @@ import offheap._
 
 @State(Scope.Thread)
 class PoolContention {
-  implicit val pool: Pool = Pool(SystemAllocator)
+  implicit val pool: Pool = Pool()
 
   @Benchmark
   def contention = {

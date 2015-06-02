@@ -10,7 +10,7 @@ import offheap._
 @data class Outer2 { @embed var inner: Inner2 = _ }
 
 class EmbedSuite extends FunSuite {
-  implicit val alloc = SystemAllocator
+  implicit val alloc = malloc
 
   test("inner pointer") {
     val inner = Inner(42)

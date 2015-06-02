@@ -70,7 +70,7 @@ final class Pool(
 object Pool {
   private final class Chunk(val start: Addr, var offset: Size, var next: Chunk)
   final class Page(val start: Addr, var offset: Size, var next: Page)
-  def apply(alloc: Allocator,
+  def apply(alloc: Allocator = malloc,
             pageSize: Size = UNSAFE.pageSize(),
             chunkSize: Size = 256 * UNSAFE.pageSize()) =
     new Pool(alloc, pageSize, chunkSize)

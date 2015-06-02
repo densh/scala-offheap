@@ -8,7 +8,7 @@ import offheap._
 @data class ECell(var v: Int)
 
 class EmbedArraySuite extends FunSuite {
-  implicit val alloc = SystemAllocator
+  implicit val alloc = malloc
 
   test("uninit") {
     val arr = EmbedArray.uninit[EPoint](2)
