@@ -14,7 +14,7 @@ class GCBinaryTree {
 
 @State(Scope.Thread)
 class OffheapBinaryTree {
-  @Param(scala.Array("16"))
+  @Param(scala.Array("20"))
   var n: Int = _
 
   @Benchmark
