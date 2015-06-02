@@ -14,7 +14,7 @@ class GCBinaryTree {
 
 @State(Scope.Thread)
 class OffheapBinaryTree {
-  @Param(scala.Array("20"))
+  @Param(scala.Array("16"))
   var n: Int = _
 
   @Benchmark
@@ -54,7 +54,7 @@ object GCHeap {
 
 @data class OhTree(i: Int, left: OhTree, right: OhTree)
 object Offheap {
-  implicit val pool = Pool()
+  implicit val policy = PoolRegion.Policy()
   def run(n: Int) = {
     val outer = Region.open
     val minDepth = 4

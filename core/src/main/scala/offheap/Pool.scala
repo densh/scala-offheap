@@ -42,12 +42,13 @@ final class Pool(
   }
   protected override def finalize: Unit = {
     while (chunk != null) {
-      try alloc.free(chunk.start)
-      catch {
+      try {
+        alloc.free(chunk.start)
+        chunk = chunk.next
+      } catch {
         case _: UnsupportedOperationException =>
-          return
+          chunk = null
       }
-      chunk = chunk.next
     }
   }
   def claim(): Pool.Page = this.synchronized {

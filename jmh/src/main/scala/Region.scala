@@ -6,7 +6,7 @@ import offheap._
 
 @State(Scope.Thread)
 class RegionClose {
-  implicit val pool: Pool = Pool()
+  implicit val policy = PoolRegion.Policy()
   var r: Region = _
 
   @Param(scala.Array("1024", "2048", "4096"))
@@ -16,7 +16,7 @@ class RegionClose {
   def setup(): Unit = {
     r = Region.open
     for (_ <- 1 to allocatedPages)
-      r.allocate(pool.pageSize)
+      r.allocate(policy.pool.pageSize)
   }
 
   @Benchmark
@@ -25,7 +25,7 @@ class RegionClose {
 
 @State(Scope.Thread)
 class RegionOpen {
-  implicit val pool: Pool = Pool()
+  implicit val policy = PoolRegion.Policy()
   var r: Region = _
 
   @TearDown(Level.Invocation)
@@ -40,7 +40,7 @@ class RegionOpen {
 
 @State(Scope.Thread)
 class RegionAllocateCurrent {
-  implicit val pool: Pool = Pool()
+  implicit val policy = PoolRegion.Policy()
   var r: Region = _
 
   @Setup(Level.Invocation)
@@ -56,13 +56,13 @@ class RegionAllocateCurrent {
 
 @State(Scope.Thread)
 class RegionAllocateNext {
-  implicit val pool: Pool = Pool()
+  implicit val policy = PoolRegion.Policy()
   var r: Region = _
 
   @Setup(Level.Invocation)
   def setup(): Unit = {
     r = Region.open
-    r.allocate(pool.pageSize)
+    r.allocate(policy.pool.pageSize)
   }
 
   @TearDown(Level.Invocation)

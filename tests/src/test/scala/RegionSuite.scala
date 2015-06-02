@@ -5,8 +5,8 @@ import offheap._
 
 @data class Dummy(value: Int)
 
-class RegionSuite extends FunSuite {
-  implicit val pool = Pool()
+trait RegionSuite extends FunSuite {
+  implicit val policy: Region.Policy
 
   test("allocate") {
     Region { r =>
@@ -40,6 +40,14 @@ class RegionSuite extends FunSuite {
     val r = Region.open
     assert(r.isOpen)
     r.close
-    assert(r.isClosed)
+    assert(!r.isOpen)
   }
+}
+
+class PoolRegionSuite extends RegionSuite {
+  implicit val policy = PoolRegion.Policy()
+}
+
+class DirectRegionSuite extends RegionSuite {
+  implicit val policy = DirectRegion.Policy()
 }

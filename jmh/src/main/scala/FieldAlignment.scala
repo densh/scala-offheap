@@ -19,7 +19,7 @@ import offheap._
 
 @State(Scope.Thread)
 class FieldAlignment {
-  implicit val pool: Pool = Pool()
+  implicit val policy = PoolRegion.Policy()
   var rl: Region = _
   var ri: Region = _
 
