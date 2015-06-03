@@ -19,9 +19,20 @@ class Annotations(val c: whitebox.Context) extends Common {
     def inBody    = !inCtor
   }
 
+  val reservedNames = {
+    (1 to 64).map { i => TermName(s"_$i") } ++
+    Seq("addr", "isEmpty", "nonEmpty", "get", "copy", "is", "as",
+        "!=", "##", "==", "asInstanceOf", "equals", "hashCode",
+        "isInstanceOf", "toString").map(TermName(_)) ++
+    Seq(complete, initializer, tag)
+  }.toSet
+
+  def assertNotReserved(name: TermName, at: Position = c.macroApplication.pos) =
+    if (reservedNames.contains(name.decoded))
+      abort(s"name ${name.decoded} is reserved and may not be used", at)
+
   // TODO: improve modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
-  // TODO: validate that fields are not called _N
   def dataTransform(clazz: Tree, companion: Tree) = {
     // Parse the input trees
     val q"""
@@ -59,6 +70,19 @@ class Annotations(val c: whitebox.Context) extends Common {
         if (args.nonEmpty || targs.nonEmpty)
           abort("data classes can only inherit from universal traits")
     }
+    rawArgs.foreach {
+      case vd: ValDef =>
+        assertNotReserved(vd.name, at = vd.pos)
+    }
+    rawStats.foreach {
+      case md: MemberDef =>
+        md.name match {
+          case name: TermName =>
+            assertNotReserved(name, at = md.pos)
+          case _ =>
+        }
+      case _ =>
+    }
 
     // Generate fresh names used in desugaring
     val alloc     = fresh("alloc")
@@ -80,6 +104,19 @@ class Annotations(val c: whitebox.Context) extends Common {
       case q"new $annot($value: $tpt)" if annot.symbol == ClassTagClass =>
         (value, tpt)
     }
+    val groupedStats = rawStats.groupBy {
+      case _: ValDef     => 'val
+      case _: TypeDef    => 'type
+      case _: DefDef     => 'def
+      case s if s.isTerm => 'term
+      case _             => 'other
+    }
+    groupedStats.get('other).map { other =>
+      abort("data classes may not contain such body statements", at = other.head.pos)
+    }
+    val valStats  = groupedStats.get('val).getOrElse(Nil)
+    val types     = groupedStats.get('type).getOrElse(Nil)
+    val methods   = groupedStats.get('def).getOrElse(Nil)
     val fields = {
       val tagField = tagOpt.map {
         case (value, tpt) => new SyntacticField(q"val $tag: $tpt")
@@ -92,7 +129,7 @@ class Annotations(val c: whitebox.Context) extends Common {
           checkMods(mods)
           new SyntacticField(vd)
       }
-      val bodyFields = rawStats.collect {
+      val bodyFields = valStats.collect {
         case vd @ ValDef(mods, _, tpt, _) =>
           if (tpt.isEmpty)
             abort("Fields of data classes must have explicitly annotated types.",
@@ -107,8 +144,6 @@ class Annotations(val c: whitebox.Context) extends Common {
       case ValDef(mods, vname, tpt, value) if !mods.hasFlag(DEFAULTINIT) =>
         q"$MethodModule.assign[$name, $tpt](this, ${vname.toString}, $value)"
     }
-    val methods = rawStats.collect { case t: DefDef => t }
-    val types = rawStats.collect { case t: TypeDef => t }
 
     // Generate additional members
     var prev = q""
