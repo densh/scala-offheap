@@ -112,7 +112,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       case _             => 'other
     }
     groupedStats.get('other).map { other =>
-      abort("data classes may not contain such body statements", at = other.head.pos)
+      abort("data class body may not contain such body statements", at = other.head.pos)
     }
     val valStats  = groupedStats.get('val).getOrElse(Nil)
     val types     = groupedStats.get('type).getOrElse(Nil)
@@ -187,7 +187,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       q"val ${f.name}: ${f.tpt} = this.${f.name}"
     }
     val init = if (initStats.isEmpty) q"" else q"def $initializer = { ..$initStats; this }"
-    val applyArgs = fields.zipWithIndex.collect { case (f, i) if f.inCtor =>
+    val applyArgs = fields.filter(_.inCtor).zipWithIndex.map { case (f, i) =>
       val name = TermName("_" + (i + 1))
       q"val $name: ${f.tpt} = ${f.default}"
     }
@@ -336,14 +336,19 @@ class Annotations(val c: whitebox.Context) extends Common {
       case tq"$pkg.AnyRef" :: Nil if pkg.symbol == ScalaPackage =>
       case _ => abort("enum classes may not inherit from other classes", at = classParents.head.pos)
     }
-    if (classStats.nonEmpty)
-      abort("enum classes may not have body statements", at = classStats.head.pos)
 
     // Generate some fresh names
     val instance = fresh("instance")
     val coerce   = fresh("coerce")
 
     // Member and annotation transformation
+    val methods = classStats.map {
+      case dd: DefDef =>
+        assertNotReserved(dd.name, at = dd.pos)
+        dd
+      case t =>
+        abort("enum class body may only contain methods", at = t.pos)
+    }
     val groupedAnnots = rawMods.annotations.groupBy {
       case q"new $ann[..$_](...$_)" =>
         ann.symbol match {
@@ -417,6 +422,8 @@ class Annotations(val c: whitebox.Context) extends Common {
         def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt](this, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]
+
+        ..$methods
       }
       $moduleMods object $termName extends { ..$rawEarly } with ..$rawParents { $rawSelf =>
         import scala.language.experimental.{macros => $canUseMacros}
