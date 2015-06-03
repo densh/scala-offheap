@@ -15,6 +15,23 @@ object E1 {
 @data class D4
 class C
 
+object Response {
+  @data class Success(value: Int)
+  @data class Fail
+}
+import Response._
+@enum class Response {
+  def map(f: Int => Int)(implicit alloc: Allocator): Response = this match {
+    case Success(value) => Success(f(value))
+    case Fail()         => this
+  }
+  def value: Int = this match {
+    case Success(value) => value
+    case _              => throw new Exception("fail")
+  }
+}
+
+
 class EnumSuite extends FunSuite {
   implicit val alloc = malloc
 
@@ -77,4 +94,15 @@ class EnumSuite extends FunSuite {
 
   test("match D1 as D2 fails") { intercept[MatchError] { val D1() = D2()  } }
   test("match C as D1 fails")  { intercept[MatchError] { val D1() = new C } }
+
+  test("map response") {
+    val resp: Response = Success(42)
+    val resp2 = resp.map(_ - 2)
+    assert(resp2.value == 40)
+  }
+
+  test("get on success") {
+    val succ = Success(42)
+    assert(succ.value == 42)
+  }
 }
