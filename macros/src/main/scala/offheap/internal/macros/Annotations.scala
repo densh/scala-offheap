@@ -10,13 +10,24 @@ class Annotations(val c: whitebox.Context) extends Common {
   import Flag._
 
   implicit class SyntacticField(vd: ValDef) {
-    def mods      = vd.mods
-    def name      = vd.name
-    def tpt       = vd.tpt
-    def default   = vd.rhs
-    def isMutable = vd.mods.hasFlag(MUTABLE)
-    def inCtor    = vd.mods.hasFlag(PARAMACCESSOR)
-    def inBody    = !inCtor
+    def name         = vd.name
+    def tpt          = vd.tpt
+    def default      = vd.rhs
+    def mods         = vd.mods
+    def isMutable    = vd.mods.hasFlag(MUTABLE)
+    def inCtor       = vd.mods.hasFlag(PARAMACCESSOR)
+    def inBody       = !inCtor
+    def accessorMods = {
+      val flags =
+        if (inCtor && mods.hasFlag(PRIVATE) && mods.hasFlag(LOCAL))
+          mods.flags & IMPLICIT
+        else
+          mods.flags & (PRIVATE | LOCAL | PROTECTED | IMPLICIT)
+      Modifiers(flags, mods.privateWithin)
+    }
+    def assignerMods =
+      Modifiers(accessorMods.flags & (PRIVATE | PROTECTED | LOCAL),
+                accessorMods.privateWithin)
   }
 
   val reservedNames = {
@@ -31,7 +42,6 @@ class Annotations(val c: whitebox.Context) extends Common {
     if (reservedNames.contains(name.decoded))
       abort(s"name ${name.decoded} is reserved and may not be used", at)
 
-  // TODO: improve modifiers propagation and checking
   // TODO: hygienic reference to class type from companion?
   def dataTransform(clazz: Tree, companion: Tree) = {
     // Parse the input trees
@@ -124,6 +134,8 @@ class Annotations(val c: whitebox.Context) extends Common {
       def checkMods(mods: Modifiers) =
         if (mods.hasFlag(LAZY))
           abort("data classes may not have lazy fields")
+        else if (mods.hasFlag(FINAL))
+          abort("data classes may not have final fields")
       val argFields = rawArgs.collect {
         case vd @ ValDef(mods, _, _, _) =>
           checkMods(mods)
@@ -160,13 +172,14 @@ class Annotations(val c: whitebox.Context) extends Common {
                           $LayoutModule.field[$name](..$props))
         """
       prev = q"this.${f.name}"
+      val accessorMods = f.accessorMods.mapAnnotations(_ => List(annot))
       val accessor = q"""
-        @$annot def ${f.name}: ${f.tpt} =
+        $accessorMods def ${f.name}: ${f.tpt} =
           $MethodModule.access[$name, ${f.tpt}](this, ${f.name.toString})
       """
       val assignerName = TermName(f.name.toString + "_$eq")
       val assigner = q"""
-        def $assignerName($value: ${f.tpt}): Unit =
+        ${f.assignerMods} def $assignerName($value: ${f.tpt}): Unit =
           $MethodModule.assign[$name, ${f.tpt}](this, ${f.name.toString}, $value)
       """
       if (!f.isMutable) accessor :: Nil

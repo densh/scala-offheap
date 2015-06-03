@@ -432,4 +432,7 @@ trait Common extends Definitions {
   def strideOf(T: Type, isEmbed: Boolean): Long =
     if (!isEmbed) sizeOf(T)
     else padded(sizeOfEmbed(T), alignmentOfEmbed(T))
+
+  implicit def flags2long(flags: FlagSet) = flags.asInstanceOf[Long]
+  implicit def long2flags(flags: Long)    = flags.asInstanceOf[FlagSet]
 }
