@@ -4,9 +4,6 @@ import static offheap.internal.Sanitizer.validate;
 import static offheap.internal.SunMisc.UNSAFE;
 
 public class Memory {
-    public static long allocate(long size) {
-        return UNSAFE.allocateMemory(size);
-    }
     public static void copy(long from, long to, long size) {
         UNSAFE.copyMemory(validate(from), validate(to), size);
     }
