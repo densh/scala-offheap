@@ -19,7 +19,8 @@ import offheap._
 
 @State(Scope.Thread)
 class FieldAlignment {
-  implicit val policy = PoolRegion.Policy()
+  implicit val props = Region.Props.pool()
+
   var rl: Region = _
   var ri: Region = _
 
