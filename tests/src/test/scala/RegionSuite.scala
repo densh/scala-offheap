@@ -45,7 +45,7 @@ trait RegionSuite extends FunSuite {
 }
 
 class PoolRegionSuite extends RegionSuite {
-  implicit val props = Region.Props.pool()
+  implicit val props = Region.Props()
 }
 
 class DirectRegionSuite extends RegionSuite {
