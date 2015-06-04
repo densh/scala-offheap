@@ -1,6 +1,5 @@
 import sbt._, Keys._
 import pl.project13.scala.sbt.SbtJmh._
-import sbtassembly.Plugin._, AssemblyKeys._
 import com.typesafe.sbt.pgp.PgpKeys._
 
 object RegionsBuild extends Build {
@@ -66,7 +65,7 @@ object RegionsBuild extends Build {
     }
   }
 
-  lazy val publishableDefaults = defaults ++ Seq(
+  lazy val publishDefaults = defaults ++ Seq(
     publishArtifact in Compile := true,
     publishArtifact in Test := false,
     credentials ++= {
@@ -102,66 +101,47 @@ object RegionsBuild extends Build {
     }.toList
   )
 
-  lazy val mergeDependencies: Seq[sbt.Def.Setting[_]] = assemblySettings ++ Seq(
-    test in assembly := {},
-    logLevel in assembly := Level.Error,
-    jarName in assembly := name.value + "_" + scalaVersion.value + "-" + version.value + "-assembly.jar",
-    assemblyOption in assembly ~= { _.copy(includeScala = false) },
-    Keys.`package` in Compile := {
-      val slimJar = (Keys.`package` in Compile).value
-      val fatJar = new File(crossTarget.value + "/" + (jarName in assembly).value)
-      val _ = assembly.value
-      IO.copy(List(fatJar -> slimJar), overwrite = true)
-      slimJar
-    },
-    packagedArtifact in Compile in packageBin := {
-      val temp = (packagedArtifact in Compile in packageBin).value
-      val (art, slimJar) = temp
-      val fatJar = new File(crossTarget.value + "/" + (jarName in assembly).value)
-      val _ = assembly.value
-      IO.copy(List(fatJar -> slimJar), overwrite = true)
-      (art, slimJar)
-    }
+  lazy val noPublishDefaults = defaults ++ Seq(
+    publishArtifact := false,
+    packagedArtifacts := Map.empty,
+    publish := {},
+    publishLocal := {}
   )
 
-  lazy val offheap = Project(
-    "scala-offheap",
+  lazy val root = Project(
+    "root",
     file("."),
-    settings = publishableDefaults ++ mergeDependencies,
-    dependencies = Seq(core, macros)
+    settings = noPublishDefaults,
+    aggregate = Seq(core, macros)
   )
 
   lazy val core = Project(
-    "core",
+    "scala-offheap",
     file("core"),
-    settings = defaults ++ Seq(
-      packagedArtifacts := Map.empty
-    ),
+    settings = publishDefaults,
     dependencies = Seq(macros)
   )
 
   lazy val macros = Project(
-    "macros",
+    "scala-offheap-macros",
     file("macros"),
-    settings = defaults ++ Seq(
+    settings = publishDefaults ++ Seq(
       libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" % _),
       libraryDependencies ++= (
         if (!scalaVersion.value.startsWith("2.10")) Nil
         else List("org.scalamacros" %% "quasiquotes" % paradiseVersion)
-      ),
-      packagedArtifacts := Map.empty
+      )
     )
   )
 
   lazy val sandbox = Project(
     "sandbox",
     file("sandbox"),
-    settings = defaults ++ Seq(
+    settings = noPublishDefaults ++ Seq(
       incOptions := incOptions.value.withNameHashing(false),
       scalacOptions += "-Xprint:typer",
       fork in run := true,
-      javaOptions in run ++= Seq("-Xms256m", "-Xmx256m"),
-      packagedArtifacts := Map.empty
+      javaOptions in run ++= Seq("-Xms256m", "-Xmx256m")
     ),
     dependencies = Seq(macros, core)
   )
@@ -169,13 +149,12 @@ object RegionsBuild extends Build {
   lazy val tests = Project(
     "tests",
     file("tests"),
-    settings = defaults ++ Seq(
+    settings = noPublishDefaults ++ Seq(
       libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.4" % "test",
       libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.2" % "test",
       incOptions := incOptions.value.withNameHashing(false),
       parallelExecution in Test := false,
-      fork in Test := true,
-      packagedArtifacts := Map.empty
+      fork in Test := true
     ),
     dependencies = Seq(core, macros)
   )
@@ -183,7 +162,7 @@ object RegionsBuild extends Build {
   lazy val jmh = Project(
     "jmh",
     file("jmh"),
-    settings = defaults ++ jmhSettings ++ Seq(packagedArtifacts := Map.empty),
+    settings = noPublishDefaults ++ jmhSettings,
     dependencies = Seq(core)
   )
 }
