@@ -2,8 +2,14 @@ language: scala
 scala:
   - 2.11.6
 script:
-  - sbt "tests/test" "jmh/compile"
+  - sbt ++$TRAVIS_SCALA_VERSION "tests/test" "jmh/compile" "scala-offheap/publishOnlyWhenOnMaster"
 jdk:
   - oraclejdk7
   - openjdk7
   - oraclejdk8
+env:
+  global:
+   - MAVEN_REALM="Sonatype Nexus Repository Manager"
+   - MAVEN_DOMAIN="oss.sonatype.org"
+   - secure: "AwIxZeqXjpgp8RKghcQazCLTZn2xX/uZ4D0Eow1WOo29md74eDDNTeNQW/HYQpVxnQ7+u4JEscXcr3f4G/vH+Mob3uI1e/QzOwQQqZWu0k0Jdzf7cBU5TGBhlg62tjUtfzPm4OV6pVfsjbF1gZEz4AQkfvA1XhCj9czw7YbyqP8="
+   - secure: "Ed7bVr38Pjr6ziKh4WlgOVyAK9PyImJXigX6MtTG3wZ0uVVGu3RQDd+IWBHexPEw/J+ZI/Ur6xlFCftsPMsrG8f+7ev4oqorhamt/sKJMl+iOpheP+1UaZ9kVRIcgqYzWKt18o8pgb7MxHvDOd1tt0phzrrXXguqntgIyOW3jKA="
