@@ -1,7 +1,7 @@
 package offheap
 
 import offheap.internal.Sanitizer
-import offheap.internal.Memory.UNSAFE
+import offheap.internal.SunMisc.UNSAFE
 
 /** Efficient pool of fixed-size memory pages.
  *  Allocations from underlying allocator are performed

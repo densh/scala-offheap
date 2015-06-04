@@ -1,7 +1,7 @@
 package offheap.test.jmh
 
 import org.openjdk.jmh.annotations._
-import offheap._, internal.Memory.UNSAFE
+import offheap._, internal.SunMisc.UNSAFE
 
 @State(Scope.Thread)
 class LoopBench {

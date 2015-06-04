@@ -3,7 +3,7 @@ package offheap.test.jmh
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra._
 import java.util.concurrent.TimeUnit
-import offheap._, internal.Memory.UNSAFE
+import offheap._, internal.SunMisc.UNSAFE
 
 @State(Scope.Thread)
 class Array {
