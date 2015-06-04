@@ -54,7 +54,7 @@ object GCHeap {
 
 @data class OhTree(i: Int, left: OhTree, right: OhTree)
 object Offheap {
-  implicit val policy = PoolRegion.Policy()
+  implicit val props = Region.Props()
   def run(n: Int) = {
     val outer = Region.open
     val minDepth = 4

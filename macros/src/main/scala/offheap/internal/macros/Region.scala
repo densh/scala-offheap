@@ -8,8 +8,8 @@ class Region(val c: whitebox.Context) extends Common {
   import c.universe._
   import c.universe.definitions._
 
-  def apply(f: Tree)(policy: Tree) = {
-    val r    = freshVal("r", RegionClass.toType, q"$RegionModule.open($policy)")
+  def apply(f: Tree)(props: Tree) = {
+    val r    = freshVal("r", RegionClass.toType, q"$props.open()")
     val res  = fresh("res")
     val body = app(f, q"${r.symbol}")
     q"""

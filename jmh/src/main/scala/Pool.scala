@@ -5,7 +5,7 @@ import offheap._
 
 @State(Scope.Thread)
 class PoolContention {
-  implicit val policy: Region.Policy = PoolRegion.Policy()
+  implicit val props = Region.Props()
 
   @Benchmark
   def contention = {

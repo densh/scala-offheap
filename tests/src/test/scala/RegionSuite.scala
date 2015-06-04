@@ -6,7 +6,7 @@ import offheap._
 @data class Dummy(value: Int)
 
 trait RegionSuite extends FunSuite {
-  implicit val policy: Region.Policy
+  implicit val props: Region.Props
 
   test("allocate") {
     Region { r =>
@@ -45,9 +45,9 @@ trait RegionSuite extends FunSuite {
 }
 
 class PoolRegionSuite extends RegionSuite {
-  implicit val policy = PoolRegion.Policy()
+  implicit val props = Region.Props()
 }
 
 class DirectRegionSuite extends RegionSuite {
-  implicit val policy = DirectRegion.Policy()
+  implicit val props = Region.Props.direct()
 }

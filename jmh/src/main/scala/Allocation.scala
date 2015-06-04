@@ -10,7 +10,7 @@ class Point(val x: Int, val y: Int)
 
 @State(Scope.Thread)
 class OffheapAllocation {
-  implicit val policy = PoolRegion.Policy()
+  implicit val props = Region.Props()
   var r: Region = _
 
   @Setup(Level.Iteration)

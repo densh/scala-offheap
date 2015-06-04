@@ -5,9 +5,13 @@ import offheap.internal.macros
 import offheap.internal.Sanitizer
 import offheap.internal.Checked
 
-/** Scoped region-based allocator. Supports allocations up to
- *  the size of a page in memory pool. Memory is reclaimed back
- *  to the pool in constant-time once the region is closed.
+/** Family of scoped memory allocators. Allocated memory
+ *  is available as long as execution is still in given
+ *  region scope and is cleaned up once it's done
+ *
+ *  A few memory management implemenations are available.
+ *  It's possible to pick the desirable implementation using
+ *  an implicit instance of `Region.Props`.
  */
 trait Region extends Allocator {
   protected val id: Long =
@@ -31,90 +35,17 @@ trait Region extends Allocator {
     throw new UnsupportedOperationException
 }
 object Region {
-  trait Policy { def open: Region }
-  def open(implicit policy: Policy): Region = policy.open
-  def apply[T](f: Region => T)(implicit policy: Policy): T = macro macros.Region.apply
+  /** Object that contains the configuration information necessary to
+   *  open a region. Used as a way to implicitly define which
+   *  region implementation strategies to pick in given scope.
+   */
+  trait Props { def open(): Region }
+  object Props {
+    def apply(pool: Pool = Pool()) = PoolRegion.Props(pool)
+    def direct(alloc: Allocator = malloc) = DirectRegion.Props(alloc)
+  }
+
+  def open(implicit props: Props): Region = props.open
+  def apply[T](f: Region => T)(implicit props: Props): T = macro macros.Region.apply
 }
 
-final class PoolRegion(private[this] val pool: Pool) extends Region {
-  private[this] val tail = pool.claim
-  tail.offset = 0
-  private[this] var page = tail
-
-  private def pad(addr: Addr) = {
-    val alignment = sizeOf[Long]
-    val padding =
-      if (addr % alignment == 0) 0
-      else alignment - addr % alignment
-    addr + padding
-  }
-
-  def isOpen = page != null
-
-  override def close(): Unit = this.synchronized {
-    super.close
-    pool.reclaim(page, tail)
-    page = null
-  }
-
-  def allocate(size: Size): Addr = this.synchronized {
-    checkOpen
-    if (size > pool.pageSize)
-      throw new IllegalArgumentException("can't allocate object larger than the virtual page")
-    val currentOffset = page.offset
-    val paddedOffset = pad(currentOffset)
-    val resOffset =
-      if (paddedOffset + size <= pool.pageSize) {
-        page.offset = paddedOffset + size
-        paddedOffset
-      } else {
-        val newpage = pool.claim
-        newpage.next = page
-        newpage.offset = size
-        page = newpage
-        0L
-      }
-    wrap(page.start + resOffset)
-  }
-}
-object PoolRegion {
-  final case class Policy(pool: Pool = Pool()) extends Region.Policy {
-    def open = PoolRegion.open(pool)
-  }
-  def open(pool: Pool): PoolRegion = new PoolRegion(pool)
-}
-
-final class DirectRegion private(private[this] var alloc: Allocator) extends Region {
-  if (alloc == null)
-    throw new IllegalArgumentException("allocator must not be null")
-
-  private final class Allocation(val addr: Addr, val next: Allocation)
-  private[this] var allocation: Allocation = null
-  def isOpen: Boolean =
-    alloc != null
-  override def close(): Unit = this.synchronized {
-    super.close
-    while (allocation != null) {
-      try {
-        alloc.free(allocation.addr)
-        allocation = allocation.next
-      } catch {
-        case _: UnsupportedOperationException =>
-          allocation = null
-      }
-    }
-    alloc = null
-  }
-  def allocate(size: Size) = this.synchronized {
-    checkOpen
-    val addr = alloc.allocate(size)
-    allocation = new Allocation(addr, allocation)
-    wrap(addr)
-  }
-}
-object DirectRegion {
-  final case class Policy(alloc: Allocator = malloc) extends Region.Policy {
-    def open = DirectRegion.open(alloc)
-  }
-  def open(alloc: Allocator): DirectRegion = new DirectRegion(alloc)
-}
