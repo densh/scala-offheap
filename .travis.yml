@@ -4,8 +4,9 @@ scala:
 script:
   - sbt ++$TRAVIS_SCALA_VERSION "tests/test" "jmh/compile" "scala-offheap/publishOnlyWhenOnMaster"
 jdk:
-  - oraclejdk7
+  - openjdk6
   - openjdk7
+  - oraclejdk7
   - oraclejdk8
 env:
   global:

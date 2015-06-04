@@ -55,13 +55,14 @@ object RegionsBuild extends Build {
   val publishOnlyWhenOnMaster = taskKey[Unit]("publish task for Travis (don't publish when building pull requests, only publish when the build is triggered by merge into master)")
   def publishOnlyWhenOnMasterImpl = Def.taskDyn {
     import scala.util.Try
-    val travis   = Try(sys.env("TRAVIS")).getOrElse("false") == "true"
-    val pr       = Try(sys.env("TRAVIS_PULL_REQUEST")).getOrElse("false") != "false"
-    val branch   = Try(sys.env("TRAVIS_BRANCH")).getOrElse("??")
-    val snapshot = version.value.trim.endsWith("SNAPSHOT")
-    (travis, pr, branch, snapshot) match {
-      case (true, false, "master", true) => publish
-      case _                             => Def.task ()
+    val travis     = Try(sys.env("TRAVIS")).getOrElse("false") == "true"
+    val pr         = Try(sys.env("TRAVIS_PULL_REQUEST")).getOrElse("false") != "false"
+    val branch     = Try(sys.env("TRAVIS_BRANCH")).getOrElse("??")
+    val snapshot   = version.value.trim.endsWith("SNAPSHOT")
+    val jdk6       = System.getProperty("java.version").contains("1.6.")
+    (travis, pr, branch, snapshot, jdk6) match {
+      case (true, false, "master", true, true) => publish
+      case _                                   => Def.task ()
     }
   }
 
