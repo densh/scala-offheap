@@ -2,7 +2,7 @@ package offheap
 package internal
 
 import java.{lang => jl}
-import internal.Memory.UNSAFE
+import internal.SunMisc.UNSAFE
 
 object Sanitizer {
   private[this] final val UNPACKED_ID_MASK = 65535L
