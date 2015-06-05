@@ -164,12 +164,11 @@ class Annotations(val c: whitebox.Context) extends Common {
         if (f.inCtor) q"new $CtorClass"
         else q""
       val props =
-        prev :: classOf(f.tpt) ::
-        q"new $AnnotsClass(..$ctorAnnot, ..${f.mods.annotations})" :: Nil
+        prev :: q"new $AnnotsClass(..$ctorAnnot, ..${f.mods.annotations})" :: Nil
       val annot: Tree =
         q"""
-          new $FieldClass(${f.name.toString}, ..$props,
-                          $LayoutModule.field[$name](..$props))
+          new $FieldClass[${f.tpt}](${f.name.toString}, ..$props,
+                                    $LayoutModule.field[$name, ${f.tpt}](..$props))
         """
       prev = q"this.${f.name}"
       val accessorMods = f.accessorMods.mapAnnotations(_ => List(annot))
@@ -423,7 +422,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val annots         = q"new $EnumClass" :: rangeAnnot ::
                          childrenAnnot :: parentAnnots
 
-    val tagprops = q"" :: classOf(tagTpt) :: q"new $AnnotsClass()" :: Nil
+    val tagprops = q"" :: q"new $AnnotsClass()" :: Nil
 
     q"""
       @..$annots final class $name private(
@@ -431,7 +430,9 @@ class Annotations(val c: whitebox.Context) extends Common {
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
 
-        @$FieldClass(${tag.toString}, ..$tagprops, $LayoutModule.field[$name](..$tagprops))
+        @$FieldClass[$tagTpt](
+          ${tag.toString}, ..$tagprops,
+          $LayoutModule.field[$name, $tagTpt](..$tagprops))
         def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt](this, ${tag.toString})
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]

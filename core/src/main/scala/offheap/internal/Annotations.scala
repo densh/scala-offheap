@@ -12,8 +12,8 @@ final class ClassTagRange(from: Any, to: Any) extends StaticAnnotation // > from
 final class ParentExractor(tag: Class[_], value: Any) extends StaticAnnotation
 final class PrimaryExtractor(value: Any) extends StaticAnnotation
 final class UniversalExtractor(value: Any) extends StaticAnnotation
-final class Field(name: String, after: Any, tag: Class[_],
-                  annots: Annots, offset: Size) extends StaticAnnotation
+final class Field[T](name: String, after: Any,
+                     annots: Annots, offset: Size) extends StaticAnnotation
 final class Annots(annots: Any*) extends StaticAnnotation
 final class Complete(any: Any) extends StaticAnnotation
 final class Ctor extends StaticAnnotation

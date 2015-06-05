@@ -82,16 +82,18 @@ trait Common extends Definitions {
   object Field {
     implicit val lift: Liftable[Field] = Liftable { f =>
       q"""
-        new $FieldClass(${f.name}, ${f.after}, $PredefModule.classOf[${f.tpe}],
-                        new $AnnotsClass(..${f.annots}), (${f.offset}: $SizeTpe))
+        new $FieldClass[${f.tpe}](
+          ${f.name}, ${f.after},
+          new $AnnotsClass(..${f.annots}), (${f.offset}: $SizeTpe))
       """
     }
     implicit val unlift: Unliftable[Field] = Unliftable {
       case q"""
-        new $cls(${name: String}, $after, ${tpe: Type},
-                 $newAnnots, (${offset: Long}: $_))
+        new ${ftpe: Type}(
+          ${name: String}, $after, $newAnnots, (${offset: Long}: $_))
         """
-        if cls.symbol == FieldClass =>
+        if ftpe.typeSymbol == FieldClass =>
+        val tpe = ftpe.baseType(FieldClass).typeArgs.head
         val annots = newAnnots match {
           case q"new $_(..$anns)" => anns
           case q"new $_"          => Nil

@@ -15,8 +15,8 @@ class Layout(val c: blackbox.Context) extends Common {
     f
   }
 
-  def field[C: WeakTypeTag](after: Tree, tag: Tree, annots: Tree) = inLayout(wt[C]) {
-    val q"${tpe: Type}" = tag
+  def field[C: WeakTypeTag, T: WeakTypeTag](after: Tree, annots: Tree) = inLayout(wt[C]) {
+    val tpe = wt[T]
     val isEmbed = annots.collect { case q"new $c" if c.symbol == EmbedClass => c }.nonEmpty
     val alignment =
       if (isEmbed) {
