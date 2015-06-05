@@ -45,7 +45,7 @@ in the near future.
 ## Documentation
 
 Documentation is available at the project's
-[wiki page](https://github.com/densh/scala-offheap/wiki).
+[wiki page](https://github.com/densh/scala-offheap/wiki/Documentation).
 
 ## How to contribute
 
