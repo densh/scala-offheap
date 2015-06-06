@@ -32,8 +32,8 @@ import Response._
 }
 
 
-class EnumSuite extends FunSuite {
-  implicit val alloc = malloc
+abstract class EnumSuite extends FunSuite { provider: HasAllocator =>
+  implicit val alloc = provider.allocator()
 
   test("D1 is D1") { assert(D1().is[D1]) }
   test("D2 is D2") { assert(D2().is[D2]) }
@@ -106,3 +106,6 @@ class EnumSuite extends FunSuite {
     assert(succ.value == 42)
   }
 }
+
+class EnumSuiteDefault extends EnumSuite with DefaultAllocator
+class EnumSuiteJemalloc extends EnumSuite with Jemalloc

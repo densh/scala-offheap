@@ -1,8 +1,8 @@
-package offheap.jemalloc;
+package offheap.jni;
 
 public final class JemallocWrapper {
     static {
-        System.loadLibrary("jemallocWrapper");
+        JNILoader.ensureLoaded();
     }
 
     public static long malloc(long size) {
