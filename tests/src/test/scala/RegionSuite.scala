@@ -48,6 +48,14 @@ class PoolRegionSuite extends RegionSuite {
   implicit val props = Region.Props()
 }
 
+class PoolRegionSuiteJemalloc extends RegionSuite {
+  implicit val props = Region.Props(Pool(alloc = jemalloc))
+}
+
 class DirectRegionSuite extends RegionSuite {
   implicit val props = Region.Props.direct()
+}
+
+class DirectRegionSuiteJemalloc extends RegionSuite {
+  implicit val props = Region.Props.direct(jemalloc)
 }

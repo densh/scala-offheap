@@ -11,8 +11,8 @@ import scala.offheap._
 @data class A(b: B)
 @data class B(a: A)
 
-class DataSuite extends FunSuite {
-  implicit val alloc = malloc
+abstract class DataSuite extends FunSuite { provider: HasAllocator =>
+  implicit val alloc = provider.allocator()
 
   test("accessors") {
     val p = Point(10, 20)
@@ -110,3 +110,6 @@ class DataSuite extends FunSuite {
     assert(aba.toString == "A(B(A.empty))")
   }
 }
+
+class DataSuiteDefault extends DataSuite with DefaultAllocator
+class DataSuiteJemalloc extends DataSuite with Jemalloc

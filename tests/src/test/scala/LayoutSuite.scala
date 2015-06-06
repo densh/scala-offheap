@@ -15,8 +15,8 @@ import scala.offheap._
 
 @data class L9
 
-class LayoutSuite extends FunSuite {
-  implicit val alloc = malloc
+abstract class LayoutSuite extends FunSuite { provider: HasAllocator =>
+  implicit val alloc = provider.allocator()
 
   test("L1.x offset") { assert(offsetOf[L1]("x") == 0) }
   test("L2.x offset") { assert(offsetOf[L2]("x") == 0) }
@@ -58,3 +58,6 @@ class LayoutSuite extends FunSuite {
   test("alignmentOfEmbed[L8]") { assert(alignmentOfEmbed[L8] == 8) }
   test("alignmentOfEmbed[L9]") { assert(alignmentOfEmbed[L9] == 1) }
 }
+
+class LayoutSuiteDefault extends LayoutSuite with DefaultAllocator
+class LayoutSuiteJemalloc extends LayoutSuite with Jemalloc
