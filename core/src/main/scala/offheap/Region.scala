@@ -9,7 +9,7 @@ import offheap.internal.Checked
  *  is available as long as execution is still in given
  *  region scope and is cleaned up once it's done
  *
- *  A few memory management implemenations are available.
+ *  A few memory management implementations are available.
  *  It's possible to pick the desirable implementation using
  *  an implicit instance of `Region.Props`.
  */

@@ -24,8 +24,8 @@ object C4 {
   var x: Long = _
 }
 
-class MutableSuite extends FunSuite {
-  implicit val alloc = malloc
+abstract class MutableSuite extends FunSuite { provider: HasAllocator =>
+  implicit val alloc = provider.allocator()
 
   test("mutable constructor argument") {
     val c1 = C1(10)
@@ -57,3 +57,6 @@ class MutableSuite extends FunSuite {
     assert(C5().x == 0L)
   }
 }
+
+class MutableSuiteDefault extends MutableSuite with DefaultAllocator
+class MutableSuiteJemalloc extends MutableSuite with Jemalloc

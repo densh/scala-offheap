@@ -7,8 +7,8 @@ import offheap._
 @data class EContainer(arr: EmbedArray[EPoint])
 @data class ECell(var v: Int)
 
-class EmbedArraySuite extends FunSuite {
-  implicit val alloc = malloc
+abstract class EmbedArraySuite extends FunSuite { provider: HasAllocator =>
+  implicit val alloc = provider.allocator()
 
   test("uninit") {
     val arr = EmbedArray.uninit[EPoint](2)
@@ -85,3 +85,6 @@ class EmbedArraySuite extends FunSuite {
     assert(arr(0).v == 4)
   }
 }
+
+class EmbedArraySuiteDefault extends EmbedArraySuite with DefaultAllocator
+class EmbedArraySuiteJemalloc extends EmbedArraySuite with Jemalloc
