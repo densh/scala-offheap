@@ -1,7 +1,7 @@
-package offheap.internal;
+package scala.offheap;
 
-import static offheap.internal.Sanitizer.validate;
-import static offheap.internal.SunMisc.UNSAFE;
+import static scala.offheap.internal.Sanitizer.validate;
+import static scala.offheap.internal.SunMisc.UNSAFE;
 
 public class Memory {
     public static void copy(long from, long to, long size) {
