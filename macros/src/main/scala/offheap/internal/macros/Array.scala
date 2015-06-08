@@ -63,7 +63,11 @@ trait ArrayApiCommon extends ArrayCommon {
   import c.universe.{ weakTypeOf => wt, _ }
   import c.universe.definitions.{ ArrayClass => JArrayClass, ArrayModule => JArrayModule, _ }
 
-  lazy val A = c.prefix.tree.tpe.baseType(MyArrayClass).typeArgs.head
+  lazy val A = {
+    val res = c.prefix.tree.tpe.baseType(MyArrayClass).typeArgs.head
+    assertAllocatable(res, s"can't use an array of non-allocatable $res elements")
+    res
+  }
 
   def isEmpty = q"${c.prefix.tree}.addr == 0L"
 
