@@ -1,4 +1,4 @@
-package offheap
+package scala.offheap
 
 /** An exception that is thrown when Allocator can not allocate requested memory. */
 class OutOfMemoryException(reason: String = "") extends Exception(reason)

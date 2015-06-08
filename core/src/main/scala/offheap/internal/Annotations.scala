@@ -1,4 +1,4 @@
-package offheap
+package scala.offheap
 package internal
 
 import scala.annotation.StaticAnnotation

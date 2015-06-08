@@ -1,4 +1,4 @@
-package offheap.test.jmh
+package jmh
 
 import org.openjdk.jmh.annotations._
 import java.util.concurrent.TimeUnit
