@@ -1,4 +1,4 @@
-package offheap.internal;
+package scala.offheap.internal;
 
 public class Checked {
     public static final boolean NULL;

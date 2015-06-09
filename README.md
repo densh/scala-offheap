@@ -36,12 +36,6 @@ Once it ends, all of them are efficiently deallocated at once.
 * Offheap arrays with direct sequential layout in memory
 * Extensibility to accomodate custom memory allocators
 
-## Installation
-
-At the moment, there has not been any public releases of scala-offheap. We plan to
-release an experimental [0.1 release](https://github.com/densh/scala-offheap/milestones)
-in the near future.
-
 ## Documentation
 
 Documentation is available at the project's

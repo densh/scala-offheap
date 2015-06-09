@@ -1,4 +1,4 @@
-package offheap.internal;
+package scala.offheap.internal;
 
 import sun.misc.Unsafe;
 import java.lang.reflect.Field;

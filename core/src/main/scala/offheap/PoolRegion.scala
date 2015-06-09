@@ -1,4 +1,4 @@
-package offheap
+package scala.offheap
 
 /** An optimized implementation of region that performs all
  *  allocations sequentially in pages that are claimed from
