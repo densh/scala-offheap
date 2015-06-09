@@ -1,4 +1,4 @@
-package offheap.jni;
+package offheap.internal;
 
 public final class JemallocWrapper {
     static {
