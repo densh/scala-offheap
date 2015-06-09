@@ -1,4 +1,4 @@
-package offheap.jni;
+package offheap.internal;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,10 +33,14 @@ public final class JNILoader {
     }
 
     private static void writeNativeLibraryToTempFolder() throws IOException {
-        try (InputStream inputStream = JNILoader.class.getClassLoader().getResourceAsStream(NativeLibraryName)) {
-            final Path nativeLibraryPath = NativeLibraryDirectory.resolve(NativeLibraryName);
-            System.out.println("Writing native library to: " + nativeLibraryPath);
+        final InputStream inputStream = JNILoader.class.getClassLoader().getResourceAsStream(NativeLibraryName);
+        final Path nativeLibraryPath = NativeLibraryDirectory.resolve(NativeLibraryName);
+        System.out.println("Writing native library to: " + nativeLibraryPath);
+
+        try {
             Files.copy(inputStream, nativeLibraryPath, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            inputStream.close();
         }
     }
 

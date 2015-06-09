@@ -1,6 +1,6 @@
 package offheap
 
-import offheap.jni.JemallocWrapper
+import offheap.internal.JemallocWrapper
 
 /** jemalloc based allocator that does not attempt
   * to perform any automatic memory management
