@@ -1,4 +1,4 @@
-package offheap
+package scala.offheap
 
 /** An off-heap memory allocator. Must always implement
  *  `allocate` method. `reallocate` and `free` may not

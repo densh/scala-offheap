@@ -1,4 +1,4 @@
-package offheap
+package scala.offheap
 
 /** An implementation of region that delegates all allocations
  *  to an underlying allocator, keeps the record of them, and
