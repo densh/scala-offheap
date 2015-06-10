@@ -1,4 +1,4 @@
-package offheap.internal;
+package scala.offheap.internal;
 
 public final class JemallocWrapper {
     static {
