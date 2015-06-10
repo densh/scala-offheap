@@ -1,4 +1,4 @@
-package offheap.internal;
+package scala.offheap.internal;
 
 import java.io.File;
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package offheap
+package scala.offheap
 
 import offheap.internal.JemallocWrapper
 
