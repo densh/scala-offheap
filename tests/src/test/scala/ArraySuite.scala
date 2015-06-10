@@ -5,8 +5,8 @@ import offheap._
 
 @data class ArrayContainer(var arr: Array[Int])
 
-class ArraySuite extends FunSuite {
-  implicit val alloc = malloc
+abstract class ArraySuite extends FunSuite { provider: HasAllocator =>
+  implicit val alloc = provider.allocator()
 
   test("uninit") {
     val arr = Array.uninit[Int](10)
@@ -141,3 +141,6 @@ class ArraySuite extends FunSuite {
     assert(Array.empty[Int].clone.isEmpty)
   }
 }
+
+class ArraySuitDefault extends ArraySuite with DefaultAllocator
+class ArraySuiteJemalloc extends ArraySuite with Jemalloc

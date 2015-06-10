@@ -9,8 +9,8 @@ import offheap._
 @data class Inner2(v: Long)
 @data class Outer2 { @embed var inner: Inner2 = _ }
 
-class EmbedSuite extends FunSuite {
-  implicit val alloc = malloc
+abstract class EmbedSuite extends FunSuite { provider: HasAllocator =>
+  implicit val alloc = provider.allocator()
 
   test("inner pointer") {
     val inner = Inner(42)
@@ -51,3 +51,6 @@ class EmbedSuite extends FunSuite {
     assert(Outer2().inner.v == 0L)
   }
 }
+
+class EmbedSuiteDefault extends EmbedSuite with DefaultAllocator
+class EmbedSuiteJemalloc extends EmbedSuite with Jemalloc
