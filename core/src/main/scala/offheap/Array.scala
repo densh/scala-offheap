@@ -24,7 +24,7 @@ final class Array[A] private (val addr: Addr) extends AnyVal {
   def clone(implicit a: Allocator): Array[A]             = macro macros.ArrayApi.clone_
 
   override def toString =
-    if (addr == 0L) s"offheap.x64.Array.empty"
+    if (addr == 0L) s"scala.offheap.Array.empty"
     else super.toString
 }
 object Array {
