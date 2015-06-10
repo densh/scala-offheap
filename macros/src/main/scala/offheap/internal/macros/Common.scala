@@ -212,7 +212,7 @@ trait Common extends Definitions {
 
   def sizeOfEmbed(tpe: Type): Long = tpe match {
     case Clazz(clazz) => clazz.size
-    case _            => abort(s"$tpe is not a an offheap class")
+    case _            => abort(s"$tpe is not an offheap class")
   }
 
   def alignmentOf(tpe: Type) = tpe match {

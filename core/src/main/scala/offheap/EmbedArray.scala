@@ -16,11 +16,11 @@ final class EmbedArray[A] private (val addr: Addr) extends AnyVal {
   def update(index: Addr, value: A): Unit                     = macro macros.EmbedArrayApi.update
   def foreach(f: A => Unit): Unit                             = macro macros.EmbedArrayApi.foreach
   def map[B](f: A => B)(implicit a: Allocator): EmbedArray[B] = macro macros.EmbedArrayApi.map[B]
-  def todArray: scala.Array[A]                                = macro macros.EmbedArrayApi.toArray
+  def toArray: scala.Array[A]                                 = macro macros.EmbedArrayApi.toArray
   def clone(implicit a: Allocator): EmbedArray[A]             = macro macros.EmbedArrayApi.clone_
 
   override def toString =
-    if (addr == 0L) s"offheap.x64.EmbedArray.empty"
+    if (addr == 0L) s"scala.offheap.EmbedArray.empty"
     else super.toString
 }
 object EmbedArray {
