@@ -25,23 +25,26 @@ class Array {
     addr
   }
 
-  @Benchmark
-  def offheapAccess = arr(0)
+  val _0 = 0
+  val _42 = 42
 
   @Benchmark
-  def onheapAccess = jarr(0)
+  def offheapAccess = arr(_0)
 
   @Benchmark
-  def unsafeAccess = UNSAFE.getLong(uarr)
+  def onheapAccess = jarr(_0)
 
   @Benchmark
-  def offheapUpdate = arr(0) = 42
+  def unsafeAccess = UNSAFE.getLong(uarr + _0)
 
   @Benchmark
-  def onheapUpdate = jarr(0) = 42
+  def offheapUpdate = { arr(_0) = _42; _42 }
 
   @Benchmark
-  def unsafeUpdate = UNSAFE.putLong(uarr, 42)
+  def onheapUpdate = { jarr(_0) = _42; _42 }
+
+  @Benchmark
+  def unsafeUpdate = { UNSAFE.putLong(uarr + _0, _42); _42 }
 
   @Benchmark
   def offheapSum = {

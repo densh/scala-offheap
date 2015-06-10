@@ -10,8 +10,10 @@ final class DirectRegion private(private[this] var alloc: Allocator) extends Reg
 
   private final class Allocation(val addr: Addr, val next: Allocation)
   private[this] var allocation: Allocation = null
+
   def isOpen: Boolean =
     alloc != null
+
   override def close(): Unit = this.synchronized {
     super.close
     while (allocation != null) {
