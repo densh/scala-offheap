@@ -134,6 +134,13 @@ object RegionsBuild extends Build {
     )
   )
 
+  lazy val jemalloc = Project(
+    "scala-offheap-jemalloc",
+    file("jemalloc"),
+    settings = publishDefaults,
+    dependencies = Seq(core)
+  )
+
   lazy val sandbox = Project(
     "sandbox",
     file("sandbox"),
@@ -156,7 +163,7 @@ object RegionsBuild extends Build {
       parallelExecution in Test := false,
       fork in Test := true
     ),
-    dependencies = Seq(core, macros)
+    dependencies = Seq(core, macros, jemalloc)
   )
 
   lazy val jmh = Project(
