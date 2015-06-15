@@ -1,7 +1,7 @@
 package scala.offheap
 
-import offheap.internal.Sanitizer
-import offheap.internal.SunMisc.UNSAFE
+import scala.offheap.internal.Sanitizer
+import scala.offheap.internal.SunMisc.UNSAFE
 
 /** Efficient pool of fixed-size memory pages.
  *  Allocations from underlying allocator are performed

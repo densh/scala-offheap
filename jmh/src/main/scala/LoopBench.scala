@@ -1,7 +1,8 @@
 package jmh
 
 import org.openjdk.jmh.annotations._
-import offheap._, internal.SunMisc.UNSAFE
+import scala.offheap._
+import scala.offheap.internal.SunMisc.UNSAFE
 
 @State(Scope.Thread)
 class LoopBench {

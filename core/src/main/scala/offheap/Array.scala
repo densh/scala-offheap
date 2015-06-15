@@ -1,7 +1,7 @@
 package scala.offheap
 
 import scala.language.experimental.{macros => CanMacro}
-import offheap.internal.macros
+import scala.offheap.internal.macros
 
 /** Off-heap equivalent of `scala.Array`. Can only be used
  *  with statically known values of type parameter which also

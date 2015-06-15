@@ -1,6 +1,6 @@
 package scala.offheap
 
-import offheap.internal.SunMisc.UNSAFE
+import scala.offheap.internal.SunMisc.UNSAFE
 
 /** Underyling OS allocator that does not attempt
  *  to perform any automatic memory management

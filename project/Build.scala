@@ -10,7 +10,7 @@ object RegionsBuild extends Build {
     organization := "sh.den",
     resolvers += Resolver.sonatypeRepo("snapshots"),
     resolvers += Resolver.sonatypeRepo("releases"),
-    initialCommands in console += "import offheap._; implicit val alloc = malloc",
+    initialCommands in console += "import scala.offheap._; implicit val alloc = malloc",
     addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full),
     publishMavenStyle := true,
     publishOnlyWhenOnMaster := publishOnlyWhenOnMasterImpl.value,

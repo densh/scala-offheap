@@ -1,2 +1,2 @@
 package test
-import offheap._
+import scala.offheap._

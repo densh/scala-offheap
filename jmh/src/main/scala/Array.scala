@@ -3,7 +3,8 @@ package jmh
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra._
 import java.util.concurrent.TimeUnit
-import offheap._, internal.SunMisc.UNSAFE
+import scala.offheap._
+import scala.offheap.internal.SunMisc.UNSAFE
 
 @State(Scope.Thread)
 class Array {

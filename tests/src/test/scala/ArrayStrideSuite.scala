@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._
+import scala.offheap._
 
 @data class AS1(a: Long, b: Byte)
 @data class AS2(a: Int, b: Int)

@@ -2,7 +2,7 @@ package jmh
 
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra._
-import offheap._
+import scala.offheap._
 
 @State(Scope.Thread)
 class RegionClose {

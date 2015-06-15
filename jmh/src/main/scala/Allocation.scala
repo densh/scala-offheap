@@ -2,7 +2,7 @@ package jmh
 
 import org.openjdk.jmh.annotations._
 import java.util.concurrent.TimeUnit
-import offheap._
+import scala.offheap._
 
 class JAlloc8(val a: Long)
 class JAlloc16(val a: Long, val b: Long)

@@ -1,9 +1,9 @@
 package scala.offheap
 
 import scala.language.experimental.{macros => canMacro}
-import offheap.internal.macros
-import offheap.internal.Sanitizer
-import offheap.internal.Checked
+import scala.offheap.internal.macros
+import scala.offheap.internal.Sanitizer
+import scala.offheap.internal.Checked
 
 /** Family of scoped memory allocators. Allocated memory
  *  is available as long as execution is still in given

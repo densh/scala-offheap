@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._
+import scala.offheap._
 
 @data class Inner(var v: Int)
 @data class Outer(@embed var inner: Inner)
