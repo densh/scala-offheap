@@ -1,8 +1,8 @@
 package test
 
-import offheap.Allocator 
-import offheap.malloc 
-import offheap.jemalloc 
+import offheap.Allocator
+import offheap.malloc
+import offheap.jemalloc
 
 trait HasAllocator {
   def allocator(): Allocator
