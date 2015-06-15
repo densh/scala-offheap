@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._
+import scala.offheap._
 
 @data class EPoint(x: Int, y: Int)
 @data class EContainer(arr: EmbedArray[EPoint])

@@ -1,7 +1,7 @@
 package jmh
 
 import org.openjdk.jmh.annotations._
-import offheap._
+import scala.offheap._
 
 @State(Scope.Thread)
 class PoolContention {

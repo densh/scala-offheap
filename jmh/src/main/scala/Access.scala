@@ -1,7 +1,7 @@
 package jmh
 
 import org.openjdk.jmh.annotations._
-import offheap._
+import scala.offheap._
 
 class JByteCell(var v: Byte)
 class JShortCell(var v: Short)

@@ -4,7 +4,7 @@ import java.{lang => jl}
 import org.scalacheck.Gen
 import org.scalacheck.Properties
 import org.scalacheck.Prop.forAll
-import offheap.internal.Sanitizer._
+import scala.offheap.internal.Sanitizer._
 
 class PackingSuite extends Properties("Packing") {
   val ADDR_MASK = jl.Long.MAX_VALUE >> 16

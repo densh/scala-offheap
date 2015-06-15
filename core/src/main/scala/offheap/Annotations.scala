@@ -2,7 +2,7 @@ package scala.offheap
 
 import scala.language.experimental.{macros => CanMacro}
 import scala.annotation.StaticAnnotation
-import offheap.internal.macros
+import scala.offheap.internal.macros
 
 /** Macro annotation that transforms given class into
  *  case-class-like offheap class.

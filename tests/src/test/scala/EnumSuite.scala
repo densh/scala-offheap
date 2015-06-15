@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._
+import scala.offheap._
 import E1._, E2._
 
 @enum class E1

@@ -1,7 +1,7 @@
 package scala
 
 import scala.language.experimental.{ macros => canMacro }
-import offheap.internal.macros
+import scala.offheap.internal.macros
 
 package object offheap {
   /** Physical address representation.

@@ -1,7 +1,7 @@
 package scala.offheap
 
 import scala.language.experimental.{macros => CanMacro}
-import offheap.internal.macros
+import scala.offheap.internal.macros
 
 /** An alternative implemenation of an array that inlines
  *  allocation of given offheap class into the array layout.
