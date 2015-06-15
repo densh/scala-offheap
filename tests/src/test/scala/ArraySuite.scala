@@ -54,10 +54,28 @@ class ArraySuite extends FunSuite {
     assert(Array.empty[Int].map(_ * 2).isEmpty)
   }
 
-  test("out of bounds") {
+  test("read out of bounds") {
     val arr = Array(1, 2, 3, 4)
     intercept[IndexOutOfBoundsException] { arr(-1) }
     intercept[IndexOutOfBoundsException] { arr(4)  }
+  }
+
+  test("write out of bounds") {
+    val arr = Array(1, 2, 3, 4)
+    intercept[IndexOutOfBoundsException] { arr(-1) = 42 }
+    intercept[IndexOutOfBoundsException] { arr(4) = 42 }
+  }
+
+  test("empty read out of bounds") {
+    intercept[IndexOutOfBoundsException] {
+      Array.empty[Int].apply(0)
+    }
+  }
+
+  test("empty write out of bounds") {
+    intercept[IndexOutOfBoundsException] {
+      Array.empty[Int].update(0, 42)
+    }
   }
 
   test("copy") {
@@ -140,4 +158,5 @@ class ArraySuite extends FunSuite {
   test("clone empty") {
     assert(Array.empty[Int].clone.isEmpty)
   }
+
 }
