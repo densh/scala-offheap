@@ -79,9 +79,10 @@ trait ArrayApiCommon extends ArrayCommon {
     stabilized(c.prefix.tree) { pre =>
       stabilized(index) { idx =>
         q"""
-          if ($CheckedModule.BOUNDS)
-            if ($idx < 0 || $idx >= ${readSize(pre)})
+          if ($CheckedModule.BOUNDS) {
+            if ($pre.isEmpty || $idx < 0 || $idx >= ${readSize(pre)})
               ${throwOutOfBounds(idx)}
+          }
           ${ifOk(pre)(idx)}
         """
       }
