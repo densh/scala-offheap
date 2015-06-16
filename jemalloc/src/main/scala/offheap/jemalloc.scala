@@ -10,9 +10,8 @@ object jemalloc extends Allocator {
   def allocate(size: Size): Addr = {
     val address = JemallocWrapper.malloc(validSize(size))
 
-    if (address <= 0) {
+    if (address <= 0)
       throw new OutOfMemoryError(s"Failed to allocate $size bytes")
-    }
 
     address
   }
@@ -20,9 +19,8 @@ object jemalloc extends Allocator {
   def reallocate(addr: Addr, size: Size): Addr = {
     val newAddress = JemallocWrapper.realloc(addr, validSize(size))
 
-    if (newAddress <= 0) {
+    if (newAddress <= 0)
       throw new OutOfMemoryError(s"Failed to reallocate memory at address $addr to new size $size")
-    }
 
     newAddress
   }
@@ -30,9 +28,7 @@ object jemalloc extends Allocator {
   def free(addr: Addr): Unit = JemallocWrapper.free(addr)
 
   private def validSize(size: Size): Size =
-    if (size < 0) {
+    if (size < 0)
       throw new IllegalArgumentException(s"allocate/reallocate sizes must be positive ($size) provided")
-    } else {
-      size
-    }
+    else size
 }
