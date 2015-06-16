@@ -50,26 +50,47 @@ class Method(val c: blackbox.Context) extends Common {
   def toString[C: WeakTypeTag](self: Tree): Tree = {
     val C = wt[C]
     val Clazz(clazz) = C
-    val sb = fresh("sb")
-    val appends =
-      if (clazz.actualFields.isEmpty) Nil
-      else clazz.actualFields.flatMap { f =>
-        List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
-      }.init
     val path = (C :: clazz.parents).reverse.map(_.typeSymbol.name.toString).mkString("", ".", "")
-    val companion = C.typeSymbol.companion
-    q"""
-      val $sb = new $StringBuilderClass
-      $sb.append($path)
-      if ($self == $companion.empty)
-        $sb.append(".empty")
-      else {
-        $sb.append("(")
-        ..$appends
-        $sb.append(")")
+    if (clazz.isData) {
+      val sb = fresh("sb")
+      val appends =
+        if (clazz.actualFields.isEmpty) Nil
+        else clazz.actualFields.flatMap { f =>
+          List(q"$sb.append($self.${TermName(f.name)})", q"""$sb.append(", ")""")
+        }.init
+      q"""
+        val $sb = new $StringBuilderClass
+        $sb.append($path)
+        if ($self.isEmpty)
+          $sb.append(".empty")
+        else {
+          $sb.append("(")
+          ..$appends
+          $sb.append(")")
+        }
+        $sb.toString
+      """
+    } else if (clazz.isEnum) {
+      val cases = clazz.children.map { child =>
+        child.tag.get match {
+          case ClassTag(v, _) =>
+            cq"$v => ${child.companion}.fromAddr($self.addr).toString"
+          case _ =>
+            unreachable
+        }
       }
-      $sb.toString
-    """
+      q"""
+        if ($self.isEmpty)
+          ${path + ".empty"}
+        else
+          $self.$tag match {
+            case ..$cases
+            case unknown =>
+              throw new $IllegalArgumentExceptionClass(
+                "Unknown branch of enumeration with tag " + unknown)
+          }
+      """
+    } else unreachable
   }
 
   def is[C: WeakTypeTag, T: WeakTypeTag]: Tree = {
