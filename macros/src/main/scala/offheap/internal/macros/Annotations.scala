@@ -441,6 +441,9 @@ class Annotations(val c: whitebox.Context) extends Common {
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]
 
+        override def toString(): $StringClass =
+          $MethodModule.toString[$name](this)
+
         ..$methods
       }
       $moduleMods object $termName extends { ..$rawEarly } with ..$rawParents { $rawSelf =>

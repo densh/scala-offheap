@@ -69,7 +69,9 @@ trait Common extends Definitions {
   object ExtractUniversalExtractor extends ExtractAnnotation(UniversalExtractorClass)
   object ExtractField              extends ExtractAnnotation(FieldClass)
 
-  final case class Tag(value: Tree, tpt: Tree)
+  sealed abstract class Tag
+  final case class ClassTag(value: Tree, tpt: Tree) extends Tag
+  final case class ClassTagRange(from: ClassTag, to: ClassTag) extends Tag
 
   case class Field(name: String, after: Tree, tpe: Type,
                    annots: List[Tree], offset: Long) {
@@ -117,17 +119,29 @@ trait Common extends Definitions {
       ExtractParent.unapply(sym).toList.flatten.map {
         case q"new $_(${tpe: Type})" => tpe
       }
-    lazy val tag =
-      ExtractClassTag.unapply(sym).map(_.head).map {
-        case q"new $_($value: $tpt)" => Tag(value, tpt)
+    lazy val children: List[Clazz] =
+      ExtractPotentialChildren.unapply(sym).toList.flatten.map {
+        case q"new $_(..${candidates: List[Type]})" =>
+          candidates.map(_.typeSymbol).filter(Clazz.is).map(Clazz(_))
+        case q"new $_" =>
+          Nil
+      }.flatten
+    lazy val tag: Option[Tag] = {
+      val classtagopt      = ExtractClassTag.unapply(sym).map(_.head)
+      val classtagrangeopt = ExtractClassTagRange.unapply(sym).map(_.head)
+      (classtagopt, classtagrangeopt) match {
+        case (Some(q"new $_($value: $tpt)"), None) =>
+          Some(ClassTag(value, tpt))
+        case (None, Some(q"new $_($fromValue: $fromTpt, $toValue: $toTpt)")) =>
+          Some(ClassTagRange(ClassTag(fromValue, fromTpt), ClassTag(toValue, toTpt)))
+        case (None, None) =>
+          None
+        case _ =>
+          unreachable
       }
+    }
     lazy val isData = ExtractData.unapply(sym).nonEmpty
     lazy val isEnum = ExtractEnum.unapply(sym).nonEmpty
-    lazy val children: List[Clazz] =
-      ExtractPotentialChildren.unapply(sym).map {
-        case q"new $_(..${tpes: List[Type]})" :: Nil =>
-          tpes.map(Clazz.unapply).flatten
-      }.getOrElse(Nil)
     lazy val size: Long = {
       assertLayoutComplete(sym, s"$sym must be defined before it's used")
       if (fields.isEmpty) 1L
@@ -407,7 +421,10 @@ trait Common extends Definitions {
     val (preamble, zeroed) =
       if (clazz.fields.filter(_.inBody).isEmpty || prezeroed) (q"", prezeroed)
       else (q"$MemoryModule.zero($addr, ${clazz.size})", true)
-    val values = clazz.tag.map(_.value) ++: args
+    val values = clazz.tag.map {
+      case ClassTag(v, _) => v
+      case _              => unreachable
+    } ++: args
     val writes = clazz.fields.zip(values).map { case (f, v) =>
       assign(q"$addr", f, v)
     }

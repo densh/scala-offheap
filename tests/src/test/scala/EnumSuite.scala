@@ -113,4 +113,9 @@ class EnumSuite extends FunSuite {
   test("empty E1 is not nonEmpty") {
     assert(!E1.empty.nonEmpty)
   }
+
+  test("toString dispatch") {
+    val e1s = Seq[E1](D1(), D2(), D3())
+    assert(e1s.map(_.toString) == Seq("E1.D1()", "E1.E2.D2()", "E1.D3()"))
+  }
 }
