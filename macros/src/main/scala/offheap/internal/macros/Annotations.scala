@@ -425,7 +425,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     val tagprops = q"" :: q"new $AnnotsClass()" :: Nil
 
     q"""
-      @..$annots final class $name private(
+      @..$annots final class $name private (
         val addr: $AddrTpe
       ) extends $AnyValClass {
         import scala.language.experimental.{macros => $canUseMacros}
@@ -434,6 +434,10 @@ class Annotations(val c: whitebox.Context) extends Common {
           ${tag.toString}, ..$tagprops,
           $LayoutModule.field[$name, $tagTpt](..$tagprops))
         def $tag: $tagTpt         = $MethodModule.access[$name, $tagTpt](this, ${tag.toString})
+
+        def isEmpty  = ${isNull(q"this.addr")}
+        def nonEmpty = ${notNull(q"this.addr")}
+
         def is[T]: $BooleanClass  = macro $internal.macros.Method.is[$name, T]
         def as[T]: T              = macro $internal.macros.Method.as[$name, T]
 

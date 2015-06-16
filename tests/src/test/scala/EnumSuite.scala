@@ -105,4 +105,12 @@ class EnumSuite extends FunSuite {
     val succ = Success(42)
     assert(succ.value == 42)
   }
+
+  test("empty E1 is empty") {
+    assert(E1.empty.isEmpty)
+  }
+
+  test("empty E1 is not nonEmpty") {
+    assert(!E1.empty.nonEmpty)
+  }
 }
