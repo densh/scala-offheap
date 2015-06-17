@@ -159,4 +159,7 @@ class ArraySuite extends FunSuite {
     assert(Array.empty[Int].clone.isEmpty)
   }
 
+  test("empty size") {
+    assert(Array.empty[Int].size == 0)
+  }
 }

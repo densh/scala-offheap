@@ -73,7 +73,12 @@ trait ArrayApiCommon extends ArrayCommon {
 
   def nonEmpty = q"${c.prefix.tree}.addr != 0L"
 
-  def size = stabilized(c.prefix.tree)(readSize)
+  def size = stabilized(c.prefix.tree) { pre =>
+    q"""
+      if ($pre.isEmpty) 0
+      else ${readSize(pre)}
+    """
+  }
 
   def boundsChecked(index: Tree)(ifOk: Tree => Tree => Tree) =
     stabilized(c.prefix.tree) { pre =>
