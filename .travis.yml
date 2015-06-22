@@ -2,6 +2,7 @@ language: scala
 scala:
   - 2.11.6
 script:
+  - cd jemalloc/src && ./build.sh
   - sbt ++$TRAVIS_SCALA_VERSION "tests/test" "jmh/compile" "root/publishOnlyWhenOnMaster"
 jdk:
   - openjdk6

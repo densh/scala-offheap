@@ -10,6 +10,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+JNIEXPORT jboolean JNICALL Java_scala_offheap_internal_JemallocWrapper_is32BitWordSize_10 (JNIEnv *, jclass);
+
 /*
  * Class:     scala_offheap_internal_JemallocWrapper
  * Method:    malloc_0
