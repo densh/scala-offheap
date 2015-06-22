@@ -4,7 +4,9 @@ set -ex
 
 ROOT=$PWD
 
-cd ../target
+cd ../
+mkdir -p target
+cd target
 WORK=$PWD
 
 rm -rf $WORK/usr

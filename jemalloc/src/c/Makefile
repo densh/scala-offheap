@@ -3,7 +3,8 @@ SOURCES  = $(shell find . -name *.cpp)
 OBJECTS  = $(SOURCES:%.cpp=%.o) 
 LIBRARY  = libscalaOffheap.so
 
-JEMALLOC  = /tmp/usr
+WORKDIR   = $(shell pwd)
+JEMALLOC  = $(WORKDIR)/../../target/usr
 JAVA      = $(shell readlink -f `which java`)
 JAVADIR   = $(shell dirname $(JAVA))
 JNIROOT   = $(JAVADIR)/../../include
