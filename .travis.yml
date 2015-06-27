@@ -9,7 +9,7 @@ jdk:
   - oraclejdk8
 env:
   global:
-  -  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/scala-offheap
+  -  LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/scala-offheap"
    - MAVEN_REALM="Sonatype Nexus Repository Manager"
    - MAVEN_DOMAIN="oss.sonatype.org"
    - secure: "MXedntUx9ssnfbfeXY9GVMdhnf/u2Cz50qBGUbSgEKiXxwBsNz4qF+JQDQI6eIE+WmaiXi9xoFyoSZaKEXF7fiGSkdX+FkPlcNOpectED78/ZBbSbGiueynE6HP8oX8gXetSYHOeWZx4Gu2WtgqZ09q44F9LiU9C3x/3YsSVIs8="
