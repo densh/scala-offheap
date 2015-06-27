@@ -10,7 +10,7 @@ JAVADIR   = $(shell dirname $(JAVA))
 JNIROOT   = $(JAVADIR)/../../include
 CC        = g++
 CFLAGS    = -DJEMALLOC_MANGLE -c -g -fPIC -O3 -Wall -I$(JEMALLOC)/include/ -I$(JNIROOT) -I$(JNIROOT)/linux 
-LDFLAGS   = -shared -L$(JEMALLOC)/lib -Wl,-rpath,$(JEMALLOC)/lib -Wl,-Bstatic -ljemalloc -Wl,-Bdynamic -pthread
+LDFLAGS   = -shared -L$(JEMALLOC)/lib -Wl,-rpath,$(JEMALLOC)/lib -Wl,-Bdynamic -ljemalloc -Wl,-Bdynamic -pthread
 
 all: $(LIBRARY)
 
