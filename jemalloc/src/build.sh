@@ -26,6 +26,7 @@ cd jemalloc
 autoconf
 ./configure --prefix=$WORK/usr --with-jemalloc-prefix=je
 sed -i 's/^CFLAGS := \(.*\)/CFLAGS := -fPIC \1/g' Makefile
+sed -i 's/^LDFLAGS := \(.*\)/LDFLAGS := -fPIC \1/g' Makefile
 
 make -j
 make install_bin install_include install_lib
