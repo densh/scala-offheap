@@ -11,7 +11,6 @@ import java.util.Set;
 public final class JNILoader {
     private static final Path NativeLibraryDirectory = Paths.get(System.getProperty("java.io.tmpdir"), "scala-offheap");
     private static final String NativeLibraryName = System.mapLibraryName("scalaOffheap");
-    private static final String JemallocLibraryName = String.format("%s.2", System.mapLibraryName("jemalloc"));
     private static final Set<PosixFilePermission> ExecutePermissions = new HashSet<PosixFilePermission>() {
         {
             add(PosixFilePermission.GROUP_EXECUTE);
@@ -27,10 +26,9 @@ public final class JNILoader {
         try {
             ensureTempFolder();
             writeNativeLibraryToTempFolder(NativeLibraryName);
-            writeNativeLibraryToTempFolder(JemallocLibraryName);
             addTempFolderToLibraryPath();
             System.out.println("ENV ... " + System.getenv("LD_LIBRARY_PATH"));
-            final Process exec = Runtime.getRuntime().exec("ldd /tmp/scala-offheap/libscalaOffheap.so");
+            final Process exec = Runtime.getRuntime().exec("ldd " + NativeLibraryDirectory.resolve(NativeLibraryName));
             final BufferedReader is = new BufferedReader(new InputStreamReader(exec.getInputStream()));
             final BufferedReader es = new BufferedReader(new InputStreamReader(exec.getErrorStream()));
             String line;
