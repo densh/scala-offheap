@@ -2,6 +2,8 @@
 #include <bits/wordsize.h>
 
 #include <iostream>
+#include <gnu/libc-version.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -16,6 +18,7 @@ static const jlong AllocationFailure = -2;
 #define resultOfAllocation(x)   if (likely(x != NULL)) { return (jlong) x; } else { return AllocationFailure; }
 
 JNIEXPORT jboolean JNICALL Java_scala_offheap_internal_JemallocWrapper_is32BitWordSize_10 (JNIEnv *, jclass) {
+    std::cout << "GLIB Version: " << gnu_get_libc_version() << std::endl;
     return __WORDSIZE == 32;
 }
 

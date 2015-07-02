@@ -2,7 +2,7 @@ language: scala
 scala:
   - 2.11.6
 script:
-  - LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tmp/scala-offheap sbt ++$TRAVIS_SCALA_VERSION "tests/test" "jmh/compile" "root/publishOnlyWhenOnMaster"
+    - LD_LIBRARY_PATH=:/tmp/scala-offheap:$LD_LIBRARY_PATH sbt ++$TRAVIS_SCALA_VERSION "tests/test" "jmh/compile" "root/publishOnlyWhenOnMaster"
 jdk:
   - openjdk6
   - openjdk7
