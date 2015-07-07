@@ -12,13 +12,31 @@ WORK=$PWD
 rm -rf $WORK/usr
 mkdir -p $WORK/usr
 
-if [ -d "jemalloc_latest" ]; then
-    cd jemalloc_latest
-    git clean -xfd
-    git pull
+while [[ $# > 0 ]]
+do
+key="$1"
+
+case $key in
+    -ng)
+    USE_GIT=false
+    ;;
+    *)
+    ;;
+esac
+shift 
+done
+
+if $USE_GIT; then
+    if [ -d "jemalloc_latest" ]; then
+        cd jemalloc_latest
+        git clean -xfd
+        git pull
+    else
+        mkdir -p jemalloc_latest
+        git clone https://github.com/jemalloc/jemalloc.git
+    fi
 else
-    mkdir -p jemalloc_latest
-    git clone https://github.com/jemalloc/jemalloc.git
+    cd jemalloc_latest
 fi
 
 cd jemalloc
@@ -34,12 +52,8 @@ make install_bin install_include install_lib
 cd $ROOT
 
 rm -rf main/resources/*
-cp ../target/usr/lib/libjemalloc.so.2 main/resources/
 
 cd c/
 make clean
 make
 mv *.so ../main/resources
-
-cd $ROOT
-rm -rf ../target/usr

@@ -7,10 +7,14 @@ WORKDIR   = $(shell pwd)
 JEMALLOC  = $(WORKDIR)/../../target/usr
 JAVA      = $(shell readlink -f `which java`)
 JAVADIR   = $(shell dirname $(JAVA))
-JNIROOT   = $(JAVADIR)/../../include
+
+# TODO AR figure out how to make virtual box image pick up host java. Uncomment first line to build on normal host
+#JNIROOT   = $(JAVADIR)/../../include
+JNIROOT   = /usr/lib/jvm/java-8-oracle/include/
+
 CC        = g++
-CFLAGS    = -DJEMALLOC_MANGLE -c -g -fPIC -std=c++11 -O3 -Wall -I$(JEMALLOC)/include/ -I$(JNIROOT) -I$(JNIROOT)/linux 
-LDFLAGS   = -shared -fPIC -L$(JEMALLOC)/lib -Wl,-rpath,$(JEMALLOC)/lib -Wl,-Bdynamic -ljemalloc -Wl,-Bdynamic -pthread
+CFLAGS    = -D__STDC_LIMIT_MACROS -DJEMALLOC_MANGLE -c -g -fPIC -O3 -Wall -std=c++0x -I$(JEMALLOC)/include/ -I$(JNIROOT) -I$(JNIROOT)/linux 
+LDFLAGS   = -shared -fPIC -L$(JEMALLOC)/lib -Wl,-rpath,$(JEMALLOC)/lib -Wl,-Bstatic -ljemalloc -Wl,-Bdynamic -pthread
 
 all: $(LIBRARY)
 

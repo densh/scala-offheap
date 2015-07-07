@@ -11,6 +11,9 @@
 extern "C" {
 #endif
 
+JNIEXPORT jlong JNICALL Java_scala_offheap_internal_JemallocWrapper_generateUnsignedLong_10 (JNIEnv *, jclass);
+JNIEXPORT jboolean JNICALL verifyUnsignedLong_10 (JNIEnv *, jclass, jlong);
+
 JNIEXPORT jboolean JNICALL Java_scala_offheap_internal_JemallocWrapper_is32BitWordSize_10 (JNIEnv *, jclass);
 
 /*
