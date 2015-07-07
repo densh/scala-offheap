@@ -49,6 +49,14 @@ class JemallocSuite extends FunSuite with ShouldMatchers {
       run64BitWordSizeTest()
   }
 
+  test("Handles native pointers greater than max signed long value") {
+    val unsignedValue = JemallocWrapper.generateUnsignedLong()
+    unsignedValue should(be < 0l)
+    
+    val verified = JemallocWrapper.verifyUnsignedLong(unsignedValue)
+    verified should be(true)
+  }
+
   private def run32BitAllocationTest(): Unit = {
     println("*** Running under presumed 32 bit word size")
 
