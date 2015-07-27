@@ -58,8 +58,8 @@ object RegionsBuild extends Build {
     val pr         = Try(sys.env("TRAVIS_PULL_REQUEST")).getOrElse("false") != "false"
     val branch     = Try(sys.env("TRAVIS_BRANCH")).getOrElse("??")
     val snapshot   = version.value.trim.endsWith("SNAPSHOT")
-    val jdk6       = System.getProperty("java.version").contains("1.6.")
-    (travis, pr, branch, snapshot, jdk6) match {
+    val jdk7       = System.getProperty("java.version").contains("1.7.")
+    (travis, pr, branch, snapshot, jdk7) match {
       case (true, false, "master", true, true) => publish
       case _                                   => Def.task ()
     }
