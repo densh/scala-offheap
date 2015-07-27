@@ -5,7 +5,7 @@ import scala.offheap._
 
 @State(Scope.Thread)
 class PoolContention {
-  implicit val props = Region.Props()
+  implicit val props = Region.Props(Pool())
 
   @Benchmark
   def contention = {

@@ -41,7 +41,7 @@ object Region {
    */
   trait Props { def open(): Region }
   object Props {
-    def apply(pool: Pool = Pool()) = PoolRegion.Props(pool)
+    def apply(pool: Pool) = PoolRegion.Props(pool)
   }
 
   def open(implicit props: Props): Region = props.open
