@@ -2,10 +2,9 @@ package scala.offheap
 
 /** An optimized implementation of region that performs all
  *  allocations sequentially in pages that are claimed from
- *  memory pool. Unlike `DirectRegion` it can not perform
- *  allocations bigger than memory pool page. This limitation
- *  is trade off to achieve superior allocation and deallocation
- *  performance.
+ *  memory pool. It can not perform allocations bigger than
+ *  memory pool page. This limitation is trade off to achieve
+ *  superior allocation and deallocation performance.
  */
 final class PoolRegion(private[this] val pool: Pool) extends Region {
   private[this] val tail = pool.claim

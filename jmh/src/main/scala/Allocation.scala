@@ -13,7 +13,7 @@ class JAlloc64(val a: Long, val b: Long, val c: Long, val d: Long,
 @State(Scope.Thread)
 class OffheapAllocation {
   val pool = Pool(malloc)
-  @Param(scala.Array("malloc"))
+  @Param(scala.Array("malloc", "region"))
   var impl: String = _
   @Param(scala.Array("16", "64", "256", "1024", "4096"))
   var n: Int = _
@@ -28,11 +28,8 @@ class OffheapAllocation {
     val (a, d1, d2) = impl match {
       case "malloc"        =>
         (malloc, () => (), malloc.free(_))
-      case "pool-region"   =>
+      case "region"   =>
         val r = PoolRegion.open(pool)
-        (r, () => r.close, (addr: Addr) => ())
-      case "direct-region" =>
-        val r = DirectRegion.open(malloc)
         (r, () => r.close, (addr: Addr) => ())
     }
     alloc = a

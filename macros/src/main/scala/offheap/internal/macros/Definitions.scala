@@ -18,7 +18,6 @@ trait Definitions {
 
   val RegionClass             = staticClass("scala.offheap.Region")
   val PoolRegionClass         = staticClass("scala.offheap.PoolRegion")
-  val DirectRegionClass       = staticClass("scala.offheap.DirectRegion")
   val AllocatorClass          = staticClass("scala.offheap.Allocator")
   val ArrayClass              = staticClass("scala.offheap.Array")
   val EmbedArrayClass         = staticClass("scala.offheap.EmbedArray")
@@ -39,7 +38,6 @@ trait Definitions {
 
   val RegionModule       = staticModule("scala.offheap.Region")
   val PoolRegionModule   = staticModule("scala.offheap.PoolRegion")
-  val DirectRegionModule = staticModule("scala.offheap.DirectRegion")
   val PoolModule         = staticModule("scala.offheap.Pool")
   val ArrayModule        = staticModule("scala.offheap.Array")
   val EmbedArrayModule   = staticModule("scala.offheap.EmbedArray")

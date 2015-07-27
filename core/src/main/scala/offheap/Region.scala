@@ -41,8 +41,7 @@ object Region {
    */
   trait Props { def open(): Region }
   object Props {
-    def apply(pool: Pool = Pool()) = PoolRegion.Props(pool)
-    def direct(alloc: Allocator = malloc) = DirectRegion.Props(alloc)
+    def apply(pool: Pool) = PoolRegion.Props(pool)
   }
 
   def open(implicit props: Props): Region = props.open
