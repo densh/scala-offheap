@@ -1,6 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
+
 import scala.offheap._
 
 @data class ArrayContainer(var arr: Array[Int])
@@ -161,5 +162,32 @@ class ArraySuite extends FunSuite {
 
   test("empty size") {
     assert(Array.empty[Int].size == 0)
+  }
+
+  test("filter") {
+    val arr = Array(1, 2, 3, 4)
+    val narr = arr.filter(x => x % 2 == 0)
+    assert(narr.nonEmpty)
+    assert(narr.size == 2)
+    assert(narr(0) == 2)
+    assert(narr(1) == 4)
+
+    val narr2 = arr.filter(x => x == 3)
+    assert(narr2.nonEmpty)
+    assert(narr2.size == 1)
+    assert(narr2(0) == 3)
+  }
+
+  test("filter no matching predicate") {
+    val arr = Array(1, 2, 3, 4)
+
+    val narr = arr.filter(x => x > 10)
+    assert(narr.isEmpty)
+    assert(narr.length == 0)
+  }
+
+  test("filter empty") {
+    assert(Array.empty[Int].filter(_ => true).isEmpty)
+    assert(Array.empty[Int].filter(_ => false).isEmpty)
   }
 }

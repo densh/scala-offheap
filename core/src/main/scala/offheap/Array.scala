@@ -20,6 +20,8 @@ final class Array[A] private (val addr: Addr) extends AnyVal {
   def update(index: Array.Index, value: A): Unit         = macro macros.ArrayApi.update
   def foreach(f: A => Unit): Unit                        = macro macros.ArrayApi.foreach
   def map[B](f: A => B)(implicit a: Allocator): Array[B] = macro macros.ArrayApi.map[B]
+  def filter(f: A => Boolean)
+            (implicit a: Allocator): Array[A]            = macro macros.ArrayApi.filter
   def toArray: scala.Array[A]                            = macro macros.ArrayApi.toArray
   def clone(implicit a: Allocator): Array[A]             = macro macros.ArrayApi.clone_
 
