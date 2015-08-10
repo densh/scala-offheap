@@ -11,3 +11,7 @@ class InaccessibleMemoryException(reason: String = "") extends Exception(reason)
 
 /** An exception that is thrown when safe `as[T]` cast fails. */
 class CastException(reason: String = "") extends Exception(reason)
+
+/** An exception that is thrown whenever one tries to call methods of the closed region. */
+class RegionClosedException(region: Region)
+  extends Exception(s"$region has already been closed")

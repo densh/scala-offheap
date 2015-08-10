@@ -19,7 +19,7 @@ trait Region extends Allocator {
     else 0L
   protected def checkOpen(): Unit =
     if (!isOpen)
-      throw new IllegalArgumentException(s"$this has already been closed")
+      throw new RegionClosedException(this)
   protected def wrap(addr: Addr): Addr = {
     if (Checked.MEMORY) Sanitizer.pack(this.id, addr)
     else addr
@@ -29,10 +29,18 @@ trait Region extends Allocator {
     checkOpen
     if (Checked.MEMORY) Sanitizer.unregister(id)
   }
-  def reallocate(addr: Addr, size: Size): Addr =
-    throw new UnsupportedOperationException
+  def reallocate(oldAddr: Addr, oldSize: Size, newSize: Size): Addr = {
+    checkOpen
+    if (newSize <= oldSize)
+      oldAddr
+    else {
+      val newAddr = allocate(newSize)
+      Memory.copy(oldAddr, newAddr, oldSize)
+      newAddr
+    }
+  }
   def free(addr: Addr): Unit =
-    throw new UnsupportedOperationException
+    checkOpen
 }
 object Region {
   /** Object that contains the configuration information necessary to
