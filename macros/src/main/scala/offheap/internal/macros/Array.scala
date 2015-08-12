@@ -181,7 +181,8 @@ trait ArrayApiCommon extends ArrayCommon {
         val newArrayIndex = freshVar("j", IntTpe, q"0")
 
         val finalSize = freshVal("finalSize", LongTpe, q"$sizeOfHeader + ${strideOf(A)} * ${newArrayIndex.symbol}")
-        val finalAddress = freshVal("finalAddress", AddrTpe, q"$alloc.reallocate(${newArray.symbol}.addr, ${finalSize.symbol}.toInt)")
+        val sourceSize = freshVal("sourceSize", LongTpe, q"${strideOf(A)} * ${sourceLength.symbol}")
+        val finalAddress = freshVal("finalAddress", AddrTpe, q"$alloc.reallocate(${newArray.symbol}.addr, ${sourceSize.symbol}.toInt, ${finalSize.symbol}.toInt)")
 
         q"""
           if ($pre.isEmpty) $MyArrayModule.empty[$A]
@@ -194,7 +195,6 @@ trait ArrayApiCommon extends ArrayCommon {
             $newArrayIndex
             while (${sourceIndex.symbol} < ${sourceLength.symbol}) {
               if (${app(f, readElem(pre, A, q"${sourceIndex.symbol}"))}) {
-                println("Element " + ${readElem(pre, A, q"${sourceIndex.symbol}")} + " matches predicate")
                 ${writeElem(q"${newArray.symbol}", A, q"${newArrayIndex.symbol}", readElem(pre, A, q"${sourceIndex.symbol}"))}
                 ${newArrayIndex.symbol} += 1
               }
@@ -204,9 +204,9 @@ trait ArrayApiCommon extends ArrayCommon {
 
             if (${newArrayIndex.symbol} > 0) {
               $finalSize
+              $sourceSize
               $finalAddress
               ${write(q"${finalAddress.symbol}", ArraySizeTpe, q"${newArrayIndex.symbol}")}
-              println("Final size is " + ${newArrayIndex.symbol})
               $MyArrayModule.fromAddr[$A](${finalAddress.symbol})
             } else {
               $alloc.free(${newArray.symbol}.addr)

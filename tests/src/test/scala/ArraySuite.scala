@@ -165,7 +165,7 @@ class ArraySuite extends FunSuite {
   }
 
   test("filter") {
-    val arr = Array(1, 2, 3, 4)
+    val arr = Array(1, 2, 3, 4, 5, 7, 9)
     val narr = arr.filter(x => x % 2 == 0)
     assert(narr.nonEmpty)
     assert(narr.size == 2)
