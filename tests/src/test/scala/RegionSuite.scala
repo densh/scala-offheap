@@ -31,7 +31,7 @@ trait RegionSuite extends FunSuite {
     Region { r =>
       rr = r
     }
-    intercept[IllegalArgumentException] {
+    intercept[RegionClosedException] {
       Dummy(10)(rr)
     }
   }
@@ -41,6 +41,55 @@ trait RegionSuite extends FunSuite {
     assert(r.isOpen)
     r.close
     assert(!r.isOpen)
+  }
+
+  test("reallocate same") {
+    Region { r =>
+      val addr = r.allocate(32)
+      val naddr = r.reallocate(addr, 32, 32)
+      assert(addr == naddr)
+    }
+  }
+
+  test("reallocate smaller") {
+    Region { r =>
+      val addr = r.allocate(32)
+      val naddr = r.reallocate(addr, 32, 16)
+      assert(addr == naddr)
+    }
+  }
+
+  test("reallocate bigger") {
+    Region { r =>
+      val addr = r.allocate(32)
+      val naddr = r.reallocate(addr, 32, 64)
+      assert(addr != naddr)
+    }
+  }
+
+  test("reallocate closed") {
+    val r = Region.open
+    val addr = r.allocate(32)
+    r.close
+    intercept[RegionClosedException] {
+      r.reallocate(addr, 32, 32)
+    }
+  }
+
+  test("free open") {
+    Region { r =>
+      val addr = r.allocate(32)
+      r.free(addr)
+    }
+  }
+
+  test("free closed") {
+    val r = Region.open
+    val addr = r.allocate(32)
+    r.close
+    intercept[RegionClosedException] {
+      r.free(addr)
+    }
   }
 }
 

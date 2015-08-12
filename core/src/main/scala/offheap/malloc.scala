@@ -7,7 +7,10 @@ import scala.offheap.internal.SunMisc.UNSAFE
  *  (all allocations must have accompanied calls to free.)
  */
 object malloc extends Allocator {
-  def allocate(size: Size): Addr               = UNSAFE.allocateMemory(size)
-  def reallocate(addr: Addr, size: Size): Addr = UNSAFE.reallocateMemory(addr, size)
-  def free(addr: Addr): Unit                   = UNSAFE.freeMemory(addr)
+  def allocate(size: Size): Addr =
+    UNSAFE.allocateMemory(size)
+  def reallocate(oldAddr: Addr, oldSize: Size, newSize: Size): Addr =
+    UNSAFE.reallocateMemory(oldAddr, newSize)
+  def free(addr: Addr): Unit =
+    UNSAFE.freeMemory(addr)
 }
