@@ -84,4 +84,47 @@ class EmbedArraySuite extends FunSuite {
     arr(0) = cell
     assert(arr(0).v == 4)
   }
+
+
+  test("filter") {
+    val arr = EmbedArray(
+      EPoint(1, 10),
+      EPoint(2, 20),
+      EPoint(3, 30),
+      EPoint(4, 40),
+      EPoint(5, 50),
+      EPoint(7, 70),
+      EPoint(9, 90)
+    )
+    val narr = arr.filter(p => p.x % 2 == 0)
+    assert(narr.nonEmpty)
+    assert(narr.size == 2)
+    assert(narr(0).x == 2)
+    assert(narr(0).y == 20)
+    assert(narr(1).x == 4)
+    assert(narr(1).y == 40)
+
+    val narr2 = arr.filter(p => p.x == 3)
+    assert(narr2.nonEmpty)
+    assert(narr2.size == 1)
+    assert(narr2(0).x == 3)
+    assert(narr2(0).y == 30)
+  }
+
+  test("filter no matching predicate") {
+    val arr = EmbedArray(
+      EPoint(1, 10),
+      EPoint(2, 20),
+      EPoint(3, 30),
+      EPoint(4, 40)
+    )
+    val narr = arr.filter(p => p.x > 10)
+    assert(narr.isEmpty)
+    assert(narr.length == 0)
+  }
+
+  test("filter empty") {
+    assert(EmbedArray.empty[EPoint].filter(_ => true).isEmpty)
+    assert(EmbedArray.empty[EPoint].filter(_ => false).isEmpty)
+  }
 }
