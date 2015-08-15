@@ -14,6 +14,7 @@ object Sanitizer {
   def unpackAddr(addr: Addr): Addr = addr & ADDR_MASK
 
   private[this] final val MAX = 65536
+  private[this] final val MAX_MASK = MAX - 1
   private[this] val valid = new java.util.concurrent.atomic.AtomicIntegerArray(MAX)
   private[this] val trans = new java.util.concurrent.atomic.AtomicLong(0L)
 
@@ -30,7 +31,7 @@ object Sanitizer {
     var res = 0
     do {
       val prevtrans = trans.get
-      val start = truncate((prevtrans % MAX).toInt)
+      val start = truncate((prevtrans & MAX_MASK).toInt)
       res = advance(start)
       while (valid.get(res) == 1 && res != start)
         res = advance(res)

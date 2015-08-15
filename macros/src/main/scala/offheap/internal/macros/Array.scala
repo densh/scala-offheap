@@ -168,6 +168,55 @@ trait ArrayApiCommon extends ArrayCommon {
         """
       }
     }
+
+  def filter(f: Tree)(a: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(a) { alloc =>
+        val newArray = freshVal("narr", appliedType(MyArrayTpe, A),
+          q"$MyArrayModule.uninit[$A]($pre.length)($alloc)")
+
+        val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+
+        val sourceIndex = freshVar("i", IntTpe, q"0")
+        val newArrayIndex = freshVar("j", IntTpe, q"0")
+
+        val finalSize = freshVal("finalSize", LongTpe, q"$sizeOfHeader + ${strideOf(A)} * ${newArrayIndex.symbol}")
+        val sourceSize = freshVal("sourceSize", LongTpe, q"${strideOf(A)} * ${sourceLength.symbol}")
+        val finalAddress = freshVal("finalAddress", AddrTpe, q"$alloc.reallocate(${newArray.symbol}.addr, ${sourceSize.symbol}.toInt, ${finalSize.symbol}.toInt)")
+
+        q"""
+          if ($pre.isEmpty) $MyArrayModule.empty[$A]
+          else {
+            $sourceLength
+
+            $newArray
+
+            $sourceIndex
+            $newArrayIndex
+            while (${sourceIndex.symbol} < ${sourceLength.symbol}) {
+              if (${app(f, readElem(pre, A, q"${sourceIndex.symbol}"))}) {
+                ${writeElem(q"${newArray.symbol}", A, q"${newArrayIndex.symbol}", readElem(pre, A, q"${sourceIndex.symbol}"))}
+                ${newArrayIndex.symbol} += 1
+              }
+
+              ${sourceIndex.symbol} += 1
+            }
+
+            if (${newArrayIndex.symbol} > 0) {
+              $finalSize
+              $sourceSize
+              $finalAddress
+              ${write(q"${finalAddress.symbol}", ArraySizeTpe, q"${newArrayIndex.symbol}")}
+              $MyArrayModule.fromAddr[$A](${finalAddress.symbol})
+            } else {
+              $alloc.free(${newArray.symbol}.addr)
+              $MyArrayModule.empty[$A]
+            }
+          }
+        """
+      }
+    }
+  }
 }
 
 trait ArrayModuleCommon extends ArrayCommon {

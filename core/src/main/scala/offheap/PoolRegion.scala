@@ -12,10 +12,10 @@ final class PoolRegion(private[this] val pool: Pool) extends Region {
   private[this] var page = tail
 
   private def pad(addr: Addr) = {
-    val alignment = sizeOf[Long]
+    val alignmentMask = sizeOf[Long] - 1
     val padding =
-      if (addr % alignment == 0) 0
-      else alignment - addr % alignment
+      if ((addr & alignmentMask) == 0) 0
+      else sizeOf[Long] - (addr & alignmentMask)
     addr + padding
   }
 

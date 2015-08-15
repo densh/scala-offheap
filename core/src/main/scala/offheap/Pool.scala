@@ -9,7 +9,7 @@ import scala.offheap.internal.SunMisc.UNSAFE
  *  pages of requested size.
  *
  *  Pages and chunks are organized in a intrusive linked list
- *  wayt to minimise memory overhead and re-use the same nodes
+ *  way to minimise memory overhead and re-use the same nodes
  *  for the whole lifetime of the pool.
  *
  *  Memory is reclaimed back to underlying alocator once
