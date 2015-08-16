@@ -190,4 +190,28 @@ class ArraySuite extends FunSuite {
     assert(Array.empty[Int].filter(_ => true).isEmpty)
     assert(Array.empty[Int].filter(_ => false).isEmpty)
   }
+
+  test("forall") {
+    val arr = Array(1, 3, 5, 7)
+    assert(arr.forall(_ < 10))
+    assert(arr.forall(x => x % 2 == 1))
+    assert(!arr.forall(_ < 6))
+  }
+
+  test("forall on empty array returns true") {
+    assert(Array.empty[Int].forall(_ < 10))
+    assert(Array.empty[Double].forall(_ => false))
+  }
+
+  test("exists") {
+    val arr = Array(1, 3, 5, 7)
+    assert(arr.exists(_ < 10))
+    assert(arr.exists(_ == 5))
+    assert(!arr.exists(x => x % 2 == 0))
+  }
+
+  test("exists on empty array returns false") {
+    assert(!Array.empty[Int].exists(_ < 10))
+    assert(!Array.empty[Double].exists(_ => true))
+  }
 }

@@ -127,4 +127,40 @@ class EmbedArraySuite extends FunSuite {
     assert(EmbedArray.empty[EPoint].filter(_ => true).isEmpty)
     assert(EmbedArray.empty[EPoint].filter(_ => false).isEmpty)
   }
+
+  test("forall") {
+    val arr = Array(
+      EPoint(1, 10),
+      EPoint(3, 30),
+      EPoint(5, 50),
+      EPoint(7, 70)
+    )
+
+    assert(arr.forall(p => p.x < 10))
+    assert(arr.forall(p => p.x % 2 == 1))
+    assert(!arr.forall(p => p.x < 6))
+  }
+
+  test("forall on empty array returns true") {
+    assert(Array.empty[EPoint].forall(p => p.x < 10))
+    assert(Array.empty[EPoint].forall(_ => false))
+  }
+
+  test("exists") {
+    val arr = Array(
+      EPoint(1, 10),
+      EPoint(3, 30),
+      EPoint(5, 50),
+      EPoint(7, 70)
+    )
+
+    assert(arr.exists(p => p.y <= 10))
+    assert(arr.exists(p => p.x == 5))
+    assert(!arr.exists(p => p.x % 2 == 0))
+  }
+
+  test("exists on empty array returns false") {
+    assert(!Array.empty[EPoint].exists(p => p.y < 10))
+    assert(!Array.empty[EPoint].exists(_ => true))
+  }
 }
