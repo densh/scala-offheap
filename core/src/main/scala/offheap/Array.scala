@@ -22,6 +22,8 @@ final class Array[A] private (val addr: Addr) extends AnyVal {
   def map[B](f: A => B)(implicit a: Allocator): Array[B] = macro macros.ArrayApi.map[B]
   def filter(f: A => Boolean)
             (implicit a: Allocator): Array[A]            = macro macros.ArrayApi.filter
+  def forall(f: A => Boolean): Boolean                   = macro macros.ArrayApi.forall
+  def exists(f: A => Boolean): Boolean                   = macro macros.ArrayApi.exists
   def toArray: scala.Array[A]                            = macro macros.ArrayApi.toArray
   def clone(implicit a: Allocator): Array[A]             = macro macros.ArrayApi.clone_
 

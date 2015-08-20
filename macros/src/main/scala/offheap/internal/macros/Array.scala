@@ -217,6 +217,48 @@ trait ArrayApiCommon extends ArrayCommon {
       }
     }
   }
+
+  def forall(f: Tree) =
+    stabilized(c.prefix.tree) { pre =>
+      val sourceIndex = freshVar("i", IntTpe, q"0")
+      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      val result = freshVar("result", BooleanTpe, q"true")
+      q"""
+        if ($pre.isEmpty) true
+        else {
+          $sourceIndex
+          $sourceLength
+          $result
+          while (${result.symbol} && ${sourceIndex.symbol} < ${sourceLength.symbol}) {
+            ${result.symbol} = ${app(f, readElem(pre, A, q"${sourceIndex.symbol}"))}
+            ${sourceIndex.symbol } += 1
+          }
+
+          ${result.symbol}
+        }
+      """
+    }
+
+  def exists(f: Tree) =
+    stabilized(c.prefix.tree) { pre =>
+      val sourceIndex = freshVar("i", IntTpe, q"0")
+      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      val result = freshVar("result", BooleanTpe, q"false")
+      q"""
+        if ($pre.isEmpty) false
+        else {
+          $sourceIndex
+          $sourceLength
+          $result
+          while (!${result.symbol} && ${sourceIndex.symbol} < ${sourceLength.symbol}) {
+            ${result.symbol} = ${app(f, readElem(pre, A, q"${sourceIndex.symbol}"))}
+            ${sourceIndex.symbol } += 1
+          }
+
+          ${result.symbol}
+        }
+      """
+    }
 }
 
 trait ArrayModuleCommon extends ArrayCommon {

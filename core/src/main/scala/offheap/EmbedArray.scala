@@ -12,12 +12,14 @@ final class EmbedArray[A] private (val addr: Addr) extends AnyVal {
   def nonEmpty: Boolean                                       = macro macros.EmbedArrayApi.nonEmpty
   def size: EmbedArray.Size                                   = macro macros.EmbedArrayApi.size
   def length: EmbedArray.Size                                 = macro macros.EmbedArrayApi.size
-  def apply(index: EmbedArray.Index): A                                   = macro macros.EmbedArrayApi.apply
-  def update(index: EmbedArray.Index, value: A): Unit                     = macro macros.EmbedArrayApi.update
+  def apply(index: EmbedArray.Index): A                       = macro macros.EmbedArrayApi.apply
+  def update(index: EmbedArray.Index, value: A): Unit         = macro macros.EmbedArrayApi.update
   def foreach(f: A => Unit): Unit                             = macro macros.EmbedArrayApi.foreach
   def map[B](f: A => B)(implicit a: Allocator): EmbedArray[B] = macro macros.EmbedArrayApi.map[B]
   def filter(f: A => Boolean)
-            (implicit a: Allocator): EmbedArray[A]                 = macro macros.EmbedArrayApi.filter
+            (implicit a: Allocator): EmbedArray[A]            = macro macros.EmbedArrayApi.filter
+  def forall(f: A => Boolean): Boolean                        = macro macros.EmbedArrayApi.forall
+  def exists(f: A => Boolean): Boolean                        = macro macros.EmbedArrayApi.exists
   def toArray: scala.Array[A]                                 = macro macros.EmbedArrayApi.toArray
   def clone(implicit a: Allocator): EmbedArray[A]             = macro macros.EmbedArrayApi.clone_
 
