@@ -38,8 +38,7 @@ Once it ends, all of them are efficiently deallocated at once.
 
 ## Documentation
 
-Documentation is available at the project's
-[wiki page](https://github.com/densh/scala-offheap/wiki).
+Documentation is available in [docs subfolder](/docs/00_toc.md).
 
 ## How to contribute
 
