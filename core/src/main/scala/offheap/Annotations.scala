@@ -17,9 +17,9 @@ final class data extends StaticAnnotation {
  *  off-heap classes defined in its companion form an
  *  off-heap child-parent relationship.
  */
-final class enum extends StaticAnnotation {
+final class variant extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any =
-    macro macros.Annotations.enum
+    macro macros.Annotations.variant
 }
 
 /** Annotation that marks fields as embedded.

@@ -13,6 +13,6 @@ be affected by the change.
 **Q**: Macro annotations are an experimental feature, what will happen if they are not merged into
 mainline Scala and become unsupported?
 
-**A**: In that case we'll re-implement the same functionality (namely `@data` and `@enum` annotations)
+**A**: In that case we'll re-implement the same functionality (namely `@data` and `@variant` annotations)
 using lower-level compiler plugin infrastructure. Considering that macros share reflection APIs with
 the compiler most of the code can be re-used.

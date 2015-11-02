@@ -15,7 +15,7 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion
 
 This includes scala-offheap's latest snapshot release and current (as of this writing)
 release of macro paradise. Macro paradise is only necessary to expand `@data` and
-`@enum` annotations and can be omitted if those features are not used.
+`@variant` annotations and can be omitted if those features are not used.
 
 Example sbt project with simple setup is
 [available on github](https://github.com/densh/scala-offheap-example).
