@@ -419,7 +419,7 @@ class Annotations(val c: whitebox.Context) extends Common {
       if (parentAnnots.nonEmpty) rangeAnnotOpt.get
       else q"new $ClassTagRangeClass(${const(0)}, ${const(count)})"
     val q"$_: $tagTpt" = const(0)
-    val annots         = q"new $EnumClass" :: rangeAnnot ::
+    val annots         = q"new $VariantClass" :: rangeAnnot ::
                          childrenAnnot :: parentAnnots
 
     val tagprops = q"" :: q"new $AnnotsClass()" :: Nil

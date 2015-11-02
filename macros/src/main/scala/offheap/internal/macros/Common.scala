@@ -58,7 +58,7 @@ trait Common extends Definitions {
       if (trees.isEmpty) None else Some(trees)
     }
   }
-  object ExtractEnum               extends ExtractAnnotation(EnumClass)
+  object ExtractVariant            extends ExtractAnnotation(VariantClass)
   object ExtractData               extends ExtractAnnotation(DataClass)
   object ExtractParent             extends ExtractAnnotation(ParentClass)
   object ExtractPotentialChildren  extends ExtractAnnotation(PotentialChildrenClass)
@@ -141,14 +141,14 @@ trait Common extends Definitions {
       }
     }
     lazy val isData = ExtractData.unapply(sym).nonEmpty
-    lazy val isEnum = ExtractEnum.unapply(sym).nonEmpty
+    lazy val isVariant = ExtractVariant.unapply(sym).nonEmpty
     lazy val size: Long = {
       assertLayoutComplete(sym, s"$sym must be defined before it's used")
       if (fields.isEmpty) 1L
       else if (isData) {
         val lastfield = fields.maxBy(_.offset)
         lastfield.offset + lastfield.size
-      } else if (isEnum) {
+      } else if (isVariant) {
         children.map(_.size).max
       } else unreachable
     }
@@ -157,7 +157,7 @@ trait Common extends Definitions {
       if (fields.isEmpty) 1L
       else if (isData) {
         fields.map(f => alignmentOf(f.tpe)).max
-      } else if (isEnum) {
+      } else if (isVariant) {
         children.map(_.alignment).max
       } else unreachable
     }
@@ -172,7 +172,7 @@ trait Common extends Definitions {
       sym.attachments.get[Clazz.Attachment].map { _.value }.getOrElse {
         val value =
           ExtractData.unapply(sym).nonEmpty ||
-          ExtractEnum.unapply(sym).nonEmpty
+          ExtractVariant.unapply(sym).nonEmpty
         sym.updateAttachment(Clazz.Attachment(value))
         value
       }
@@ -362,7 +362,7 @@ trait Common extends Definitions {
       abort(msg)
     }
 
-  def isEnum(T: Type): Boolean = ExtractEnum.unapply(T.typeSymbol).nonEmpty
+  def isVariant(T: Type): Boolean = ExtractVariant.unapply(T.typeSymbol).nonEmpty
 
   def isData(T: Type): Boolean = ExtractData.unapply(T.typeSymbol).nonEmpty
 

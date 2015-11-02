@@ -4,7 +4,7 @@ package internal
 import scala.annotation.StaticAnnotation
 
 final class Data extends StaticAnnotation
-final class Enum extends StaticAnnotation
+final class Variant extends StaticAnnotation
 final class Parent(tag: Class[_]) extends StaticAnnotation
 final class PotentialChildren(tags: Class[_]*) extends StaticAnnotation
 final class ClassTag(tag: Any) extends StaticAnnotation
