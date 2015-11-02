@@ -70,7 +70,7 @@ class Method(val c: blackbox.Context) extends Common {
         }
         $sb.toString
       """
-    } else if (clazz.isEnum) {
+    } else if (clazz.isVariant) {
       val cases = clazz.children.map { child =>
         child.tag.get match {
           case ClassTag(v, _) =>
@@ -101,7 +101,7 @@ class Method(val c: blackbox.Context) extends Common {
     else {
       val tg = fresh("tag")
       val check =
-        if (isEnum(T)) {
+        if (isVariant(T)) {
           val ExtractClassTagRange(q"new $_($from: $_, $to: $_)" :: Nil) = T.typeSymbol
           q"$tg > $from && $tg <= $to"
         } else if (isData(T)) {

@@ -23,7 +23,7 @@ trait Definitions {
   val EmbedArrayClass         = staticClass("scala.offheap.EmbedArray")
   val EmbedClass              = staticClass("scala.offheap.embed")
   val DataClass               = staticClass("scala.offheap.internal.Data")
-  val EnumClass               = staticClass("scala.offheap.internal.Enum")
+  val VariantClass            = staticClass("scala.offheap.internal.Variant")
   val ClassTagClass           = staticClass("scala.offheap.internal.ClassTag")
   val ClassTagRangeClass      = staticClass("scala.offheap.internal.ClassTagRange")
   val PotentialChildrenClass  = staticClass("scala.offheap.internal.PotentialChildren")

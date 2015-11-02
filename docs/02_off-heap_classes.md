@@ -173,7 +173,7 @@ and macros that are used to implement them:
 
 ## @variant classes
 
-Variant classes are an off-heap equivalent of sealed abstract class hierarchy. For example:
+Variant classes are off-heap tagged unions of off-heap classes:
 
 ```scala
 @variant class Figure
@@ -202,7 +202,6 @@ object Figure {
 }
 ```
 
-
 Whenever inner variant doesn't define any methods it's possible to use shorthand syntax
 that annotates nested object as `@variant` without a need to explicitly define accompanying
 class (it will be generated automatically):
@@ -215,7 +214,7 @@ object Figure {
 }
 ```
 
-**Data layout.** Enum classes are represented as a tagged unions of the nested off-heap
+**Data layout.** Variant classes are represented as a tagged unions of the nested off-heap
 classes. Layout-wise this has an effect of having one extra hidden tag field (of the smallest
 numeric type appropriate to enumerate all nested classes) to each and every children
 data class.
@@ -224,7 +223,7 @@ This field is used to implement pattern matching and `is` and `as` helpers. In s
 when variant classes are nested one into the other, the hidden tag field is introduced only
 once per top-level variant class. Nested variant classes share the same field.
 
-**Automatically generated members.** Enum classes generates a subset of methods
+**Automatically generated members.** Variant classes generates a subset of methods
 we've seen before with the same semantics as in data classes:
 
 1. `isEmpty`, `nonEmpty`.
@@ -247,9 +246,9 @@ And corresponding companion members:
 
 **Limitations.**
 
-* Enum classes may only contain non-abstract methods in their body.
-* Enum classes may only inherit from universal traits.
-* Enum classes may not have any constructors
-* Enum classes may not define their own implementations of pre-generated methods.
-* Enum classes may not have type parameters.
-* Enum classes may not have early initializers.
+* Variant classes may only contain non-abstract methods in their body.
+* Variant classes may only inherit from universal traits.
+* Variant classes may not have any constructors
+* Variant classes may not define their own implementations of pre-generated methods.
+* Variant classes may not have type parameters.
+* Variant classes may not have early initializers.
