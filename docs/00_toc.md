@@ -5,7 +5,7 @@
     * Supported environments
 1. [Off-heap classes](/docs/02_off-heap_classes.md)
     * `@data` classes
-    * `@enum` classes
+    * `@variant` classes
 1. [Off-heap arrays](/docs/03_off-heap_arrays.md)
     * `Array[T]`
     * `EmbedArray[T]`

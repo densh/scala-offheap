@@ -87,7 +87,7 @@ class Method(val c: blackbox.Context) extends Common {
             case ..$cases
             case unknown =>
               throw new $IllegalArgumentExceptionClass(
-                "Unknown branch of enumeration with tag " + unknown)
+                "Unknown case of variant with tag " + unknown)
           }
       """
     } else unreachable

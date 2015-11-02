@@ -322,7 +322,7 @@ class Annotations(val c: whitebox.Context) extends Common {
     case _            => 0
   }.sum
 
-  def enumTransform(clazz: ClassDef, module: ModuleDef) = {
+  def variantTransform(clazz: ClassDef, module: ModuleDef) = {
     val q"""
       $classMods class $name[..$classTargs] $classCtorMods(...$classArgss)
                  extends { ..$classEarly }
@@ -335,18 +335,18 @@ class Annotations(val c: whitebox.Context) extends Common {
 
     // Well-formedness checks
     if (classMods.flags != NoFlags)
-      abort("enum classes may not have any modifiers")
+      abort("variant classes may not have any modifiers")
     if (classTargs.nonEmpty)
-      abort("enum classes may not have type arguments", at = classTargs.head.pos)
+      abort("variant classes may not have type arguments", at = classTargs.head.pos)
     if (classCtorMods.flags != NoFlags)
-      abort("enum classes may not have constructor modifiers")
+      abort("variant classes may not have constructor modifiers")
     if (classArgss != List(Nil))
-      abort("enum classes may not have constructor arguments", at = classArgss.head.head.pos)
+      abort("variant classes may not have constructor arguments", at = classArgss.head.head.pos)
     if (classEarly.nonEmpty)
-      abort("enum classes may not have early definitions", at = classEarly.head.pos)
+      abort("variant classes may not have early definitions", at = classEarly.head.pos)
     classParents match {
       case tq"$pkg.AnyRef" :: Nil if pkg.symbol == ScalaPackage =>
-      case _ => abort("enum classes may not inherit from other classes", at = classParents.head.pos)
+      case _ => abort("variant classes may not inherit from other classes", at = classParents.head.pos)
     }
 
     // Generate some fresh names
@@ -359,7 +359,7 @@ class Annotations(val c: whitebox.Context) extends Common {
         assertNotReserved(dd.name, at = dd.pos)
         dd
       case t =>
-        abort("enum class body may only contain methods", at = t.pos)
+        abort("variant class body may only contain methods", at = t.pos)
     }
     val groupedAnnots = rawMods.annotations.groupBy {
       case q"new $ann[..$_](...$_)" =>
@@ -457,14 +457,14 @@ class Annotations(val c: whitebox.Context) extends Common {
     """
   }
 
-  def enum(annottees: Tree*): Tree = annottees match {
+  def variant(annottees: Tree*): Tree = annottees match {
     case (clazz: ClassDef) :: Nil =>
-      enumTransform(clazz, q"object ${clazz.name.toTermName}")
+      variantTransform(clazz, q"object ${clazz.name.toTermName}")
     case (clazz: ClassDef) :: (module: ModuleDef) :: Nil =>
-      enumTransform(clazz, module)
+      variantTransform(clazz, module)
     case (module: ModuleDef) :: Nil =>
-      enumTransform(q"class ${module.name.toTypeName}", module)
+      variantTransform(q"class ${module.name.toTypeName}", module)
     case _ =>
-      abort("@enum annotation only works on objects and classes")
+      abort("@variant annotation only works on objects and classes")
   }
 }

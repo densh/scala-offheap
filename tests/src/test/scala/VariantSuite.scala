@@ -4,10 +4,10 @@ import org.scalatest.FunSuite
 import scala.offheap._
 import E1._, E2._
 
-@enum class E1
+@variant class E1
 object E1 {
   @data class D1
-  @enum object E2 {
+  @variant object E2 {
     @data class D2
   }
   @data class D3
@@ -20,7 +20,7 @@ object Response {
   @data class Fail
 }
 import Response._
-@enum class Response {
+@variant class Response {
   def map(f: Int => Int)(implicit alloc: Allocator): Response = this match {
     case Success(value) => Success(f(value))
     case Fail()         => this
@@ -32,7 +32,7 @@ import Response._
 }
 
 
-class EnumSuite extends FunSuite {
+class VariantSuite extends FunSuite {
   implicit val alloc = malloc
 
   test("D1 is D1") { assert(D1().is[D1]) }

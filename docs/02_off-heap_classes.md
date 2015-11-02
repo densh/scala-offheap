@@ -15,7 +15,7 @@ scala> implicit val alloc: Allocator = malloc
 alloc: offheap.Allocator = offheap.malloc$@23d230db
 ```
 
-Off-heap classes come in two varieties: `@data` classes and `@enum` classes. Both of
+Off-heap classes come in two varieties: `@data` classes and `@variant` classes. Both of
 them desugar down to value classes over underlying physical address. Due to that they:
 
 * can only be defined in statically accessible locations
@@ -171,12 +171,12 @@ and macros that are used to implement them:
 * Data classes may not have fields that refer to on-heap classes
   (i.e. all fields should either be of primitive or off-heap object types.)
 
-## @enum classes
+## @variant classes
 
-Enum classes are an off-heap equivalent of sealed abstract class hierarchy. For example:
+Variant classes are an off-heap equivalent of sealed abstract class hierarchy. For example:
 
 ```scala
-@enum class Figure
+@variant class Figure
 object Figure {
   @data class Point(x: Float, y: Float)
   @data class Segment(from: Point, to: Point)
@@ -184,17 +184,17 @@ object Figure {
 }
 ```
 
-It's also possible to nest enums.
+It's also possible to nest variants:
 
 ```scala
-@enum class Figure
+@variant class Figure
 object Figure {
-  @enum class _2D
+  @variant class _2D
   object _2D {
     @data class Point(x: Float, y: Float)
     ...
   }
-  @enum class _3D
+  @variant class _3D
   object _3D {
     @data class Point(x: Float, y: Float, z: Float)
     ...
@@ -203,15 +203,15 @@ object Figure {
 ```
 
 
-Whenever inner enum doesn't define any methods it's possible to use shorthand syntax
-that annotates nested object as `@enum` without a need to explicitly define accompanying
+Whenever inner variant doesn't define any methods it's possible to use shorthand syntax
+that annotates nested object as `@variant` without a need to explicitly define accompanying
 class (it will be generated automatically):
 
 ```scala
-@enum class Figure
+@variant class Figure
 object Figure {
-  @enum object _2D { ... }
-  @enum object _3D { ... }
+  @variant object _2D { ... }
+  @variant object _3D { ... }
 }
 ```
 
@@ -221,8 +221,8 @@ numeric type appropriate to enumerate all nested classes) to each and every chil
 data class.
 
 This field is used to implement pattern matching and `is` and `as` helpers. In situations
-when enum classes are nested one into the other, the hidden tag field is introduced only
-once per top-level enum class. Nested enum classes share the same field.
+when variant classes are nested one into the other, the hidden tag field is introduced only
+once per top-level variant class. Nested variant classes share the same field.
 
 **Automatically generated members.** Enum classes generates a subset of methods
 we've seen before with the same semantics as in data classes:
