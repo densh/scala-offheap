@@ -6,14 +6,14 @@
 To use scala-offheap one has to add following lines to their sbt build:
 
 ```scala
-resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+resolvers += "Sonatype OSS Releases" at "https://oss.sonatype.org/content/repositories/releases"
 
-libraryDependencies += "sh.den" % "scala-offheap_2.11" % "0.1-SNAPSHOT"
+libraryDependencies += "sh.den" % "scala-offheap_2.11" % "0.1"
 
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
 ```
 
-This includes scala-offheap's latest snapshot release and current (as of this writing)
+This includes scala-offheap's latest 0.1 release and current (as of this writing)
 release of macro paradise. Macro paradise is only necessary to expand `@data` and
 `@variant` annotations and can be omitted if those features are not used.
 

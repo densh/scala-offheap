@@ -5,7 +5,7 @@ import com.typesafe.sbt.pgp.PgpKeys._
 object RegionsBuild extends Build {
   val paradiseVersion = "2.1.0-M5"
   lazy val defaults = Defaults.defaultSettings ++ Seq(
-    version := "0.1-SNAPSHOT",
+    version := "0.2-SNAPSHOT",
     scalaVersion := "2.11.6",
     organization := "sh.den",
     resolvers += Resolver.sonatypeRepo("snapshots"),
