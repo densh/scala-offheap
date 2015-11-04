@@ -7,7 +7,7 @@ and incur no typical GC overhead that regular classes do.
 
 To allocate anything off heap one has to provide an instance of
 `Allocator` type that defines memory management strategy for current allocation.
-[[Allocators]] are going to be covered in detail in the next section
+[Allocators](/docs/04_allocators.md) are going to be covered in detail in the next section
 and for now we just assume that there is one available in the scope. E.g.:
 
 ```scala
