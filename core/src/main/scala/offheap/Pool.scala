@@ -32,7 +32,7 @@ final class Pool(
   private[this] var page: Pool.Page = null
   newChunk()
   private def newChunk(): Unit = {
-    val start = Sanitizer.validate(alloc.allocate(chunkSize))
+    val start = Sanitizer.validate(alloc.allocate(chunkSize, pageSize))
     chunk = new Pool.Chunk(start, 0, chunk)
   }
   private def newPage(): Unit = {
