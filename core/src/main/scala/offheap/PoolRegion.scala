@@ -1,5 +1,7 @@
 package scala.offheap
 
+import scala.offheap.internal.pad
+
 /** An optimized implementation of region that performs all
  *  allocations sequentially in pages that are claimed from
  *  memory pool. It can not perform allocations bigger than
@@ -11,14 +13,6 @@ final class PoolRegion(private[this] val pool: Pool) extends Region {
   tail.offset = 0
   private[this] var page = tail
 
-  private def pad(addr: Addr) = {
-    val alignmentMask = sizeOf[Long] - 1
-    val padding =
-      if ((addr & alignmentMask) == 0) 0
-      else sizeOf[Long] - (addr & alignmentMask)
-    addr + padding
-  }
-
   def isOpen = page != null
 
   override def close(): Unit = this.synchronized {
@@ -27,12 +21,12 @@ final class PoolRegion(private[this] val pool: Pool) extends Region {
     page = null
   }
 
-  def allocate(size: Size): Addr = this.synchronized {
+  def allocate(size: Size, alignment: Size = alignmentOf[Long]): Addr = this.synchronized {
     checkOpen
     if (size > pool.pageSize)
       throw new IllegalArgumentException("can't allocate object larger than the virtual page")
     val currentOffset = page.offset
-    val paddedOffset = pad(currentOffset)
+    val paddedOffset = pad(currentOffset, alignment)
     val resOffset =
       if (paddedOffset + size <= pool.pageSize) {
         page.offset = paddedOffset + size

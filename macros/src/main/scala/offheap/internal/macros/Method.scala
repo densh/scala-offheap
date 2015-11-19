@@ -42,7 +42,7 @@ class Method(val c: blackbox.Context) extends Common {
     val Clazz(clazz) = C
     val addr = fresh("addr")
     Allocation(clazz, args, alloc, q"""
-      val $addr = $alloc.allocate(${clazz.size})
+      val $addr = $alloc.allocate(${clazz.size}, $offheap.alignmentOf[$C])
       ..${initialize(clazz, addr, args, discardResult = false, prezeroed = false)}
     """)
   }
