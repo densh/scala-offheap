@@ -8,7 +8,7 @@ import scala.offheap.internal.SunMisc.UNSAFE
  *  (all allocations must have accompanied calls to free.)
  */
 object malloc extends Allocator {
-  def allocate(size: Size, alignment: Size = alignmentOf[Long]): Addr =
+  def allocate(size: Size, alignment: Size): Addr =
     if (alignment <= alignmentOf[Long])
       UNSAFE.allocateMemory(size)
     else

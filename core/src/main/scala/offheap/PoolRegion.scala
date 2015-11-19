@@ -21,7 +21,7 @@ final class PoolRegion(private[this] val pool: Pool) extends Region {
     page = null
   }
 
-  def allocate(size: Size, alignment: Size = alignmentOf[Long]): Addr = this.synchronized {
+  def allocate(size: Size, alignment: Size): Addr = this.synchronized {
     checkOpen
     if (size > pool.pageSize)
       throw new IllegalArgumentException("can't allocate object larger than the virtual page")

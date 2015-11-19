@@ -25,6 +25,9 @@ trait ArrayCommon extends Common {
   def sizeOfHeader =
     q"$offheap.sizeOf[$LongTpe]"
 
+  def alignment =
+    q"$offheap.alignmentOf[$LongTpe]"
+
   def readSize(pre: Tree) =
     read(q"$pre.addr", ArraySizeTpe)
 
@@ -180,9 +183,16 @@ trait ArrayApiCommon extends ArrayCommon {
         val sourceIndex = freshVar("i", IntTpe, q"0")
         val newArrayIndex = freshVar("j", IntTpe, q"0")
 
-        val finalSize = freshVal("finalSize", LongTpe, q"$sizeOfHeader + ${strideOf(A)} * ${newArrayIndex.symbol}")
-        val sourceSize = freshVal("sourceSize", LongTpe, q"${strideOf(A)} * ${sourceLength.symbol}")
-        val finalAddress = freshVal("finalAddress", AddrTpe, q"$alloc.reallocate(${newArray.symbol}.addr, ${sourceSize.symbol}.toInt, ${finalSize.symbol}.toInt)")
+        val finalSize =
+          freshVal("finalSize", LongTpe,
+                   q"$sizeOfHeader + ${strideOf(A)} * ${newArrayIndex.symbol}")
+        val sourceSize =
+          freshVal("sourceSize", LongTpe,
+                   q"${strideOf(A)} * ${sourceLength.symbol}")
+        val finalAddress =
+          freshVal("finalAddress", AddrTpe,
+                   q"""$alloc.reallocate(${newArray.symbol}.addr, ${sourceSize.symbol}.toInt,
+                                         ${finalSize.symbol}.toInt, $alignment)""")
 
         q"""
           if ($pre.isEmpty) $MyArrayModule.empty[$A]
@@ -271,7 +281,7 @@ trait ArrayModuleCommon extends ArrayCommon {
     stabilized(n) { len =>
       stabilized(a) { alloc =>
         val size  = q"$sizeOfHeader + $len * ${strideOf(T)}"
-        val naddr = freshVal("addr", AddrTpe, q"$alloc.allocate($size)")
+        val naddr = freshVal("addr", AddrTpe, q"$alloc.allocate($size, $alignment)")
         q"""
           if ($len < 0) throw new $IllegalArgumentExceptionClass
           else if ($len == 0) $MyArrayModule.empty[$T]

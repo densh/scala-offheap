@@ -45,47 +45,47 @@ trait RegionSuite extends FunSuite {
 
   test("reallocate same") {
     Region { r =>
-      val addr = r.allocate(32)
-      val naddr = r.reallocate(addr, 32, 32)
+      val addr = r.allocate(32, alignment = 8)
+      val naddr = r.reallocate(addr, 32, 32, alignment = 8)
       assert(addr == naddr)
     }
   }
 
   test("reallocate smaller") {
     Region { r =>
-      val addr = r.allocate(32)
-      val naddr = r.reallocate(addr, 32, 16)
+      val addr = r.allocate(32, alignment = 8)
+      val naddr = r.reallocate(addr, 32, 16, alignment = 8)
       assert(addr == naddr)
     }
   }
 
   test("reallocate bigger") {
     Region { r =>
-      val addr = r.allocate(32)
-      val naddr = r.reallocate(addr, 32, 64)
+      val addr = r.allocate(32, alignment = 8)
+      val naddr = r.reallocate(addr, 32, 64, alignment = 8)
       assert(addr != naddr)
     }
   }
 
   test("reallocate closed") {
     val r = Region.open
-    val addr = r.allocate(32)
+    val addr = r.allocate(32, alignment = 8)
     r.close
     intercept[RegionClosedException] {
-      r.reallocate(addr, 32, 32)
+      r.reallocate(addr, 32, 32, alignment = 8)
     }
   }
 
   test("free open") {
     Region { r =>
-      val addr = r.allocate(32)
+      val addr = r.allocate(32, alignment = 8)
       r.free(addr)
     }
   }
 
   test("free closed") {
     val r = Region.open
-    val addr = r.allocate(32)
+    val addr = r.allocate(32, alignment = 8)
     r.close
     intercept[RegionClosedException] {
       r.free(addr)
