@@ -82,6 +82,17 @@ trait AlignmentSuite extends FunSuite {
     assert(addr3 % 64 == 0)
     assert(addr4 % 64 == 0)
   }
+
+  test("allocate aligned 128") {
+    val addr1 = alloc.allocate(1, alignment = 128)
+    val addr2 = alloc.allocate(1, alignment = 128)
+    val addr3 = alloc.allocate(1, alignment = 128)
+    val addr4 = alloc.allocate(1, alignment = 128)
+    assert(addr1 % 128 == 0)
+    assert(addr2 % 128 == 0)
+    assert(addr3 % 128 == 0)
+    assert(addr4 % 128 == 0)
+  }
 }
 
 class RegionAllignmentSuite extends AlignmentSuite {
