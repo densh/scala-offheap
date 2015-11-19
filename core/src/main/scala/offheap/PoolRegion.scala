@@ -25,6 +25,8 @@ final class PoolRegion(private[this] val pool: Pool) extends Region {
     checkOpen
     if (size > pool.pageSize)
       throw new IllegalArgumentException("can't allocate object larger than the virtual page")
+    if (alignment > pool.pageSize)
+      throw new IllegalArgumentException("can't align to size bigger than the virtual page")
     val currentOffset = page.offset
     val paddedOffset = pad(currentOffset, alignment)
     val resOffset =
