@@ -29,12 +29,12 @@ trait Region extends Allocator {
     checkOpen
     if (Checked.MEMORY) Sanitizer.unregister(id)
   }
-  def reallocate(oldAddr: Addr, oldSize: Size, newSize: Size): Addr = {
+  def reallocate(oldAddr: Addr, oldSize: Size, newSize: Size, alignment: Size): Addr = {
     checkOpen
     if (newSize <= oldSize)
       oldAddr
     else {
-      val newAddr = allocate(newSize)
+      val newAddr = allocate(newSize, alignment)
       Memory.copy(oldAddr, newAddr, oldSize)
       newAddr
     }
