@@ -1,6 +1,6 @@
 import sbt._, Keys._
-import pl.project13.scala.sbt.SbtJmh._
 import com.typesafe.sbt.pgp.PgpKeys._
+import pl.project13.scala.sbt.JmhPlugin
 
 object RegionsBuild extends Build {
   val paradiseVersion = "2.1.0-M5"
@@ -162,7 +162,7 @@ object RegionsBuild extends Build {
   lazy val jmh = Project(
     "jmh",
     file("jmh"),
-    settings = noPublishDefaults ++ jmhSettings,
+    settings = noPublishDefaults,
     dependencies = Seq(core)
-  )
+  ).enablePlugins(JmhPlugin)
 }

@@ -8,7 +8,7 @@ To use scala-offheap one has to add following lines to their sbt build:
 ```scala
 libraryDependencies += "sh.den" % "scala-offheap_2.11" % "0.1"
 
-addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
+addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 ```
 
 This includes scala-offheap's latest 0.1 release and current (as of this writing)
