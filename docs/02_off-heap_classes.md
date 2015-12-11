@@ -1,6 +1,6 @@
 # Off-heap classes
 
-Off-heap classes are core abstraction that lets one define custom data structures to
+Off-heap classes are a core abstraction that lets one define custom data structures to
 be allocated in off-heap memory. Unlike regular classes they are completely opaque
 to JVM's garbage collector (which sees them just as values of `Long` primitive type)
 and incur no typical GC overhead that regular classes do.
@@ -42,7 +42,7 @@ we define another data class that contains two fields of `Point` type:
 ```
 
 We would store two references to two points allocated somewhere. It's possible to
-change standard by-reference semantics into by-value one using `@embed` annotion:
+change standard by-reference semantics into by-value one using `@embed` annotation:
 
 ```scala
 @data class Segment2(@embed start: Point, @embed end: Point)
@@ -53,8 +53,8 @@ Here `start` and `end` are not references to `Point` but rather actual values wi
 field is computed and returned as a value of given type without any extra dereferencing
 overhead.
 
-Whenever and off-heap class with embed fields is instantiated using canonical constructors
-the construction of embedded fields happens right within outer classes memory. For example
+Whenever an off-heap class with embed fields is instantiated using canonical constructors
+the construction of embedded fields happens right within outer class's memory. For example
 in the following snippet:
 
 ```scala
@@ -80,7 +80,7 @@ res1: Segment2 = Segment2(Point(10, 20), Point(30, 40))
 The end result would be the same but the point values would first be allocated separately
 using current allocator in scope and then copied over to segment memory. Needless to say
 this is going to be less efficient and will allocate more memory that has to be taken care
-off in one way or the other.
+of in one way or the other.
 
 At the moment one can only embed other off-heap classes. Primitives have embed-like
 semantics by default. Arrays can not be embedded due to their variable size nature. We
@@ -125,8 +125,8 @@ Embedded fields of type `T` are treated as a large primitive value with a `sizeO
 size and aligned to the size of their largest field that one can look up using
 `alignmentOfEmbed[T]` utility function.
 
-**Automatically generated members.** Apart from field accessors such
-classes get following automatically generated methods:
+**Automatically generated members.** Apart from field accessors, such
+classes get the following automatically generated methods:
 
 1. `isEmpty`, `nonEmpty`. `isEmpty` returns true whenever current point value is
    a null reference.
