@@ -12,7 +12,7 @@ import scala.offheap.internal.SunMisc.UNSAFE
  *  way to minimise memory overhead and re-use the same nodes
  *  for the whole lifetime of the pool.
  *
- *  Memory is reclaimed back to underlying alocator once
+ *  Memory is reclaimed back to underlying allocator once
  *  the pool is finalized.
  */
 final class Pool(
