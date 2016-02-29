@@ -1,7 +1,7 @@
 package test
 
 import org.scalatest.FunSuite
-import offheap._
+import scala.offheap._
 
 trait AlignmentSuite extends FunSuite {
   val alloc: Allocator
