@@ -34,7 +34,7 @@ Data classes are a close equivalent of on-heap case classes. For example:
 ```
 
 Defines a data class with two immutable publicly accessible fields `x` and `y`. Data
-classes are usually passed by reference just regular normal classes. For example if
+classes are usually passed by reference just like regular classes. For example if
 we define another data class that contains two fields of `Point` type:
 
 ```scala
@@ -100,7 +100,7 @@ defined class XYZ
 defined object XYZ
 ```
 
-Is going to take 16 bytes, not 9. 1-byte padding is going to be inserted after `x` and
+Is going to take 16 bytes, not 11. 1-byte padding is going to be inserted after `x` and
 4-byte padding is going to be inserted after `y`. Reordering the fields can sometimes
 reduce the size of the data structure.
 
