@@ -269,6 +269,37 @@ trait ArrayApiCommon extends ArrayCommon {
         }
       """
     }
+
+  def sameElements(other: Tree) =
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(other) { oth =>
+        val sourceIndex = freshVar("i", IntTpe, q"0")
+        val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+        val otherLength = freshVal("othLen", ArraySizeTpe, read(q"$oth.addr", ArraySizeTpe))
+        val result = freshVar("result", BooleanTpe, q"true")
+        q"""
+          if ($pre.addr == $oth.addr) true
+          else if ($pre.isEmpty || $oth.isEmpty) false
+          else {
+            $sourceLength
+            $otherLength
+
+            if (${sourceLength.symbol} != ${otherLength.symbol}) false
+            else {
+              $sourceIndex
+              $result
+              while (${result.symbol} && ${sourceIndex.symbol} < ${sourceLength.symbol}) {
+                ${result.symbol} =
+                  ${readElem(pre, A, q"${sourceIndex.symbol}")} == ${readElem(oth, A, q"${sourceIndex.symbol}")}
+                ${sourceIndex.symbol} += 1
+              }
+
+              ${result.symbol}
+            }
+          }
+          """
+      }
+    }
 }
 
 trait ArrayModuleCommon extends ArrayCommon {
