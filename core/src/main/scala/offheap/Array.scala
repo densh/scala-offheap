@@ -25,6 +25,9 @@ final class Array[A] private (val addr: Addr) extends AnyVal {
   def forall(f: A => Boolean): Boolean                   = macro macros.ArrayApi.forall
   def exists(f: A => Boolean): Boolean                   = macro macros.ArrayApi.exists
   def sameElements(other: Array[A]): Boolean             = macro macros.ArrayApi.sameElements
+  def startsWith(that: Array[A]): Boolean                = macro macros.ArrayApi.startsWith
+  def startsWith(that: Array[A], offset: Int): Boolean   = macro macros.ArrayApi.startsWithOffset
+  def endsWith(that: Array[A]): Boolean                  = macro macros.ArrayApi.endsWith
   def toArray: scala.Array[A]                            = macro macros.ArrayApi.toArray
   def clone(implicit a: Allocator): Array[A]             = macro macros.ArrayApi.clone_
 
