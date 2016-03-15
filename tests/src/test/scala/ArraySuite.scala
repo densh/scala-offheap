@@ -214,4 +214,19 @@ class ArraySuite extends FunSuite {
     assert(!Array.empty[Int].exists(_ < 10))
     assert(!Array.empty[Double].exists(_ => true))
   }
+
+  test("sameElements") {
+    var arr1 = Array(1, 3, 5, 7)
+    val arr2 = Array(1, 3, 5, 7)
+    val arr3 = Array(1, 3, 5, 8)
+    val arr4 = Array(1, 3, 5)
+
+    assert(arr1.sameElements(arr1))
+    assert(arr1.sameElements(arr2))
+    assert(!arr1.sameElements(arr3))
+    assert(!arr1.sameElements(arr4))
+    assert(!arr1.sameElements(Array.empty[Int]))
+    assert(!Array.empty[Int].sameElements(arr1))
+    assert(Array.empty[Int].sameElements(Array.empty[Int]))
+  }
 }

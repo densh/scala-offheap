@@ -23,6 +23,7 @@ stored as `Addr` references.
 * `arr.forall(f)`. Check if given predicate applies to all elements in the array.
 * `arr.exists(f)`. Check if given predicate applies to at least one element in the array.
 * `arr.filter(f)`. Create a new array where each element satifies given predicate.
+* `arr.sameElements(other)`. Check if this and given array have the same elements in the same order.
 
 **Companion methods.**
 
@@ -51,7 +52,8 @@ An alternative implementation of arrays that includes off-heap classes as values
 than as references to reduce dereferencing overhead and improve data locality.
 Direct equivalent of dynamically sized array of structs in C.
 
-**Methods.** Same as for regular arrays.
+**Methods.** Same as for regular arrays, except for the methods which rely on equality of
+elements like `sameElements`.
 
 **Companion methods.** Same as for regular arrays.
 

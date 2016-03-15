@@ -9,7 +9,7 @@ final class Parent(tag: Class[_]) extends StaticAnnotation
 final class PotentialChildren(tags: Class[_]*) extends StaticAnnotation
 final class ClassTag(tag: Any) extends StaticAnnotation
 final class ClassTagRange(from: Any, to: Any) extends StaticAnnotation // > from <= to
-final class ParentExractor(tag: Class[_], value: Any) extends StaticAnnotation
+final class ParentExtractor(tag: Class[_], value: Any) extends StaticAnnotation
 final class PrimaryExtractor(value: Any) extends StaticAnnotation
 final class UniversalExtractor(value: Any) extends StaticAnnotation
 final class Field[T](name: String, after: Any,

@@ -20,7 +20,7 @@ class DataSuite extends FunSuite {
     assert(p.y == 20)
   }
 
-  test("acessors on empty throw null reference exception") {
+  test("accessors on empty throw null reference exception") {
     intercept[NullPointerException] {
       Point.empty.x
     }

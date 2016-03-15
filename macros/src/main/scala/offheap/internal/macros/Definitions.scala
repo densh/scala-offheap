@@ -29,7 +29,7 @@ trait Definitions {
   val PotentialChildrenClass  = staticClass("scala.offheap.internal.PotentialChildren")
   val ParentClass             = staticClass("scala.offheap.internal.Parent")
   val PrimaryExtractorClass   = staticClass("scala.offheap.internal.PrimaryExtractor")
-  val ParentExtractorClass    = staticClass("scala.offheap.internal.ParentExractor")
+  val ParentExtractorClass    = staticClass("scala.offheap.internal.ParentExtractor")
   val UniversalExtractorClass = staticClass("scala.offheap.internal.UniversalExtractor")
   val FieldClass              = staticClass("scala.offheap.internal.Field")
   val AnnotsClass             = staticClass("scala.offheap.internal.Annots")
