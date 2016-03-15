@@ -4,6 +4,9 @@ import static scala.offheap.internal.Sanitizer.validate;
 import static scala.offheap.internal.SunMisc.UNSAFE;
 
 public class Memory {
+    public static boolean isAvailable() {
+        return null != UNSAFE;
+    }
     public static void copy(long from, long to, long size) {
         UNSAFE.copyMemory(validate(from), validate(to), size);
     }
