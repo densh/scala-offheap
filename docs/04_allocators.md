@@ -45,6 +45,11 @@ applications is going to leak memory. It's highly recommended to only use such
 allocators for data that has to be permanently available throughout application
 lifetime. Regions provide much safer interface for temporary allocations.
 
+It is also important to remember that data collections returned by methods such as
+`map` or `filter` also need to be freed. In particular one shouldn't chain calls to those
+methods like `.filter(...).map(...)` since the intermediary result is guaranteed to cause
+a memory leak.
+
 ## Region allocators
 
 Region allocators are a family of semi-automatic memory allocators that are based upon
