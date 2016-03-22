@@ -55,6 +55,18 @@ class ArraySuite extends FunSuite {
     assert(Array.empty[Int].map(_ * 2).isEmpty)
   }
 
+  test("transform") {
+    val arr = Array(1, 2, 3, 4)
+    val narr = arr.transform(v => v * 2)
+    val exp = Array(2, 4, 6, 8)
+    assert(arr == narr)
+    assert(narr.sameElements(exp))
+  }
+
+  test("transform empty") {
+    assert(Array.empty[Int].transform(_ * 2).isEmpty)
+  }
+
   test("read out of bounds") {
     val arr = Array(1, 2, 3, 4)
     intercept[IndexOutOfBoundsException] { arr(-1) }
