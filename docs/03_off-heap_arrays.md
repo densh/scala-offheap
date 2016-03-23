@@ -24,6 +24,10 @@ stored as `Addr` references.
 * `arr.exists(f)`. Check if given predicate applies to at least one element in the array.
 * `arr.filter(f)`. Create a new array where each element satifies given predicate.
 * `arr.sameElements(other)`. Check if this and given array have the same elements in the same order.
+* `arr.startsWith(that)`. Check if this array starts with the same elements as the given array.
+* `arr.startsWith(that, offset)`. Check if this array starts with the same elements as the given array, 
+  starting at given offset.
+* `arr.endsWith(that)`. Check if this array ends with the same elements as the given array.
 
 **Companion methods.**
 
