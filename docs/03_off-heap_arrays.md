@@ -18,6 +18,7 @@ stored as `Addr` references.
 * `arr.size`, `arr.length`. Get a size of given array.
 * `arr.foreach(f)`. Call function on every element and discard the result.
 * `arr.map(f)`. Call function on every element and create a new array with its results.
+* `arr.transform(f)`. Call function on every element and store its result back at the same position.
 * `arr.toArray`. Create an on-heap copy of given array.
 * `arr.clone`. Create and off-heap copy of given array.
 * `arr.forall(f)`. Check if given predicate applies to all elements in the array.

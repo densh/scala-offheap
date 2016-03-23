@@ -135,6 +135,18 @@ trait ArrayApiCommon extends ArrayCommon {
     }
   }
 
+  def transform(f: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      val body = iterate(pre, A, idx => writeElem(q"${pre.symbol}", A, idx, app(f, readElem(pre, A, idx))))
+      q"""
+        if ($pre.nonEmpty) {
+          ..$body
+        }
+        ${pre.symbol}
+      """
+    }
+  }
+
   def toArray =
     stabilized(c.prefix.tree) { pre =>
       val size = fresh("size")

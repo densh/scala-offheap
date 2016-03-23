@@ -48,6 +48,16 @@ class EmbedArraySuite extends FunSuite {
     assert(narr(1).y == 4)
   }
 
+  test("transform") {
+    val arr = EmbedArray(EPoint(10, 20), EPoint(30, 40))
+    val narr = arr.transform { p => p.copy(x = p.x * 2, y = p.y / 10) }
+    assert(narr == arr)
+    assert(arr(0).x == 20)
+    assert(arr(0).y == 2)
+    assert(arr(1).x == 60)
+    assert(arr(1).y == 4)
+  }
+
   test("out of bounds") {
     val arr = EmbedArray.uninit[EPoint](10)
     intercept[IndexOutOfBoundsException] { arr(-1) }
