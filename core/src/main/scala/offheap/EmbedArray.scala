@@ -16,6 +16,7 @@ final class EmbedArray[A] private (val addr: Addr) extends AnyVal {
   def update(index: EmbedArray.Index, value: A): Unit         = macro macros.EmbedArrayApi.update
   def foreach(f: A => Unit): Unit                             = macro macros.EmbedArrayApi.foreach
   def map[B](f: A => B)(implicit a: Allocator): EmbedArray[B] = macro macros.EmbedArrayApi.map[B]
+  def transform(f: A => A): EmbedArray[A]                     = macro macros.EmbedArrayApi.transform
   def filter(f: A => Boolean)
             (implicit a: Allocator): EmbedArray[A]            = macro macros.EmbedArrayApi.filter
   def forall(f: A => Boolean): Boolean                        = macro macros.EmbedArrayApi.forall
