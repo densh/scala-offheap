@@ -241,4 +241,37 @@ class ArraySuite extends FunSuite {
     assert(!Array.empty[Int].sameElements(arr1))
     assert(Array.empty[Int].sameElements(Array.empty[Int]))
   }
+
+  test("startsWith") {
+    val arr = Array(1, 3, 5, 7)
+    val arr2 = Array(1, 3)
+    val arr3 = Array(5, 7)
+    val arr4 = Array(1, 5)
+
+    assert(arr.startsWith(arr))
+    assert(arr.startsWith(arr2))
+    assert(arr.startsWith(arr3, 2))
+    assert(!arr.startsWith(arr3, 3))
+    assert(!arr.startsWith(arr4))
+    assert(!arr4.startsWith(arr))
+    assert(arr.startsWith(Array.empty[Int]))
+    assert(!Array.empty[Int].startsWith(arr))
+
+    intercept[IndexOutOfBoundsException] {
+      arr.startsWith(arr2, -1)
+    }
+  }
+
+  test("endsWith") {
+    val arr = Array(1, 3, 5, 7)
+    val arr2 = Array(3, 5, 7)
+    val arr3 = Array(1, 5)
+
+    assert(arr.endsWith(arr))
+    assert(arr.endsWith(arr2))
+    assert(!arr.endsWith(arr3))
+    assert(!arr3.endsWith(arr))
+    assert(arr.endsWith(Array.empty[Int]))
+    assert(!Array.empty[Int].endsWith(arr))
+  }
 }

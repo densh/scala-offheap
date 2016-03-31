@@ -312,6 +312,76 @@ trait ArrayApiCommon extends ArrayCommon {
           """
       }
     }
+
+  def startsWith(that: Tree): Tree = startsWithOffset(that, q"0")
+
+  def startsWithOffset(that: Tree, offset: Tree): Tree = {
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(that) { that =>
+        stabilized(offset) { offset =>
+          val index = freshVar("i", IntTpe, q"0")
+          val sourceLength = freshVal("srcLen", ArraySizeTpe, readSize(pre))
+          val thatLength = freshVal("thatLen", ArraySizeTpe, readSize(that))
+          val result = freshVar("result", BooleanTpe, q"true")
+          q"""
+            if ($offset < 0) ${throwOutOfBounds(offset)}
+
+            if ($pre.addr == $that.addr) true
+            else if ($pre.isEmpty) false
+            else if ($that.isEmpty) true
+            else {
+              $sourceLength
+              $thatLength
+              if ($offset + ${thatLength.symbol} > ${sourceLength.symbol}) false
+              else {
+                $index
+                $result
+                while (${result.symbol} && ${index.symbol} < ${thatLength.symbol}) {
+                  ${result.symbol} =
+                    ${readElem(pre, A, q"${index.symbol} + $offset")} == ${readElem(that, A, q"${index.symbol}")}
+                  ${index.symbol} += 1
+                }
+                ${result.symbol}
+              }
+            }
+          """
+        }
+      }
+    }
+  }
+
+  def endsWith(that: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(that) { that =>
+        val index = freshVar("i", IntTpe, q"0")
+        val sourceLength = freshVal("srcLen", ArraySizeTpe, readSize(pre))
+        val thatLength = freshVal("thatLen", ArraySizeTpe, readSize(that))
+        val offset = freshVal("offset", IntTpe, q"${sourceLength.symbol} - ${thatLength.symbol}")
+        val result = freshVar("result", BooleanTpe, q"true")
+        q"""
+          if ($pre.addr == $that.addr) true
+          else if ($pre.isEmpty) false
+          else if ($that.isEmpty) true
+          else {
+            $sourceLength
+            $thatLength
+            $offset
+            if (${offset.symbol} < 0 || ${offset.symbol} + ${thatLength.symbol} > ${sourceLength.symbol}) false
+            else {
+              $index
+              $result
+              while (${result.symbol} && ${index.symbol} < ${thatLength.symbol}) {
+                ${result.symbol} =
+                  ${readElem(pre, A, q"${index.symbol} + ${offset.symbol}")} == ${readElem(that, A, q"${index.symbol}")}
+                ${index.symbol} += 1
+              }
+              ${result.symbol}
+            }
+          }
+        """
+      }
+    }
+  }
 }
 
 trait ArrayModuleCommon extends ArrayCommon {
