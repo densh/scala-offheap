@@ -240,6 +240,42 @@ trait ArrayApiCommon extends ArrayCommon {
     }
   }
 
+  def foldLeft[B: WeakTypeTag](z: Tree, op: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(z) { z =>
+        val acc = freshVar("acc", wt[B], z)
+        val f = { idx: Tree => q"${acc.symbol} = ${app(op, q"${acc.symbol}", readElem(pre, A, idx))}" }
+        q"""
+          $acc
+          if ($pre.nonEmpty) ${iterate(pre, A, f)}
+          ${acc.symbol}
+        """
+      }
+    }
+  }
+
+  def foldRight[B: WeakTypeTag](z: Tree, op: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(z) { z =>
+        val acc = freshVar("acc", wt[B], z)
+        val length = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+        val index = freshVar("i", IntTpe, q"${length.symbol} - 1")
+        q"""
+          $acc
+          if ($pre.nonEmpty) {
+            $length
+            $index
+            while (${index.symbol} >= 0) {
+              ${acc.symbol} = ${app(op, readElem(pre, A, q"${index.symbol}"), q"${acc.symbol}")}
+              ${index.symbol} -= 1
+            }
+          }
+          ${acc.symbol}
+        """
+      }
+    }
+  }
+
   def forall(f: Tree) =
     stabilized(c.prefix.tree) { pre =>
       val sourceIndex = freshVar("i", IntTpe, q"0")

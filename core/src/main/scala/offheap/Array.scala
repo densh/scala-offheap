@@ -23,6 +23,8 @@ final class Array[A] private (val addr: Addr) extends AnyVal {
   def transform(f: A => A): Array[A]                     = macro macros.ArrayApi.transform
   def filter(f: A => Boolean)
             (implicit a: Allocator): Array[A]            = macro macros.ArrayApi.filter
+  def foldLeft[B](z: B, op: (B, A) => B): B              = macro macros.ArrayApi.foldLeft[B]
+  def foldRight[B](z: B, op: (A, B) => B): B             = macro macros.ArrayApi.foldRight[B]
   def forall(f: A => Boolean): Boolean                   = macro macros.ArrayApi.forall
   def exists(f: A => Boolean): Boolean                   = macro macros.ArrayApi.exists
   def sameElements(other: Array[A]): Boolean             = macro macros.ArrayApi.sameElements
