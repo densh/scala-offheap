@@ -33,6 +33,4 @@ x86-64 hardware and recent Linux, Mac OS operating systems. The library
 hasn't been tested on other software/hardware configurations and might
 or might not work for them.
 
-If you've managed to successfully use the library on other environments let us now.
-
-
+If you've managed to successfully use the library on other environments let us know.
