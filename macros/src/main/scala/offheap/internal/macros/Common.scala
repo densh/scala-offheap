@@ -311,7 +311,7 @@ trait Common extends Definitions {
         }
       }
       val argVals = args map (_._1)
-      val argDefs = args map (_._2)
+      val argDefs = args map (_._2) filter { case q"" => false; case _ => true }
 
       val param2Val = params zip (argVals) map { case (param, arg) =>
         (param.symbol, arg)
