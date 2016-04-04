@@ -49,10 +49,8 @@ trait ArrayCommon extends Common {
   def iterate(pre: Tree, T: Type, f: Tree => Tree) = {
     val i = freshVar("i", IntTpe, q"0")
     val len = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
-    val base = freshVal("base", AddrTpe, q"$pre.addr + $sizeOfHeader")
     q"""
       $len
-      $base
       $i
       while (${i.symbol} < ${len.symbol}) {
         ..${f(q"${i.symbol}")}
@@ -117,8 +115,6 @@ trait ArrayApiCommon extends ArrayCommon {
       stabilized(a) { alloc =>
         val narr = freshVal("narr", appliedType(MyArrayTpe, B),
                             q"$MyArrayModule.uninit[$B]($pre.length)($alloc)")
-        val base = freshVal("base", AddrTpe,
-                            q"${narr.symbol}.addr + $sizeOfHeader")
         val body =
           iterate(pre, A, idx =>
             writeElem(q"${narr.symbol}", B, idx, app(f, readElem(pre, A, idx))))
@@ -126,7 +122,6 @@ trait ArrayApiCommon extends ArrayCommon {
           if ($pre.isEmpty) $MyArrayModule.empty[$B]
           else {
             $narr
-            $base
             ..$body
             ${narr.symbol}
           }
