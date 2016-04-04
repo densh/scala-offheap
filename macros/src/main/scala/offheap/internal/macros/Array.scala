@@ -58,6 +58,19 @@ trait ArrayCommon extends Common {
       }
     """
   }
+
+  def iterateRight(pre: Tree, T: Type, f: Tree => Tree) = {
+    val len = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+    val i = freshVar("i", IntTpe, q"${len.symbol} - 1")
+    q"""
+      $len
+      $i
+      while (${i.symbol} >= 0) {
+        ..${f(q"${i.symbol}")}
+        ${i.symbol} -= 1
+      }
+    """
+  }
 }
 
 trait ArrayApiCommon extends ArrayCommon {
@@ -253,18 +266,10 @@ trait ArrayApiCommon extends ArrayCommon {
     stabilized(c.prefix.tree) { pre =>
       stabilized(z) { z =>
         val acc = freshVar("acc", wt[B], z)
-        val length = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
-        val index = freshVar("i", IntTpe, q"${length.symbol} - 1")
+        val f = { idx: Tree => q"${acc.symbol} = ${app(op, readElem(pre, A, idx), q"${acc.symbol}")}" }
         q"""
           $acc
-          if ($pre.nonEmpty) {
-            $length
-            $index
-            while (${index.symbol} >= 0) {
-              ${acc.symbol} = ${app(op, readElem(pre, A, q"${index.symbol}"), q"${acc.symbol}")}
-              ${index.symbol} -= 1
-            }
-          }
+          if ($pre.nonEmpty) ${iterateRight(pre, A, f)}
           ${acc.symbol}
         """
       }
