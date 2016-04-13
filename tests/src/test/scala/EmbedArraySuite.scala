@@ -144,11 +144,11 @@ class EmbedArraySuite extends FunSuite {
       EPoint(2, 20),
       EPoint(3, 30)
     )
-    assert(arr.foldLeft[Int](0, (acc, el) => (acc + el.x) * el.x) == 27)
+    assert(arr.foldLeft[Int](0)((acc, el) => (acc + el.x) * el.x) == 27)
   }
 
   test("foldLeft empty") {
-    assert(EmbedArray.empty[EPoint].foldLeft[Int](3, (_, _) => 1) == 3)
+    assert(EmbedArray.empty[EPoint].foldLeft[Int](3)((_, _) => 1) == 3)
   }
 
   test("foldRight") {
@@ -157,11 +157,11 @@ class EmbedArraySuite extends FunSuite {
       EPoint(2, 20),
       EPoint(3, 30)
     )
-    assert(arr.foldRight[Int](0, (el, acc) => (acc + el.x) * el.x) == 23)
+    assert(arr.foldRight[Int](0)((el, acc) => (acc + el.x) * el.x) == 23)
   }
 
   test("foldRight empty") {
-    assert(EmbedArray.empty[EPoint].foldRight[Int](5, (_, _) => 1) == 5)
+    assert(EmbedArray.empty[EPoint].foldRight[Int](5)((_, _) => 1) == 5)
   }
 
   test("forall") {

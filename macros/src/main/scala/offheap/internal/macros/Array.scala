@@ -248,7 +248,7 @@ trait ArrayApiCommon extends ArrayCommon {
     }
   }
 
-  def foldLeft[B: WeakTypeTag](z: Tree, op: Tree) = {
+  def foldLeft[B: WeakTypeTag](z: Tree)(op: Tree) = {
     stabilized(c.prefix.tree) { pre =>
       stabilized(z) { z =>
         val acc = freshVar("acc", wt[B], z)
@@ -262,7 +262,7 @@ trait ArrayApiCommon extends ArrayCommon {
     }
   }
 
-  def foldRight[B: WeakTypeTag](z: Tree, op: Tree) = {
+  def foldRight[B: WeakTypeTag](z: Tree)(op: Tree) = {
     stabilized(c.prefix.tree) { pre =>
       stabilized(z) { z =>
         val acc = freshVar("acc", wt[B], z)
