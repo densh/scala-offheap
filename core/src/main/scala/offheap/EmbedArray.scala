@@ -19,6 +19,8 @@ final class EmbedArray[A] private (val addr: Addr) extends AnyVal {
   def transform(f: A => A): EmbedArray[A]                     = macro macros.EmbedArrayApi.transform
   def filter(f: A => Boolean)
             (implicit a: Allocator): EmbedArray[A]            = macro macros.EmbedArrayApi.filter
+  def foldLeft[B](z: B)(op: (B, A) => B): B                   = macro macros.EmbedArrayApi.foldLeft[B]
+  def foldRight[B](z: B)(op: (A, B) => B): B                  = macro macros.EmbedArrayApi.foldRight[B]
   def forall(f: A => Boolean): Boolean                        = macro macros.EmbedArrayApi.forall
   def exists(f: A => Boolean): Boolean                        = macro macros.EmbedArrayApi.exists
   def toArray: scala.Array[A]                                 = macro macros.EmbedArrayApi.toArray

@@ -297,32 +297,40 @@ trait Common extends Definitions {
     (sym.isTerm && sym.asTerm.isStable) || sym.attachments.get[SemiStable].nonEmpty
 
   // TODO: handle non-function literal cases
-  def appSubs(f: Tree, argValue: Tree, subs: Tree => Tree) = f match {
-    case q"($param => $body)" =>
-      val q"$_ val $_: $argTpt = $_" = param
+  def app(f: Tree, argValues: Tree*) = f match {
+    case q"(..$params => $body)" =>
       changeOwner(body, f.symbol, enclosingOwner)
-      val (arg, argDef) = argValue match {
-        case rt: RefTree if isSemiStable(rt.symbol) =>
-          (rt, q"")
-        case _ =>
-          val vd = freshVal("arg", argTpt.tpe, argValue)
-          (q"${vd.symbol}", vd)
+      val args = params zip(argValues) map { case (param, argValue) =>
+        val q"$_ val $_: $argTpt = $_" = param
+        argValue match {
+          case rt: RefTree if isSemiStable(rt.symbol) =>
+            (rt, q"")
+          case _ =>
+            val vd = freshVal("arg", argTpt.tpe, argValue)
+            (q"${vd.symbol}", vd)
+        }
       }
+      val argVals = args map (_._1)
+      val argDefs = args map (_._2) filter { case q"" => false; case _ => true }
+
+      val param2Val = params zip (argVals) map { case (param, arg) =>
+        (param.symbol, arg)
+      } toMap
+
       val transformedBody = typingTransform(body) { (tree, api) =>
         tree match {
-          case id: Ident if id.symbol == param.symbol =>
-            api.typecheck(subs(q"$arg"))
+          case id: Ident if param2Val.contains(id.symbol) =>
+            val arg = param2Val(id.symbol)
+            api.typecheck(q"$arg")
           case _ =>
             api.default(tree)
         }
       }
-      q"..$argDef; $transformedBody"
-    case _             =>
-      q"$f($argValue)"
-  }
 
-  def app(f: Tree, argValue: Tree) =
-    appSubs(f, argValue, identity)
+      q"..$argDefs; $transformedBody"
+    case _             =>
+      q"$f(..$argValues)"
+  }
 
   def stabilized(tree: Tree)(f: Tree => Tree) = tree match {
     case q"${const: Literal}" =>

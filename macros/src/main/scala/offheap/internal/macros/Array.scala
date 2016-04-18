@@ -49,14 +49,25 @@ trait ArrayCommon extends Common {
   def iterate(pre: Tree, T: Type, f: Tree => Tree) = {
     val i = freshVar("i", IntTpe, q"0")
     val len = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
-    val base = freshVal("base", AddrTpe, q"$pre.addr + $sizeOfHeader")
     q"""
       $len
-      $base
       $i
       while (${i.symbol} < ${len.symbol}) {
         ..${f(q"${i.symbol}")}
         ${i.symbol} += 1
+      }
+    """
+  }
+
+  def iterateRight(pre: Tree, T: Type, f: Tree => Tree) = {
+    val len = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+    val i = freshVar("i", IntTpe, q"${len.symbol} - 1")
+    q"""
+      $len
+      $i
+      while (${i.symbol} >= 0) {
+        ..${f(q"${i.symbol}")}
+        ${i.symbol} -= 1
       }
     """
   }
@@ -117,8 +128,6 @@ trait ArrayApiCommon extends ArrayCommon {
       stabilized(a) { alloc =>
         val narr = freshVal("narr", appliedType(MyArrayTpe, B),
                             q"$MyArrayModule.uninit[$B]($pre.length)($alloc)")
-        val base = freshVal("base", AddrTpe,
-                            q"${narr.symbol}.addr + $sizeOfHeader")
         val body =
           iterate(pre, A, idx =>
             writeElem(q"${narr.symbol}", B, idx, app(f, readElem(pre, A, idx))))
@@ -126,7 +135,6 @@ trait ArrayApiCommon extends ArrayCommon {
           if ($pre.isEmpty) $MyArrayModule.empty[$B]
           else {
             $narr
-            $base
             ..$body
             ${narr.symbol}
           }
@@ -235,6 +243,34 @@ trait ArrayApiCommon extends ArrayCommon {
               $MyArrayModule.empty[$A]
             }
           }
+        """
+      }
+    }
+  }
+
+  def foldLeft[B: WeakTypeTag](z: Tree)(op: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(z) { z =>
+        val acc = freshVar("acc", wt[B], z)
+        val f = { idx: Tree => q"${acc.symbol} = ${app(op, q"${acc.symbol}", readElem(pre, A, idx))}" }
+        q"""
+          $acc
+          if ($pre.nonEmpty) ${iterate(pre, A, f)}
+          ${acc.symbol}
+        """
+      }
+    }
+  }
+
+  def foldRight[B: WeakTypeTag](z: Tree)(op: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      stabilized(z) { z =>
+        val acc = freshVar("acc", wt[B], z)
+        val f = { idx: Tree => q"${acc.symbol} = ${app(op, readElem(pre, A, idx), q"${acc.symbol}")}" }
+        q"""
+          $acc
+          if ($pre.nonEmpty) ${iterateRight(pre, A, f)}
+          ${acc.symbol}
         """
       }
     }

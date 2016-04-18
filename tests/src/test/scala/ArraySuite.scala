@@ -203,6 +203,24 @@ class ArraySuite extends FunSuite {
     assert(Array.empty[Int].filter(_ => false).isEmpty)
   }
 
+  test("foldLeft") {
+    val arr = Array(1, 2, 3)
+    assert(arr.foldLeft[Int](0)((acc, el) => (acc + el) * el) == 27)
+  }
+
+  test("foldLeft empty") {
+    assert(Array.empty[Int].foldLeft[Int](3)((_, _) => 1) == 3)
+  }
+
+  test("foldRight") {
+    val arr = Array(1, 2, 3)
+    assert(arr.foldRight[Int](0)((el, acc) => (acc + el) * el) == 23)
+  }
+
+  test("foldRight empty") {
+    assert(Array.empty[Int].foldRight[Int](5)((_, _) => 1) == 5)
+  }
+
   test("forall") {
     val arr = Array(1, 3, 5, 7)
     assert(arr.forall(_ < 10))

@@ -24,6 +24,8 @@ stored as `Addr` references.
 * `arr.forall(f)`. Check if given predicate applies to all elements in the array.
 * `arr.exists(f)`. Check if given predicate applies to at least one element in the array.
 * `arr.filter(f)`. Create a new array where each element satifies given predicate.
+* `arr.foldLeft(z)(op)`, `arr.foldRight(z)(op)`. Applies given operator to a starting value and all elements of 
+  this array going from left or right.
 * `arr.sameElements(other)`. Check if this and given array have the same elements in the same order.
 * `arr.startsWith(that)`. Check if this array starts with the same elements as the given array.
 * `arr.startsWith(that, offset)`. Check if this array starts with the same elements as the given array, 
