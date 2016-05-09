@@ -11,10 +11,11 @@ trait Definitions {
   import c.universe.definitions._
   import c.universe.rootMirror._
 
-  val StringBuilderClass             = staticClass("scala.collection.mutable.StringBuilder")
-  val NullPointerExceptionClass      = staticClass("java.lang.NullPointerException")
-  val IllegalArgumentExceptionClass  = staticClass("java.lang.IllegalArgumentException")
-  val IndexOutOfBoundsExceptionClass = staticClass("java.lang.IndexOutOfBoundsException")
+  val StringBuilderClass                 = staticClass("scala.collection.mutable.StringBuilder")
+  val NullPointerExceptionClass          = staticClass("java.lang.NullPointerException")
+  val IllegalArgumentExceptionClass      = staticClass("java.lang.IllegalArgumentException")
+  val IndexOutOfBoundsExceptionClass     = staticClass("java.lang.IndexOutOfBoundsException")
+  val UnsupportedOperationExceptionClass = staticClass("java.lang.UnsupportedOperationException")
 
   val RegionClass             = staticClass("scala.offheap.Region")
   val PoolRegionClass         = staticClass("scala.offheap.PoolRegion")

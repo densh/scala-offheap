@@ -164,6 +164,34 @@ class EmbedArraySuite extends FunSuite {
     assert(EmbedArray.empty[EPoint].foldRight[Int](5)((_, _) => 1) == 5)
   }
 
+  test("reduceLeft") {
+    val arr = EmbedArray[EPoint](
+      EPoint(1, 10),
+      EPoint(2, 20),
+      EPoint(3, 30)
+    )
+    val result = arr.reduceLeft { (acc, el) => EPoint((acc.x + el.x) * el.x, acc.y) }
+    assert(result.x == 27)
+
+    intercept[UnsupportedOperationException] {
+      Array.empty[EPoint].reduceLeft { (_, _) => EPoint(0, 0) }
+    }
+  }
+
+  test("reduceRight") {
+    val arr = EmbedArray[EPoint](
+      EPoint(1, 10),
+      EPoint(2, 20),
+      EPoint(3, 30)
+    )
+    val result = arr.reduceRight { (el, acc) => EPoint((acc.x + el.x) * el.x, acc.y) }
+    assert(result.x == 11)
+
+    intercept[UnsupportedOperationException] {
+      Array.empty[EPoint].reduceRight { (_, _) => EPoint(0, 0) }
+    }
+  }
+
   test("forall") {
     val arr = EmbedArray(
       EPoint(1, 10),

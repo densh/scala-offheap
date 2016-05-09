@@ -20,6 +20,9 @@ trait ArrayCommon extends Common {
   def throwOutOfBounds(idx: Tree) =
     q"throw new $IndexOutOfBoundsExceptionClass($idx.toString)"
 
+  def throwUnsupportedOperation(msg: String) =
+    q"throw new $UnsupportedOperationExceptionClass($msg)"
+
   def strideOf(T: Type): Long = strideOf(T, isEmbed)
 
   def sizeOfHeader =
@@ -273,6 +276,48 @@ trait ArrayApiCommon extends ArrayCommon {
           ${acc.symbol}
         """
       }
+    }
+  }
+
+  def reduceLeft(op: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      val acc = freshVar("acc", A, readElem(pre, A, q"0"))
+      val sourceIndex = freshVar("i", IntTpe, q"1")
+      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      q"""
+        if ($pre.isEmpty) ${throwUnsupportedOperation("empty.reduceLeft")}
+        else {
+          $acc
+          $sourceIndex
+          $sourceLength
+          while (${sourceIndex.symbol} < ${sourceLength.symbol}) {
+            ${acc.symbol} = ${app(op, q"${acc.symbol}", readElem(pre, A, q"${sourceIndex.symbol}"))}
+            ${sourceIndex.symbol} += 1
+          }
+          ${acc.symbol}
+        }
+      """
+    }
+  }
+
+  def reduceRight(op: Tree) = {
+    stabilized(c.prefix.tree) { pre =>
+      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      val acc = freshVar("acc", A, readElem(pre, A, q"${sourceLength.symbol} - 1"))
+      val sourceIndex = freshVar("i", IntTpe, q"${sourceLength.symbol} - 2")
+      q"""
+        if ($pre.isEmpty) ${throwUnsupportedOperation("empty.reduceRight")}
+        else {
+          $sourceLength
+          $acc
+          $sourceIndex
+          while (${sourceIndex.symbol} >= 0) {
+            ${acc.symbol} = ${app(op, readElem(pre, A, q"${sourceIndex.symbol}"), q"${acc.symbol}")}
+            ${sourceIndex.symbol} -= 1
+          }
+          ${acc.symbol}
+        }
+      """
     }
   }
 

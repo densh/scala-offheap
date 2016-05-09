@@ -221,6 +221,30 @@ class ArraySuite extends FunSuite {
     assert(Array.empty[Int].foldRight[Int](5)((_, _) => 1) == 5)
   }
 
+  test("reduceLeft") {
+    val arr = Array(1, 2, 3)
+    assert(arr.reduceLeft((acc, el) => (acc + el) * el) == 27)
+
+    val single = Array(5)
+    assert(single.reduceLeft((_, _) => 1) == 5)
+
+    intercept[UnsupportedOperationException] {
+      Array.empty[Int].reduceLeft { (_, _) => 1 }
+    }
+  }
+
+  test("reduceRight") {
+    val arr = Array(1, 2, 3)
+    assert(arr.reduceRight((el, acc) => (acc + el) * el) == 11)
+
+    val single = Array(5)
+    assert(single.reduceRight((_, _) => 1) == 5)
+
+    intercept[UnsupportedOperationException] {
+      Array.empty[Int].reduceRight { (_, _) => 1 }
+    }
+  }
+
   test("forall") {
     val arr = Array(1, 3, 5, 7)
     assert(arr.forall(_ < 10))
