@@ -51,7 +51,7 @@ trait ArrayCommon extends Common {
 
   def iterate(pre: Tree, T: Type, f: Tree => Tree) = {
     val i = freshVar("i", IntTpe, q"0")
-    val len = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+    val len = freshVal("len", ArraySizeTpe, readSize(pre))
     q"""
       $len
       $i
@@ -63,7 +63,7 @@ trait ArrayCommon extends Common {
   }
 
   def iterateRight(pre: Tree, T: Type, f: Tree => Tree) = {
-    val len = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+    val len = freshVal("len", ArraySizeTpe, readSize(pre))
     val i = freshVar("i", IntTpe, q"${len.symbol} - 1")
     q"""
       $len
@@ -201,7 +201,7 @@ trait ArrayApiCommon extends ArrayCommon {
         val newArray = freshVal("narr", appliedType(MyArrayTpe, A),
           q"$MyArrayModule.uninit[$A]($pre.length)($alloc)")
 
-        val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+        val sourceLength = freshVal("len", ArraySizeTpe, readSize(pre))
 
         val sourceIndex = freshVar("i", IntTpe, q"0")
         val newArrayIndex = freshVar("j", IntTpe, q"0")
@@ -283,7 +283,7 @@ trait ArrayApiCommon extends ArrayCommon {
     stabilized(c.prefix.tree) { pre =>
       val acc = freshVar("acc", A, readElem(pre, A, q"0"))
       val sourceIndex = freshVar("i", IntTpe, q"1")
-      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      val sourceLength = freshVal("len", ArraySizeTpe, readSize(pre))
       q"""
         if ($pre.isEmpty) ${throwUnsupportedOperation("empty.reduceLeft")}
         else {
@@ -302,7 +302,7 @@ trait ArrayApiCommon extends ArrayCommon {
 
   def reduceRight(op: Tree) = {
     stabilized(c.prefix.tree) { pre =>
-      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      val sourceLength = freshVal("len", ArraySizeTpe, readSize(pre))
       val acc = freshVar("acc", A, readElem(pre, A, q"${sourceLength.symbol} - 1"))
       val sourceIndex = freshVar("i", IntTpe, q"${sourceLength.symbol} - 2")
       q"""
@@ -324,7 +324,7 @@ trait ArrayApiCommon extends ArrayCommon {
   def forall(f: Tree) =
     stabilized(c.prefix.tree) { pre =>
       val sourceIndex = freshVar("i", IntTpe, q"0")
-      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      val sourceLength = freshVal("len", ArraySizeTpe, readSize(pre))
       val result = freshVar("result", BooleanTpe, q"true")
       q"""
         if ($pre.isEmpty) true
@@ -345,7 +345,7 @@ trait ArrayApiCommon extends ArrayCommon {
   def exists(f: Tree) =
     stabilized(c.prefix.tree) { pre =>
       val sourceIndex = freshVar("i", IntTpe, q"0")
-      val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
+      val sourceLength = freshVal("len", ArraySizeTpe, readSize(pre))
       val result = freshVar("result", BooleanTpe, q"false")
       q"""
         if ($pre.isEmpty) false
@@ -367,8 +367,8 @@ trait ArrayApiCommon extends ArrayCommon {
     stabilized(c.prefix.tree) { pre =>
       stabilized(other) { oth =>
         val sourceIndex = freshVar("i", IntTpe, q"0")
-        val sourceLength = freshVal("len", ArraySizeTpe, read(q"$pre.addr", ArraySizeTpe))
-        val otherLength = freshVal("othLen", ArraySizeTpe, read(q"$oth.addr", ArraySizeTpe))
+        val sourceLength = freshVal("len", ArraySizeTpe, readSize(pre))
+        val otherLength = freshVal("othLen", ArraySizeTpe, readSize(oth))
         val result = freshVar("result", BooleanTpe, q"true")
         q"""
           if ($pre.addr == $oth.addr) true
