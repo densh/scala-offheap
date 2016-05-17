@@ -447,7 +447,7 @@ trait ArrayApiCommon extends ArrayCommon {
             $sourceLength
             $thatLength
             $offset
-            if (${offset.symbol} < 0 || ${offset.symbol} + ${thatLength.symbol} > ${sourceLength.symbol}) false
+            if (${offset.symbol} < 0) false
             else {
               $index
               $result
