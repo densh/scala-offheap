@@ -40,7 +40,7 @@ final class PoolRegion(private[this] val pool: Pool) extends Region {
         page = newpage
         0L
       }
-    wrap(page.start + resOffset)
+    page.start + resOffset
   }
 }
 object PoolRegion {

@@ -2,8 +2,6 @@ package scala.offheap
 
 import scala.language.experimental.{macros => canMacro}
 import scala.offheap.internal.macros
-import scala.offheap.internal.Sanitizer
-import scala.offheap.internal.Checked
 
 /** Family of scoped memory allocators. Allocated memory
  *  is available as long as execution is still in given
@@ -14,21 +12,11 @@ import scala.offheap.internal.Checked
  *  an implicit instance of `Region.Props`.
  */
 trait Region extends Allocator {
-  protected val id: Long =
-    if (Checked.MEMORY) Sanitizer.register()
-    else 0L
   protected def checkOpen(): Unit =
     if (!isOpen)
       throw new RegionClosedException(this)
-  protected def wrap(addr: Addr): Addr = {
-    if (Checked.MEMORY) Sanitizer.pack(this.id, addr)
-    else addr
-  }
   def isOpen: Boolean
-  def close(): Unit = {
-    checkOpen
-    if (Checked.MEMORY) Sanitizer.unregister(id)
-  }
+  def close(): Unit = checkOpen
   def reallocate(oldAddr: Addr, oldSize: Size, newSize: Size, alignment: Size): Addr = {
     checkOpen
     if (newSize <= oldSize)

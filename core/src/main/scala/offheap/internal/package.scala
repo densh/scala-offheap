@@ -1,7 +1,7 @@
 package scala.offheap
 
 package object internal {
-  def pad(addr: Addr, alignment: Size) = {
+  def pad(addr: Long, alignment: Size): Long = {
     val alignmentMask = alignment - 1
     val padding =
       if ((addr & alignmentMask) == 0) 0

@@ -1,6 +1,5 @@
 package scala.offheap
 
-import scala.offheap.internal.Sanitizer
 import scala.offheap.internal.SunMisc.UNSAFE
 
 /** Efficient pool of fixed-size memory pages.
@@ -32,7 +31,7 @@ final class Pool(
   private[this] var page: Pool.Page = null
   newChunk()
   private def newChunk(): Unit = {
-    val start = Sanitizer.validate(alloc.allocate(chunkSize, pageSize))
+    val start = alloc.allocate(chunkSize, pageSize)
     chunk = new Pool.Chunk(start, 0, chunk)
   }
   private def newPage(): Unit = {
